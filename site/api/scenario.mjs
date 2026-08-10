@@ -115,6 +115,25 @@ gadget-builders matter enormously here, and raw power matters less. Show the
 preparation paying off, or failing.`
 };
 
+// The tier maths is settled before the writer sees anything. Its job is to make
+// the result convincing, not to decide it, otherwise the tiers mean nothing.
+function ruling(r, body){
+  if (!r || typeof r.a !== "number") return "";
+  const na = String((body.a && body.a.name) || "one side").slice(0, 20);
+  const nb = String((body.b && body.b.name) || "the other").slice(0, 20);
+  const head = `TIER SCORE (already calculated, not your decision): ${na} ${r.a}, ${nb} ${r.b}.`;
+  if (r.close) return head + `
+These two are close enough that the tiers do not settle it. YOU decide the winner
+on tactics, matchups, terrain and nerve, and say plainly that it was close.`;
+  return head + `
+THE WINNER IS ${String(r.winner).slice(0, 20)}. This is decided and you may not
+change it. Do not hedge it, do not make it a draw, do not have the other side
+win on a technicality. Your job is to make this outcome feel earned: show the
+stronger characters mattering, and give the losing side real moments before it
+turns. If a lower tier character does something decisive, it must be in service
+of the result above, never against it.`;
+}
+
 function roster(team){
   if (!team || !Array.isArray(team.picks)) return null;
   const picks = team.picks.slice(0, 5).map(p => {
@@ -163,13 +182,16 @@ export default async function handler(req, res){
   let body = req.body;
   if (typeof body === "string"){ try { body = JSON.parse(body); } catch { body = null; } }
   const a = roster(body && body.a), b = roster(body && body.b);
+  const r = body && body.ruling;
   const mode = MODES[body && body.mode] ? body.mode : "random";
   if (!a || !b) return res.status(400).json({ error: "Two full rosters are required." });
 
   const messages = [
     { role: "system", content: SYSTEM + FINISH_RULE },
     { role: "user", content:
-`${MODES[mode]}
+`${ruling(r, body)}
+
+${MODES[mode]}
 
 These are the two sides. Refer to them by these owner names throughout, never as
 "Team One" or "Team Two".

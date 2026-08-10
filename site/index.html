@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Superhero Drafts: Superhero Back-Issue Auction</title>
+<title>Super Drafts</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Ultra&family=Archivo+Narrow:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Special+Elite&family=Permanent+Marker&display=swap" rel="stylesheet">
@@ -33,9 +33,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <main id="setup" class="screen setup-screen">
   <div class="guide-cover">
     <div class="cover-rules" aria-hidden="true"></div>
-    <p class="cover-edition">Forty-Ninth Edition &middot; Two-Player Saleroom Rules &middot; Prices in US Dollars</p>
-    <h1 class="cover-title">The Draft</h1>
-    <p class="cover-sub">Official Superhero Price Guide &amp; Back-Issue Auction</p>
+    <p class="cover-edition">Two Buyers &middot; One Box &middot; Nothing Goes Back</p>
+    <h1 class="cover-title">Super Drafts</h1>
+    <p class="cover-sub">Ten Characters. Twenty Dollars. One Fight.</p>
 
     <div class="cover-strip">
       <span id="stockCount">Issues in Stock</span><i></i><span>Marvel &amp; DC</span><i></i><span>Base Versions Only</span><i></i><span>No Cosmic Gods</span>
@@ -71,12 +71,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <div class="doors">
       <section class="door">
         <h2 class="fm-head">Open a table</h2>
-        <p class="door-copy">You take the red pencil. You get a four-letter code and a link to send your friend.</p>
+        <p class="door-copy">You take the red pencil, name the box, and get a code to send your friend.</p>
         <button id="openBox" class="stamp-btn" type="button"><span>Open the Box</span></button>
       </section>
       <section class="door">
         <h2 class="fm-head">Sit down at one</h2>
-        <p class="door-copy">Your friend opened a table and sent you a code. You take the blue pencil.</p>
+        <p class="door-copy">Somebody sent you four letters. Take the blue pencil and sit down.</p>
         <div class="join-row">
           <input id="joinCode" class="code-input" type="text" maxlength="4" autocomplete="off" spellcheck="false" placeholder="CODE" aria-label="Four-letter table code">
           <button id="joinBtn" class="pn-pass join-btn" type="button">Join</button>
@@ -99,10 +99,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <li><b>Unopposed.</b> Once one roster is full, every remaining issue goes straight to the other buyer at $1.</li>
         <li><b>Five against five.</b> Base versions, random encounter. Copy the rosters out at the end and get the fight written up.</li>
       </ol>
-      <p class="fm-foot">No stats, no power levels. You are bidding on what you already know about them.</p>
+      <p class="fm-foot">Tiers are the only number on the table. Everything else is what you already know.</p>
     </section>
 
-    <p class="cover-hint">Two devices, anywhere in the world. Bids are public, so keep a call open and argue about the prices.</p>
+    <p class="cover-hint">Two devices, anywhere in the world. Every bid is public, so keep a call open and talk your way into a bargain.</p>
   </div>
 </main>
 
@@ -130,7 +130,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <main id="auction" class="screen auction-screen" hidden>
 
   <header class="guide-head">
-    <h2 class="gh-title">Cover Price</h2>
+    <h2 class="gh-title">Super Drafts</h2>
     <div class="gh-rule" aria-hidden="true"></div>
     <p class="gh-meta">
       <span id="lotNo">Lot 1</span><i></i><span id="stockLeft">144 left in box</span><i></i>
@@ -146,7 +146,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <p class="purse-line">Purse remaining</p>
       <p class="purse-figure" id="purse0">$20</p>
       <ol class="slots" id="slots0"></ol>
-      <p class="ledger-foot"><span id="spent0">$0 spent</span> &middot; <span id="left0">5 slots open</span></p>
+      <p class="ledger-foot"><span id="spent0">$0 spent</span> &middot; <span id="left0">5 slots open</span> &middot; <span id="skips0">3 skips</span></p>
     </aside>
 
     <!-- CENTRE: THE ISSUE -->
@@ -192,7 +192,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <p class="purse-line">Purse remaining</p>
       <p class="purse-figure" id="purse1">$20</p>
       <ol class="slots" id="slots1"></ol>
-      <p class="ledger-foot"><span id="spent1">$0 spent</span> &middot; <span id="left1">5 slots open</span></p>
+      <p class="ledger-foot"><span id="spent1">$0 spent</span> &middot; <span id="left1">5 slots open</span> &middot; <span id="skips1">3 skips</span></p>
     </aside>
   </div>
 
@@ -207,6 +207,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <input type="number" id="other0" min="1" step="1" inputmode="numeric" aria-label="Custom bid for player one">
         </label>
         <button class="pn-pass" type="button" data-pass="0">Yours</button>
+        <button class="pn-skip" type="button" data-skip="0">Skip</button>
       </div>
       <p class="pn-state" id="state0"></p>
     </div>
@@ -220,6 +221,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <input type="number" id="other1" min="1" step="1" inputmode="numeric" aria-label="Custom bid for player two">
         </label>
         <button class="pn-pass" type="button" data-pass="1">Yours</button>
+        <button class="pn-skip" type="button" data-skip="1">Skip</button>
       </div>
       <p class="pn-state" id="state1"></p>
     </div>
@@ -281,12 +283,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     </fieldset>
 
     <button id="writeBtn" class="stamp-btn stamp-btn-sm" type="button"><span>Write the Fight</span></button>
-    <p class="fo-hint" id="writeHint">One issue, written from the two rosters above.</p>
+    <p class="fo-hint" id="writeHint">One issue, written from the ten characters above.</p>
 
     <div class="story" id="story" hidden>
       <div class="story-grain" aria-hidden="true"></div>
       <div class="story-body" id="storyBody" aria-live="polite"></div>
       <p class="story-foot"><span id="storyFoot"></span></p>
+      <p class="story-score" id="storyScore"></p>
     </div>
 
     <section class="box-pick fo-box" id="foBox" hidden>
@@ -311,206 +314,206 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
  *  Beyonder, Galactus, Phoenix Force, Lucifer, Spectre, Darkseid, Presence).
  * ------------------------------------------------------------------ */
 const STOCK = [
-["Spider-Man","MAR","Peter Parker","Everybody's first back issue.","B"],
-["Iron Man","MAR","Tony Stark","Runs on money and guilt.","A"],
-["Captain America","MAR","Steve Rogers","The shield does the talking.","C"],
-["Thor","MAR","Thor Odinson","Weather included, no extra charge.","S"],
-["Hulk","MAR","Bruce Banner","Do not shelve near the door.","S"],
-["Black Widow","MAR","Natasha Romanoff","Wins fights she never starts.","D"],
-["Hawkeye","MAR","Clint Barton","Never misses. Often bleeding.","D"],
-["Doctor Strange","MAR","Stephen Strange","Reality is a suggestion.","S"],
-["Black Panther","MAR","T'Challa","King, scientist, problem.","C"],
-["Wolverine","MAR","Logan","Bagged twice. Still smells of cigars.","B"],
-["Deadpool","MAR","Wade Wilson","Reads the price sticker back to you.","C"],
-["Daredevil","MAR","Matt Murdock","Blind. Still sees you coming.","C"],
-["The Punisher","MAR","Frank Castle","A one-man clearance sale.","D"],
-["Storm","MAR","Ororo Munroe","Brings her own climate.","A"],
-["Cyclops","MAR","Scott Summers","Leads. Nobody enjoys it.","B"],
-["Jean Grey","MAR","Jean Grey","Reads the room. Literally.","A"],
-["Beast","MAR","Hank McCoy","Six doctorates and a left hook.","B"],
-["Nightcrawler","MAR","Kurt Wagner","Gone before you finish the sentence.","B"],
-["Rogue","MAR","Anna Marie","Borrow now, apologise later.","B"],
-["Gambit","MAR","Remy LeBeau","Anything is a weapon if you charge it.","B"],
-["Magneto","MAR","Erik Lehnsherr","Do not store in a metal box.","A"],
-["Professor X","MAR","Charles Xavier","Wins before the bell.","A"],
-["Venom","MAR","Eddie Brock","Comes with a passenger.","A"],
-["Carnage","MAR","Cletus Kasady","Sold as-is. No returns.","A"],
-["Green Goblin","MAR","Norman Osborn","Laughing all the way down.","B"],
-["Doctor Doom","MAR","Victor Von Doom","Insists on the full title.","A"],
-["Loki","MAR","Loki Laufeyson","The copy you got may not be the copy.","A"],
-["Ultron","MAR","No civilian name","Keeps coming back, like a bad reprint.","A"],
-["Vision","MAR","Synthezoid","Walks straight through the argument.","A"],
-["Scarlet Witch","MAR","Wanda Maximoff","Rewrites the ending.","S"],
-["Quicksilver","MAR","Pietro Maximoff","Already read it.","A"],
-["Ant-Man","MAR","Scott Lang","Small print, big problem.","B"],
-["Wasp","MAR","Janet Van Dyne","Stings well above her weight.","B"],
-["Falcon","MAR","Sam Wilson","Owns the airspace.","B"],
-["Winter Soldier","MAR","Bucky Barnes","Seventy years of practice.","C"],
-["Star-Lord","MAR","Peter Quill","Confidence exceeds inventory.","C"],
-["Gamora","MAR","Gamora","Raised by the worst.","B"],
-["Drax the Destroyer","MAR","Drax","Takes everything literally.","B"],
-["Rocket Raccoon","MAR","Rocket","Do not comment on the species.","C"],
-["Groot","MAR","Groot","Three words, infinite range.","B"],
-["Ghost Rider","MAR","Johnny Blaze","Judges you on sight.","B"],
-["Moon Knight","MAR","Marc Spector","Four opinions, one body.","C"],
-["Blade","MAR","Eric Brooks","Night shift specialist.","B"],
-["Mister Fantastic","MAR","Reed Richards","Solves it on the way over.","A"],
-["Invisible Woman","MAR","Sue Storm","The strongest one, quietly.","A"],
-["Human Torch","MAR","Johnny Storm","Keep well away from the longbox.","B"],
-["The Thing","MAR","Ben Grimm","Clobbering time, every time.","B"],
-["Namor","MAR","Namor McKenzie","Rude. Correct. Amphibious.","A"],
-["She-Hulk","MAR","Jennifer Walters","Will sue you and also throw you.","A"],
-["Iron Fist","MAR","Danny Rand","One punch, fully funded.","B"],
-["Luke Cage","MAR","Luke Cage","Sweet Christmas.","B"],
-["Elektra","MAR","Elektra Natchios","Two sai, no small talk.","C"],
-["Kingpin","MAR","Wilson Fisk","Owns the block you are standing on.","C"],
-["Bullseye","MAR","Lester","Anything in his hand is a bullet.","D"],
-["Doctor Octopus","MAR","Otto Octavius","Four arms, zero patience.","B"],
-["Sandman","MAR","Flint Marko","Punching him is a waste of a turn.","B"],
-["Rhino","MAR","Aleksei Sytsevich","Goes one direction. Fast.","B"],
-["Mysterio","MAR","Quentin Beck","You already lost. Probably.","D"],
-["Kraven the Hunter","MAR","Sergei Kravinoff","Hunts for sport, never for need.","D"],
-["Juggernaut","MAR","Cain Marko","Nothing stops him. Nothing.","A"],
-["Sabretooth","MAR","Victor Creed","Enjoys it far too much.","B"],
-["War Machine","MAR","James Rhodes","Same suit, considerably more guns.","B"],
-["Shang-Chi","MAR","Shang-Chi","Best hands in the box.","C"],
-["Ms. Marvel","MAR","Kamala Khan","Fan first, hero second.","B"],
-["Nova","MAR","Richard Rider","Space cop with a temper.","A"],
-["Hercules","MAR","Hercules","Will arm-wrestle absolutely anyone.","A"],
-["Taskmaster","MAR","Tony Masters","Copies your move once, keeps it.","C"],
-["Red Skull","MAR","Johann Schmidt","The worst man in the box.","B"],
-["Colossus","MAR","Piotr Rasputin","Gentle until he is not.","B"],
-["Psylocke","MAR","Betsy Braddock","Cuts the mind first.","B"],
-["Domino","MAR","Neena Thurman","Luck counts as a superpower.","C"],
-["Cable","MAR","Nathan Summers","Pouches. So many pouches.","B"],
-["Bishop","MAR","Lucas Bishop","Eats your energy blast.","B"],
-["Silver Surfer","MAR","Norrin Radd","Rides in from somewhere sad.","S"],
-["Thanos","MAR","Thanos","Base model. Still a problem.","S"],
-["Apocalypse","MAR","En Sabah Nur","Survival of the loudest.","S"],
-["Nick Fury","MAR","Nick Fury","Knows exactly what you did.","D"],
-["Jessica Jones","MAR","Jessica Jones","Strong, tired, and correct.","C"],
-["Squirrel Girl","MAR","Doreen Green","Undefeated. Look it up.","C"],
-["Beta Ray Bill","MAR","Beta Ray Bill","Worthy, and nobody expected it.","A"],
-["Wong","MAR","Wong","Sorcerer Supreme paperwork, handled.","B"],
-["Hela","MAR","Hela","Death goddess, minus the throne.","A"],
-["Green Lantern","DC","Hal Jordan","Imagination with a battery.","A"],
-["Superman","DC","Clark Kent","The one everybody bids on.","S"],
-["Batman","DC","Bruce Wayne","Prepared for this exact auction.","C"],
-["Wonder Woman","DC","Diana Prince","Truth is not optional.","A"],
-["The Flash","DC","Barry Allen","His bid is already in.","A"],
-["Aquaman","DC","Arthur Curry","Stop laughing. Look at him.","A"],
-["Cyborg","DC","Victor Stone","Booyah, and a mainframe.","A"],
-["Martian Manhunter","DC","J'onn J'onzz","Superman with more powers.","S"],
-["Green Arrow","DC","Oliver Queen","Rich, loud, surprisingly right.","C"],
-["Shazam","DC","Billy Batson","A child with a god's account.","S"],
-["Nightwing","DC","Dick Grayson","Best acrobat in the building.","C"],
-["Robin","DC","Damian Wayne","Ten years old. Furious.","C"],
-["Batgirl","DC","Barbara Gordon","Smartest person in the cave.","C"],
-["Supergirl","DC","Kara Zor-El","Angrier, newer, same sun.","S"],
-["Black Canary","DC","Dinah Lance","Scream first, ask later.","C"],
-["Zatanna","DC","Zatanna Zatara","Sdrawkcab skaeps ehs.","A"],
-["John Constantine","DC","John Constantine","You will regret this purchase.","C"],
-["Swamp Thing","DC","Alec Holland","The whole planet backs him.","A"],
-["Raven","DC","Rachel Roth","Father issues, cosmic scale.","A"],
-["Starfire","DC","Koriand'r","Joy, and starbolts.","B"],
-["Beast Boy","DC","Garfield Logan","A whole zoo in one slot.","B"],
-["Blue Beetle","DC","Jaime Reyes","The scarab makes the decisions.","B"],
-["Booster Gold","DC","Michael Carter","Here for the endorsements.","B"],
-["Hawkman","DC","Carter Hall","Mace now, questions never.","B"],
-["Firestorm","DC","Ronnie Raymond","Two minds, one atom.","A"],
-["Plastic Man","DC","Eel O'Brian","Genuinely unkillable. Genuinely annoying.","B"],
-["Red Hood","DC","Jason Todd","Came back angry.","C"],
-["The Joker","DC","Name unknown","Priced high for no clear reason.","D"],
-["Harley Quinn","DC","Harleen Quinzel","Mallet included.","C"],
-["Lex Luthor","DC","Lex Luthor","Would buy this entire box.","A"],
-["Deathstroke","DC","Slade Wilson","Uses ninety percent. Still wins.","B"],
-["Bane","DC","Bane","Has read the file on you.","B"],
-["Poison Ivy","DC","Pamela Isley","The garden is on her side.","B"],
-["Catwoman","DC","Selina Kyle","Already took the good issue.","C"],
-["The Riddler","DC","Edward Nygma","Loses on purpose. Sort of.","E"],
-["The Penguin","DC","Oswald Cobblepot","Money, birds, leverage.","E"],
-["Two-Face","DC","Harvey Dent","Fifty-fifty on everything.","C"],
-["Scarecrow","DC","Jonathan Crane","Sells you your own fear.","C"],
-["Mr. Freeze","DC","Victor Fries","Saddest man in the box.","B"],
-["Killer Croc","DC","Waylon Jones","A sewer-level problem.","B"],
-["Reverse-Flash","DC","Eobard Thawne","Ruined your childhood retroactively.","A"],
-["Sinestro","DC","Thaal Sinestro","Better ring discipline than Hal.","A"],
-["Black Manta","DC","David Hyde","Hates one man completely.","B"],
-["Cheetah","DC","Barbara Minerva","Fast, cursed, personal.","B"],
-["Brainiac","DC","Vril Dox","Collects cities. Bottled.","A"],
-["Doomsday","DC","The Ultimate","Killed Superman once. Priced accordingly.","S"],
-["Bizarro","DC","Imperfect copy","Am not good bid.","A"],
-["Solomon Grundy","DC","Cyrus Gold","Born on a Monday.","B"],
-["Vixen","DC","Mari McCabe","Every animal, on tap.","B"],
-["Static","DC","Virgil Hawkins","Lightning with a bus pass.","B"],
-["John Stewart","DC","John Stewart","Marine, architect, Green Lantern.","A"],
-["The Atom","DC","Ray Palmer","Wins from inside your ear.","B"],
-["Vandal Savage","DC","Vandar Adg","Fifty thousand years of practice.","A"],
-["Ra's al Ghul","DC","Ra's al Ghul","Patient in a way that frightens.","C"],
-["Talia al Ghul","DC","Talia al Ghul","Better tactician than her father.","C"],
-["Etrigan","DC","Jason Blood","Answers only in rhyme.","A"],
-["Doctor Fate","DC","Kent Nelson","The helmet is in charge.","S"],
-["Captain Cold","DC","Leonard Snart","Has rules, and keeps them.","B"],
-["Gorilla Grodd","DC","Grodd","Telepathic gorilla. That is the pitch.","A"],
-["Killer Frost","DC","Caitlin Snow","Absolute zero, zero mercy.","B"],
-["Huntress","DC","Helena Bertinelli","Crossbow and a grudge.","C"],
-["The Question","DC","Vic Sage","No face, all answers.","D"],
-["Metamorpho","DC","Rex Mason","The whole periodic table.","B"],
-["Blue Devil","DC","Dan Cassidy","Stuck in the costume.","B"],
-["Katana","DC","Tatsu Yamashiro","The sword keeps the souls.","C"],
-["Zauriel","DC","Zauriel","An angel who resigned.","B"],
-["Madara Uchiha","NAR","Madara","Woke up and chose the whole war.","A"],
-["Naruto Uzumaki","NAR","Naruto","Never once shut up, never once quit.","A"],
-["Sasuke Uchiha","NAR","Sasuke","Left the group chat permanently.","A"],
-["Pain","NAR","Nagato","Six bodies, one very sad man.","B"],
-["Itachi Uchiha","NAR","Itachi","Every plan inside another plan.","B"],
-["Jiraiya","NAR","Jiraiya","Terrible role model, excellent teacher.","B"],
-["Might Guy","NAR","Guy","Opens doors nobody should open.","B"],
-["Kakashi Hatake","NAR","Kakashi","Late to everything except the kill.","C"],
-["Gaara","NAR","Gaara","The sand gets there first.","C"],
-["Rock Lee","NAR","Lee","No talent whatsoever. Wins anyway.","D"],
-["Shikamaru Nara","NAR","Shikamaru","Cannot be bothered. Still out-thinks you.","D"],
-["Hinata Hyuga","NAR","Hinata","Sees exactly where it hurts.","D"],
-["Satoru Gojo","JJK","Gojo","The strongest, and unbearable about it.","S"],
-["Ryomen Sukuna","JJK","Sukuna","Twenty fingers of very old spite.","S"],
-["Toji Fushiguro","JJK","Toji","No cursed energy. Still the scariest.","B"],
-["Kento Nanami","JJK","Nanami","Clocks off at six. Lethal until then.","C"],
-["Yuji Itadori","JJK","Yuji","Punches far above his own weight class.","C"],
-["Megumi Fushiguro","JJK","Megumi","Shadows do the work.","C"],
-["Maki Zenin","JJK","Maki","Cursed tools and pure spite.","C"],
-["Nobara Kugisaki","JJK","Nobara","Hammer, nails, no hesitation.","D"],
-["Muzan Kibutsuji","DS","Muzan","Runs from everything, survives everything.","B"],
-["Akaza","DS","Akaza","Will not fight anyone weaker. Politely.","C"],
-["Kyojuro Rengoku","DS","Rengoku","Set his heart ablaze and meant it.","C"],
-["Giyu Tomioka","DS","Giyu","Says nothing. Cuts everything.","C"],
-["Shinobu Kocho","DS","Shinobu","Too small to behead, so she uses poison.","D"],
-["Tanjiro Kamado","DS","Tanjiro","Smells your intent before you move.","D"],
-["Zenitsu Agatsuma","DS","Zenitsu","Screams, faints, wins.","D"],
-["Inosuke Hashibira","DS","Inosuke","Boar head, no plan.","D"],
-["Lucius Zogratis","BC","Lucius","Time, and an unbearable smile.","A"],
-["Julius Novachrono","BC","Julius","Spends years he does not have.","A"],
-["Licht","BC","Licht","Sword saint with a grievance.","A"],
-["Yami Sukehiro","BC","Yami","Cuts the gap between here and there.","B"],
-["Mereoleona Vermillion","BC","Mereoleona","Fire, and absolutely no supervision.","B"],
-["Asta","BC","Asta","No magic at all. That is the problem.","B"],
-["Yuno","BC","Yuno","Everything comes easily, annoyingly.","B"],
-["Zenon Zogratis","BC","Zenon","Bone, and nothing behind the eyes.","B"],
-["Noelle Silva","BC","Noelle","Terrified, and a tidal wave anyway.","C"],
-["Sung Jinwoo","SL","Shadow Monarch","Levelled up past the whole system.","S"],
-["Beru","SL","Beru","Ant king, extremely loyal now.","A"],
-["Thomas Andre","SL","Goliath","America's national-level problem.","A"],
-["Cha Hae-In","SL","Cha Hae-In","Smells mana. Dislikes yours.","B"],
-["Baek Yoonho","SL","White Tiger Guild","Turns into the obvious answer.","B"],
-["Igris","SL","Blood-Red Commander","Bows first, then removes you.","B"],
-["Go Gunhee","SL","Go Gunhee","Old, tired, still S-rank.","B"],
-["Albus Dumbledore","HP","Dumbledore","Knew for years and said nothing.","B"],
-["Lord Voldemort","HP","Tom Riddle","Split himself seven ways to dodge one death.","B"],
-["Severus Snape","HP","Snape","Always.","C"],
-["Bellatrix Lestrange","HP","Bellatrix","Enjoying this far too much.","C"],
-["Minerva McGonagall","HP","McGonagall","The desks fight for her.","C"],
-["Sirius Black","HP","Padfoot","Twelve years angry.","D"],
-["Hermione Granger","HP","Hermione","Read the counter-curse in third year.","D"],
-["Harry Potter","HP","Harry","Survives things. That is the whole gimmick.","D"]
+["Spider-Man","MAR","Peter Parker","Everybody's first back issue.","B",0],
+["Iron Man","MAR","Tony Stark","Runs on money and guilt.","A",2],
+["Captain America","MAR","Steve Rogers","The shield does the talking.","C",1],
+["Thor","MAR","Thor Odinson","Weather included, no extra charge.","S",0],
+["Hulk","MAR","Bruce Banner","Do not shelve near the door.","S",0],
+["Black Widow","MAR","Natasha Romanoff","Wins fights she never starts.","D",1],
+["Hawkeye","MAR","Clint Barton","Never misses. Often bleeding.","D",1],
+["Doctor Strange","MAR","Stephen Strange","Reality is a suggestion.","S",1],
+["Black Panther","MAR","T'Challa","King, scientist, problem.","C",1],
+["Wolverine","MAR","Logan","Bagged twice. Still smells of cigars.","B",0],
+["Deadpool","MAR","Wade Wilson","Reads the price sticker back to you.","C",0],
+["Daredevil","MAR","Matt Murdock","Blind. Still sees you coming.","C",0],
+["The Punisher","MAR","Frank Castle","A one-man clearance sale.","D",0],
+["Storm","MAR","Ororo Munroe","Brings her own climate.","A",0],
+["Cyclops","MAR","Scott Summers","Leads. Nobody enjoys it.","B",0],
+["Jean Grey","MAR","Jean Grey","Reads the room. Literally.","A",0],
+["Beast","MAR","Hank McCoy","Six doctorates and a left hook.","B",0],
+["Nightcrawler","MAR","Kurt Wagner","Gone before you finish the sentence.","B",0],
+["Rogue","MAR","Anna Marie","Borrow now, apologise later.","B",0],
+["Gambit","MAR","Remy LeBeau","Anything is a weapon if you charge it.","B",0],
+["Magneto","MAR","Erik Lehnsherr","Do not store in a metal box.","A",0],
+["Professor X","MAR","Charles Xavier","Wins before the bell.","A",2],
+["Venom","MAR","Eddie Brock","Comes with a passenger.","A",0],
+["Carnage","MAR","Cletus Kasady","Sold as-is. No returns.","A",0],
+["Green Goblin","MAR","Norman Osborn","Laughing all the way down.","B",0],
+["Doctor Doom","MAR","Victor Von Doom","Insists on the full title.","A",2],
+["Loki","MAR","Loki Laufeyson","The copy you got may not be the copy.","A",0],
+["Ultron","MAR","No civilian name","Keeps coming back, like a bad reprint.","A",2],
+["Vision","MAR","Synthezoid","Walks straight through the argument.","A",0],
+["Scarlet Witch","MAR","Wanda Maximoff","Rewrites the ending.","S",0],
+["Quicksilver","MAR","Pietro Maximoff","Already read it.","A",0],
+["Ant-Man","MAR","Scott Lang","Small print, big problem.","B",0],
+["Wasp","MAR","Janet Van Dyne","Stings well above her weight.","B",0],
+["Falcon","MAR","Sam Wilson","Owns the airspace.","B",0],
+["Winter Soldier","MAR","Bucky Barnes","Seventy years of practice.","C",1],
+["Star-Lord","MAR","Peter Quill","Confidence exceeds inventory.","C",0],
+["Gamora","MAR","Gamora","Raised by the worst.","B",0],
+["Drax the Destroyer","MAR","Drax","Takes everything literally.","B",0],
+["Rocket Raccoon","MAR","Rocket","Do not comment on the species.","C",0],
+["Groot","MAR","Groot","Three words, infinite range.","B",0],
+["Ghost Rider","MAR","Johnny Blaze","Judges you on sight.","B",0],
+["Moon Knight","MAR","Marc Spector","Four opinions, one body.","C",1],
+["Blade","MAR","Eric Brooks","Night shift specialist.","B",0],
+["Mister Fantastic","MAR","Reed Richards","Solves it on the way over.","A",2],
+["Invisible Woman","MAR","Sue Storm","The strongest one, quietly.","A",0],
+["Human Torch","MAR","Johnny Storm","Keep well away from the longbox.","B",0],
+["The Thing","MAR","Ben Grimm","Clobbering time, every time.","B",0],
+["Namor","MAR","Namor McKenzie","Rude. Correct. Amphibious.","A",0],
+["She-Hulk","MAR","Jennifer Walters","Will sue you and also throw you.","A",0],
+["Iron Fist","MAR","Danny Rand","One punch, fully funded.","B",0],
+["Luke Cage","MAR","Luke Cage","Sweet Christmas.","B",0],
+["Elektra","MAR","Elektra Natchios","Two sai, no small talk.","C",1],
+["Kingpin","MAR","Wilson Fisk","Owns the block you are standing on.","C",2],
+["Bullseye","MAR","Lester","Anything in his hand is a bullet.","D",0],
+["Doctor Octopus","MAR","Otto Octavius","Four arms, zero patience.","B",0],
+["Sandman","MAR","Flint Marko","Punching him is a waste of a turn.","B",0],
+["Rhino","MAR","Aleksei Sytsevich","Goes one direction. Fast.","B",0],
+["Mysterio","MAR","Quentin Beck","You already lost. Probably.","D",2],
+["Kraven the Hunter","MAR","Sergei Kravinoff","Hunts for sport, never for need.","D",0],
+["Juggernaut","MAR","Cain Marko","Nothing stops him. Nothing.","A",0],
+["Sabretooth","MAR","Victor Creed","Enjoys it far too much.","B",0],
+["War Machine","MAR","James Rhodes","Same suit, considerably more guns.","B",1],
+["Shang-Chi","MAR","Shang-Chi","Best hands in the box.","C",1],
+["Ms. Marvel","MAR","Kamala Khan","Fan first, hero second.","B",0],
+["Nova","MAR","Richard Rider","Space cop with a temper.","A",0],
+["Hercules","MAR","Hercules","Will arm-wrestle absolutely anyone.","A",0],
+["Taskmaster","MAR","Tony Masters","Copies your move once, keeps it.","C",2],
+["Red Skull","MAR","Johann Schmidt","The worst man in the box.","B",0],
+["Colossus","MAR","Piotr Rasputin","Gentle until he is not.","B",0],
+["Psylocke","MAR","Betsy Braddock","Cuts the mind first.","B",0],
+["Domino","MAR","Neena Thurman","Luck counts as a superpower.","C",1],
+["Cable","MAR","Nathan Summers","Pouches. So many pouches.","B",2],
+["Bishop","MAR","Lucas Bishop","Eats your energy blast.","B",0],
+["Silver Surfer","MAR","Norrin Radd","Rides in from somewhere sad.","S",-1],
+["Thanos","MAR","Thanos","Base model. Still a problem.","S",0],
+["Apocalypse","MAR","En Sabah Nur","Survival of the loudest.","S",0],
+["Nick Fury","MAR","Nick Fury","Knows exactly what you did.","D",2],
+["Jessica Jones","MAR","Jessica Jones","Strong, tired, and correct.","C",0],
+["Squirrel Girl","MAR","Doreen Green","Undefeated. Look it up.","C",0],
+["Beta Ray Bill","MAR","Beta Ray Bill","Worthy, and nobody expected it.","A",0],
+["Wong","MAR","Wong","Sorcerer Supreme paperwork, handled.","B",1],
+["Hela","MAR","Hela","Death goddess, minus the throne.","A",0],
+["Green Lantern","DC","Hal Jordan","Imagination with a battery.","A",0],
+["Superman","DC","Clark Kent","The one everybody bids on.","S",-1],
+["Batman","DC","Bruce Wayne","Prepared for this exact auction.","C",3],
+["Wonder Woman","DC","Diana Prince","Truth is not optional.","A",0],
+["The Flash","DC","Barry Allen","His bid is already in.","A",0],
+["Aquaman","DC","Arthur Curry","Stop laughing. Look at him.","A",0],
+["Cyborg","DC","Victor Stone","Booyah, and a mainframe.","A",0],
+["Martian Manhunter","DC","J'onn J'onzz","Superman with more powers.","S",0],
+["Green Arrow","DC","Oliver Queen","Rich, loud, surprisingly right.","C",1],
+["Shazam","DC","Billy Batson","A child with a god's account.","S",0],
+["Nightwing","DC","Dick Grayson","Best acrobat in the building.","C",1],
+["Robin","DC","Damian Wayne","Ten years old. Furious.","C",0],
+["Batgirl","DC","Barbara Gordon","Smartest person in the cave.","C",1],
+["Supergirl","DC","Kara Zor-El","Angrier, newer, same sun.","S",-1],
+["Black Canary","DC","Dinah Lance","Scream first, ask later.","C",0],
+["Zatanna","DC","Zatanna Zatara","Sdrawkcab skaeps ehs.","A",1],
+["John Constantine","DC","John Constantine","You will regret this purchase.","C",1],
+["Swamp Thing","DC","Alec Holland","The whole planet backs him.","A",0],
+["Raven","DC","Rachel Roth","Father issues, cosmic scale.","A",0],
+["Starfire","DC","Koriand'r","Joy, and starbolts.","B",0],
+["Beast Boy","DC","Garfield Logan","A whole zoo in one slot.","B",0],
+["Blue Beetle","DC","Jaime Reyes","The scarab makes the decisions.","B",1],
+["Booster Gold","DC","Michael Carter","Here for the endorsements.","B",0],
+["Hawkman","DC","Carter Hall","Mace now, questions never.","B",0],
+["Firestorm","DC","Ronnie Raymond","Two minds, one atom.","A",0],
+["Plastic Man","DC","Eel O'Brian","Genuinely unkillable. Genuinely annoying.","B",0],
+["Red Hood","DC","Jason Todd","Came back angry.","C",1],
+["The Joker","DC","Name unknown","Priced high for no clear reason.","D",0],
+["Harley Quinn","DC","Harleen Quinzel","Mallet included.","C",0],
+["Lex Luthor","DC","Lex Luthor","Would buy this entire box.","A",2],
+["Deathstroke","DC","Slade Wilson","Uses ninety percent. Still wins.","B",2],
+["Bane","DC","Bane","Has read the file on you.","B",2],
+["Poison Ivy","DC","Pamela Isley","The garden is on her side.","B",1],
+["Catwoman","DC","Selina Kyle","Already took the good issue.","C",0],
+["The Riddler","DC","Edward Nygma","Loses on purpose. Sort of.","E",2],
+["The Penguin","DC","Oswald Cobblepot","Money, birds, leverage.","E",0],
+["Two-Face","DC","Harvey Dent","Fifty-fifty on everything.","C",0],
+["Scarecrow","DC","Jonathan Crane","Sells you your own fear.","C",2],
+["Mr. Freeze","DC","Victor Fries","Saddest man in the box.","B",1],
+["Killer Croc","DC","Waylon Jones","A sewer-level problem.","B",0],
+["Reverse-Flash","DC","Eobard Thawne","Ruined your childhood retroactively.","A",0],
+["Sinestro","DC","Thaal Sinestro","Better ring discipline than Hal.","A",1],
+["Black Manta","DC","David Hyde","Hates one man completely.","B",0],
+["Cheetah","DC","Barbara Minerva","Fast, cursed, personal.","B",0],
+["Brainiac","DC","Vril Dox","Collects cities. Bottled.","A",2],
+["Doomsday","DC","The Ultimate","Killed Superman once. Priced accordingly.","S",-1],
+["Bizarro","DC","Imperfect copy","Am not good bid.","A",-1],
+["Solomon Grundy","DC","Cyrus Gold","Born on a Monday.","B",0],
+["Vixen","DC","Mari McCabe","Every animal, on tap.","B",0],
+["Static","DC","Virgil Hawkins","Lightning with a bus pass.","B",0],
+["John Stewart","DC","John Stewart","Marine, architect, Green Lantern.","A",0],
+["The Atom","DC","Ray Palmer","Wins from inside your ear.","B",0],
+["Vandal Savage","DC","Vandar Adg","Fifty thousand years of practice.","A",2],
+["Ra's al Ghul","DC","Ra's al Ghul","Patient in a way that frightens.","C",2],
+["Talia al Ghul","DC","Talia al Ghul","Better tactician than her father.","C",2],
+["Etrigan","DC","Jason Blood","Answers only in rhyme.","A",0],
+["Doctor Fate","DC","Kent Nelson","The helmet is in charge.","S",1],
+["Captain Cold","DC","Leonard Snart","Has rules, and keeps them.","B",1],
+["Gorilla Grodd","DC","Grodd","Telepathic gorilla. That is the pitch.","A",1],
+["Killer Frost","DC","Caitlin Snow","Absolute zero, zero mercy.","B",1],
+["Huntress","DC","Helena Bertinelli","Crossbow and a grudge.","C",1],
+["The Question","DC","Vic Sage","No face, all answers.","D",1],
+["Metamorpho","DC","Rex Mason","The whole periodic table.","B",0],
+["Blue Devil","DC","Dan Cassidy","Stuck in the costume.","B",0],
+["Katana","DC","Tatsu Yamashiro","The sword keeps the souls.","C",1],
+["Zauriel","DC","Zauriel","An angel who resigned.","B",0],
+["Madara Uchiha","NAR","Madara","Woke up and chose the whole war.","A",0],
+["Naruto Uzumaki","NAR","Naruto","Never once shut up, never once quit.","A",0],
+["Sasuke Uchiha","NAR","Sasuke","Left the group chat permanently.","A",1],
+["Pain","NAR","Nagato","Six bodies, one very sad man.","B",2],
+["Itachi Uchiha","NAR","Itachi","Every plan inside another plan.","B",2],
+["Jiraiya","NAR","Jiraiya","Terrible role model, excellent teacher.","B",1],
+["Might Guy","NAR","Guy","Opens doors nobody should open.","B",0],
+["Kakashi Hatake","NAR","Kakashi","Late to everything except the kill.","C",2],
+["Gaara","NAR","Gaara","The sand gets there first.","C",1],
+["Rock Lee","NAR","Lee","No talent whatsoever. Wins anyway.","D",0],
+["Shikamaru Nara","NAR","Shikamaru","Cannot be bothered. Still out-thinks you.","D",2],
+["Hinata Hyuga","NAR","Hinata","Sees exactly where it hurts.","D",0],
+["Satoru Gojo","JJK","Gojo","The strongest, and unbearable about it.","S",-1],
+["Ryomen Sukuna","JJK","Sukuna","Twenty fingers of very old spite.","S",-1],
+["Toji Fushiguro","JJK","Toji","No cursed energy. Still the scariest.","B",2],
+["Kento Nanami","JJK","Nanami","Clocks off at six. Lethal until then.","C",1],
+["Yuji Itadori","JJK","Yuji","Punches far above his own weight class.","C",0],
+["Megumi Fushiguro","JJK","Megumi","Shadows do the work.","C",2],
+["Maki Zenin","JJK","Maki","Cursed tools and pure spite.","C",1],
+["Nobara Kugisaki","JJK","Nobara","Hammer, nails, no hesitation.","D",0],
+["Muzan Kibutsuji","DS","Muzan","Runs from everything, survives everything.","B",-1],
+["Akaza","DS","Akaza","Will not fight anyone weaker. Politely.","C",0],
+["Kyojuro Rengoku","DS","Rengoku","Set his heart ablaze and meant it.","C",0],
+["Giyu Tomioka","DS","Giyu","Says nothing. Cuts everything.","C",1],
+["Shinobu Kocho","DS","Shinobu","Too small to behead, so she uses poison.","D",1],
+["Tanjiro Kamado","DS","Tanjiro","Smells your intent before you move.","D",0],
+["Zenitsu Agatsuma","DS","Zenitsu","Screams, faints, wins.","D",0],
+["Inosuke Hashibira","DS","Inosuke","Boar head, no plan.","D",0],
+["Lucius Zogratis","BC","Lucius","Time, and an unbearable smile.","A",0],
+["Julius Novachrono","BC","Julius","Spends years he does not have.","A",2],
+["Licht","BC","Licht","Sword saint with a grievance.","A",0],
+["Yami Sukehiro","BC","Yami","Cuts the gap between here and there.","B",1],
+["Mereoleona Vermillion","BC","Mereoleona","Fire, and absolutely no supervision.","B",0],
+["Asta","BC","Asta","No magic at all. That is the problem.","B",0],
+["Yuno","BC","Yuno","Everything comes easily, annoyingly.","B",0],
+["Zenon Zogratis","BC","Zenon","Bone, and nothing behind the eyes.","B",0],
+["Noelle Silva","BC","Noelle","Terrified, and a tidal wave anyway.","C",0],
+["Sung Jinwoo","SL","Shadow Monarch","Levelled up past the whole system.","S",-1],
+["Beru","SL","Beru","Ant king, extremely loyal now.","A",0],
+["Thomas Andre","SL","Goliath","America's national-level problem.","A",0],
+["Cha Hae-In","SL","Cha Hae-In","Smells mana. Dislikes yours.","B",1],
+["Baek Yoonho","SL","White Tiger Guild","Turns into the obvious answer.","B",0],
+["Igris","SL","Blood-Red Commander","Bows first, then removes you.","B",0],
+["Go Gunhee","SL","Go Gunhee","Old, tired, still S-rank.","B",1],
+["Albus Dumbledore","HP","Dumbledore","Knew for years and said nothing.","B",1],
+["Lord Voldemort","HP","Tom Riddle","Split himself seven ways to dodge one death.","B",-1],
+["Severus Snape","HP","Snape","Always.","C",1],
+["Bellatrix Lestrange","HP","Bellatrix","Enjoying this far too much.","C",0],
+["Minerva McGonagall","HP","McGonagall","The desks fight for her.","C",1],
+["Sirius Black","HP","Padfoot","Twelve years angry.","D",0],
+["Hermione Granger","HP","Hermione","Read the counter-curse in third year.","D",2],
+["Harry Potter","HP","Harry","Survives things. That is the whole gimmick.","D",0]
 ];
 
 const SLOTS = 5, PURSE = 20;
@@ -536,9 +539,38 @@ const BANDS = {
   street: { name: "Street",       tiers: ["D","E"],                 blurb: "No powers worth the name. D and E." }
 };
 
+// Tier points are deliberately steep. One S has to outweigh a handful of Cs,
+// otherwise a tier is just a label and the draft is decided by volume.
+const LADDER = ["S","A","B","C","D","E"];
+const POINTS = { S: 16, A: 8, B: 4, C: 2, D: 1, E: 0.5 };
+
+// A week of prep moves a character along the ladder by its own prep rating.
+// Batman climbs three steps. The Hulk does not move. Superman slides down one,
+// because a week is long enough for the other side to find kryptonite.
+function effTier(ch, mode){
+  if (mode !== "prep") return ch.tier;
+  const i = LADDER.indexOf(ch.tier) - (ch.prep || 0);
+  return LADDER[Math.max(0, Math.min(LADDER.length - 1, i))];
+}
+const teamScore = (roster, mode) =>
+  roster.reduce((n, r) => n + (POINTS[effTier(r.char, mode)] || 0), 0);
+
+// Binding, with a close-call window: a clear lead decides the fight, a narrow
+// one leaves it to tactics so a near-even draft still gets a real story.
+const CLOSE = 0.20;
+function verdict(mode){
+  const a = teamScore(P[0].roster, mode), b = teamScore(P[1].roster, mode);
+  const hi = Math.max(a, b) || 1;
+  const gap = Math.abs(a - b) / hi;
+  return { a, b, gap, close: gap <= CLOSE, winner: gap <= CLOSE ? null : (a > b ? 0 : 1) };
+}
+
+const SKIPS = 3;
+
 // What is in the box. The host owns this and it travels to the joiner.
 let BOX = { u: ["MAR","DC"], band: "all", tiers: true };
 
+const MIN_BOX = 16;   // ten sold, plus up to six thrown out
 const inBox = c => BOX.u.includes(c[1]) && BANDS[BOX.band].tiers.includes(c[4]);
 const boxCount = () => STOCK.filter(inBox).length;
 
@@ -616,12 +648,12 @@ function handle(m){
   }
   if (m.t === "act" && HOST && started){
     if (m.p !== 1) return;                       // the guest only ever moves for themselves
-    m.kind === "bid" ? bid(1, m.amount) : concede(1);
+    m.kind === "bid" ? bid(1, m.amount) : m.kind === "skip" ? skip(1) : concede(1);
   }
   if (m.t === "state" && !HOST) applyState(m.s);
   // The story is written once and shared, so both sides read the same issue.
   if (m.t === "writing") showWriting(m.mode);
-  if (m.t === "story") showStory(m.text, m.mode);
+  if (m.t === "story") showStory(m.text, m.mode, m.score);
   if (m.t === "storyfail") showStoryError(m.error);
   if (m.t === "closed" && !HOST){
     setWire(false, "table closed");
@@ -662,8 +694,10 @@ function applyState(s, local){
 
 /* An action either runs here (host) or travels to the referee (guest). */
 function act(kind, amount){
-  if (HOST) kind === "bid" ? bid(0, amount) : concede(0);
-  else send({ t: "act", p: 1, kind, amount });
+  if (!HOST) return send({ t: "act", p: 1, kind, amount });
+  if (kind === "bid") return bid(0, amount);
+  if (kind === "skip") return skip(0);
+  return concede(0);
 }
 
 function showScreen(which){
@@ -715,10 +749,10 @@ function paintBox(chipsEl, bandEl, countEl, onChange){
   }
 
   const n = boxCount();
-  countEl.textContent = n < 10
-    ? `Only ${n} characters match. A draft needs 10, so widen the box.`
+  countEl.textContent = n < MIN_BOX
+    ? `Only ${n} characters match. A draft plus skips needs ${MIN_BOX}, so widen the box.`
     : `${n} characters in the box.`;
-  countEl.classList.toggle("thin", n < 10);
+  countEl.classList.toggle("thin", n < MIN_BOX);
   return n;
 }
 
@@ -729,7 +763,7 @@ const boxSummary = () =>
 
 function refreshFoBox(){
   paintBox($("foChips"), $("foBands"), $("foCount"), refreshFoBox);
-  $("againBtn").disabled = boxCount() < 10;
+  $("againBtn").disabled = boxCount() < MIN_BOX;
 }
 
 function refreshSetupBox(){
@@ -759,10 +793,10 @@ function dealDeck(){
 async function openTable(){
   const n = myName();
   if (!n) return nudge("Put your name on the tab first.");
-  if (boxCount() < 10) return nudge("The box is too thin for a draft. Add a universe or widen the tiers.");
+  if (boxCount() < MIN_BOX) return nudge("The box is too thin. Add a universe or widen the tiers.");
   HOST = true; ME = 0; started = false;
   ROOM = code4();
-  P = [{ name: n, purse: PURSE, roster: [] }, { name: "…", purse: PURSE, roster: [] }];
+  P = [{ name: n, purse: PURSE, roster: [], skips: SKIPS }, { name: "…", purse: PURSE, roster: [], skips: SKIPS }];
   $("setupMsg").textContent = "Opening the table…";
   try { await connect(); } catch { return nudge("Could not reach the table service. Check your connection and try again."); }
   $("setupMsg").textContent = "";
@@ -824,13 +858,38 @@ function nextLot(){
   lot = { char: deck.shift(), price: 0, high: null, opener: (lotNum - 1) % 2 };
 
   if (soloRun()){
-    // Nobody left to bid against: the remaining buyer takes it for a dollar.
+    // Nobody left to bid against. It is theirs for a dollar, but if they can
+    // still afford a skip they get the choice rather than a forced hand.
     const p = inPlay(0) ? 0 : 1;
     lot.price = 1; lot.high = p;
     pushState();
-    return setTimeout(() => award(p, 1), 800);
+    if (!canSkip(p)) return setTimeout(() => award(p, 1), 800);
+    return;
   }
   pushState();
+}
+
+/* Skips. Three each. Free while both are still bidding, $2 once you are
+   buying alone, because by then it is a luxury rather than a mercy. */
+const skipCost = p => (soloRun() && inPlay(p)) ? 2 : 0;
+function canSkip(p){
+  if (over || !lot || lot.sold || !inPlay(p)) return false;
+  if ((P[p].skips || 0) < 1) return false;
+  const cost = skipCost(p);
+  if (cost === 0) return lot.high === null;              // only before any bid
+  return P[p].purse - cost >= slotsLeft(p);              // must still fill the roster
+}
+
+function skip(p){
+  if (!canSkip(p)) return;
+  const cost = skipCost(p);
+  P[p].skips -= 1;
+  P[p].purse -= cost;
+  lot.sold = true; lot.skipped = true;                   // finished with, and nobody bought it
+  pushState({ id: ++fxSeq, word: "Skipped",
+    line: `${lot.char.name}, thrown out by ${P[p].name}` + (cost ? ` for ${money(cost)}` : ""),
+    tone: "grey" });
+  setTimeout(nextLot, 1000);
 }
 
 /* ---------------------------- actions ---------------------------- */
@@ -939,6 +998,8 @@ function render(){
     $("spent" + p).textContent = money(PURSE - me.purse) + " spent";
     const sl = slotsLeft(p);
     $("left" + p).textContent = sl === 0 ? "roster full" : sl + (sl === 1 ? " slot open" : " slots open");
+    const sk = me.skips || 0;
+    $("skips" + p).textContent = sk === 1 ? "1 skip left" : sk + " skips left";
 
     const ol = $("slots" + p);
     ol.innerHTML = "";
@@ -965,7 +1026,12 @@ function renderSticker(){
   const solo = soloRun();
   const lbl = $("stLabel"), pr = $("stPrice"), who = $("stWho"), st = $("sticker");
   st.className = "sticker" + (lot.high === null ? "" : lot.high === 0 ? " tone-red" : " tone-blue");
-  if (lot.sold){
+  if (lot.skipped){
+    lbl.textContent = "Thrown out";
+    pr.textContent = "--";
+    who.textContent = "";
+    $("call").textContent = `${lot.char.name} goes back in the box. Nobody paid for that.`;
+  } else if (lot.sold){
     lbl.textContent = "Sold";
     pr.textContent = money(lot.price);
     who.textContent = P[lot.high].name;
@@ -989,7 +1055,11 @@ function renderPanels(){
   const solo = soloRun();
   for (const p of [0, 1]){
     const panel = $("panel" + p), bids = $("bids" + p), state = $("state" + p),
-          other = $("other" + p), passBtn = panel.querySelector(".pn-pass");
+          other = $("other" + p), passBtn = panel.querySelector(".pn-pass"),
+          skipBtn = panel.querySelector(".pn-skip");
+    const mySkip = p === ME && canSkip(p);
+    skipBtn.hidden = !mySkip;
+    skipBtn.textContent = skipCost(p) ? `Skip ${money(skipCost(p))}` : "Skip";
     bids.innerHTML = "";
     panel.classList.toggle("out", !inPlay(p));
     panel.classList.toggle("standing", lot.high === p);
@@ -999,7 +1069,7 @@ function renderPanels(){
     const mustOpen = lot.high === null && p === lot.opener;
 
     if (lot.sold){
-      state.textContent = lot.high === p ? "Sold to you." : "Gone.";
+      state.textContent = lot.skipped ? "Thrown out." : (lot.high === p ? "Sold to you." : "Gone.");
       other.disabled = true; passBtn.disabled = true;
       continue;
     }
@@ -1124,8 +1194,12 @@ function showWriting(mode){
   $("writeBtn").disabled = true;
 }
 
-function showStory(text, mode){
+function showStory(text, mode, score){
   window.__story = text;
+  if (score) $("storyScore").textContent =
+    `Tier score, ${mode === "prep" ? "with a week of prep" : "on raw capability"}: ` +
+    `${P[0].name} ${score.a}, ${P[1].name} ${score.b}` +
+    (score.close ? ". Close enough that tactics decided it." : "");
   $("story").hidden = false;
   $("storyBody").innerHTML = renderStory(text);
   $("storyFoot").textContent = MODE_NAME[mode] || "";
@@ -1144,8 +1218,11 @@ async function writeFight(){
   const mode = chosenMode();
   showWriting(mode);
   send({ t: "writing", mode });
+  const v = verdict(mode);
   const payload = {
     mode,
+    ruling: { a: v.a, b: v.b, close: v.close,
+              winner: v.winner === null ? null : P[v.winner].name },
     a: { name: P[0].name, picks: P[0].roster.map(r => ({ name: r.char.name, world: (UNIVERSES[r.char.pub]||{}).name || r.char.pub, tier: r.char.tier, price: r.price })) },
     b: { name: P[1].name, picks: P[1].roster.map(r => ({ name: r.char.name, world: (UNIVERSES[r.char.pub]||{}).name || r.char.pub, tier: r.char.tier, price: r.price })) }
   };
@@ -1160,8 +1237,8 @@ async function writeFight(){
       const msg = (data && data.error) || `The writer failed (${r.status}).`;
       showStoryError(msg); send({ t: "storyfail", error: msg }); return;
     }
-    showStory(data.text, mode);
-    send({ t: "story", text: data.text, mode });
+    showStory(data.text, mode, v);
+    send({ t: "story", text: data.text, mode, score: v });
   } catch (e){
     const msg = "Could not reach the writer. Check your connection.";
     showStoryError(msg); send({ t: "storyfail", error: msg });
@@ -1172,7 +1249,7 @@ function rosterText(){
   const side = p => P[p].roster
     .map((r, i) => `${i + 1}. ${r.char.name} (${(UNIVERSES[r.char.pub] || {}).name || r.char.pub}${r.char.tier ? ", tier " + r.char.tier : ""}), ${money(r.price)}`)
     .join("\n");
-  return `COVER PRICE / FINAL ROSTERS
+  return `SUPER DRAFTS / FINAL ROSTERS
 Base versions. Random encounter. $20 purse each.
 
 ${P[0].name}: ${money(PURSE - P[0].purse)} spent, ${money(P[0].purse)} unspent
@@ -1234,6 +1311,10 @@ addEventListener("resize", () => {
   fitTimer = setTimeout(() => { if (lot) fitName(); }, 120);
 });
 
+document.querySelectorAll(".pn-skip[data-skip]").forEach(b =>
+  b.addEventListener("click", () => { if (Number(b.dataset.skip) === ME) act("skip"); })
+);
+
 document.querySelectorAll(".pn-pass[data-pass]").forEach(b =>
   b.addEventListener("click", () => { if (Number(b.dataset.pass) === ME) act("pass"); })
 );
@@ -1276,9 +1357,9 @@ $("againBtn").addEventListener("click", () => {
   $("copyHint").textContent = "";
   $("story").hidden = true; $("storyBody").innerHTML = ""; window.__story = null;
   $("writeBtn").disabled = false;
-  $("writeHint").textContent = "One issue, written from the two rosters above.";
-  if (boxCount() < 10) return;
-  P = [{ name: P[0].name, purse: PURSE, roster: [] }, { name: P[1].name, purse: PURSE, roster: [] }];
+  $("writeHint").textContent = "One issue, written from the ten characters above.";
+  if (boxCount() < MIN_BOX) return;
+  P = [{ name: P[0].name, purse: PURSE, roster: [], skips: SKIPS }, { name: P[1].name, purse: PURSE, roster: [], skips: SKIPS }];
   lot = null; lastFx = 0; drawnLot = -1;
   dealDeck();
   nextLot();
@@ -1287,7 +1368,7 @@ $("againBtn").addEventListener("click", () => {
 
 <style>
 /* ==================================================================
-   COVER PRICE, the comic-shop back room.
+   SUPER DRAFTS, the comic-shop back room.
    Kraft box, yellowed pulp, two grease pencils, one rubber stamp.
    ================================================================== */
 :root{
@@ -2222,6 +2303,22 @@ body{
   animation:breathe 1.8s ease-in-out infinite;
 }
 .story-err{ color:var(--red-dk) !important; font-family:var(--type); }
+.story-score{
+  position:relative; margin:8px 0 0;
+  font-size:11px; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--red-dk);
+}
+.story-score:empty{ display:none; }
+.pn-skip{
+  flex:0 0 auto; padding:8px 14px;
+  font-family:var(--data); font-size:11.5px; font-weight:700;
+  letter-spacing:.14em; text-transform:uppercase;
+  color:var(--pulp); background:var(--ink-3);
+  border:2px solid var(--ink-3); border-radius:2px; cursor:pointer;
+  transition:background-color .14s, border-color .14s;
+}
+.pn-skip:hover{ background:var(--ink); border-color:var(--ink); }
+.pn-skip[hidden]{ display:none; }
 .story-foot{
   position:relative; margin:18px 0 0; padding-top:10px;
   border-top:1px solid var(--rule);

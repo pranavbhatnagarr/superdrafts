@@ -1,8 +1,8 @@
 {
-  "name": "coverprice",
+  "name": "superdrafts",
   "version": "1.0.0",
   "private": true,
-  "description": "Cover Price, a two-player superhero back-issue auction.",
+  "description": "Super Drafts, a two-player superhero back-issue auction.",
   "scripts": {
     "login": "vercel login --global-config .vercel-cli",
     "logout": "vercel logout --global-config .vercel-cli",
