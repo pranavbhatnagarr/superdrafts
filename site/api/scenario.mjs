@@ -68,6 +68,17 @@ Rules you must respect:
   or simply "Pranav". NEVER write "Team One", "Team Two", "the first team" or
   "the second team". The two people reading this are the two owners, and they
   want to read their own names.
+- THESE CHARACTERS COME FROM DIFFERENT FICTIONAL WORLDS. Adjudicate honestly:
+  use each character's typical showings, not their single best feat, and never a
+  composite or peak "end of series" version. A tier letter is given for each
+  (S is world-threatening, E is a capable human); treat two characters within a
+  tier of each other as a real contest that tactics can swing, and a gap of three
+  or more tiers as decided unless the weaker side has a specific, named reason.
+  Never rebalance a world upward because it is someone's favourite.
+- Abilities that simply erase an opponent (instant kills, mind control, absolute
+  barriers) only land on a target who is unaware or unprepared. In an open fight
+  the opposition knows they are in a fight, so these must be worked around, not
+  used as an off switch.
 - PUNCTUATION: never use long dashes of any kind (em dash or en dash) anywhere
   in your answer. Use commas, full stops, colons or semicolons in their place.
   Ordinary short hyphens inside words such as "back-issue" are fine.
@@ -106,9 +117,11 @@ preparation paying off, or failing.`
 
 function roster(team){
   if (!team || !Array.isArray(team.picks)) return null;
-  const picks = team.picks.slice(0, 5).map(p =>
-    `- ${String(p.name).slice(0, 40)} (${p.pub === "D" ? "DC" : "Marvel"}), bought for $${Number(p.price) | 0}`
-  );
+  const picks = team.picks.slice(0, 5).map(p => {
+    const world = String(p.world || p.pub || "").slice(0, 24);
+    const tier = /^[SABCDE]$/.test(String(p.tier)) ? `, tier ${p.tier}` : "";
+    return `- ${String(p.name).slice(0, 40)} (${world}${tier}), bought for $${Number(p.price) | 0}`;
+  });
   return `${String(team.name).slice(0, 20)}'s team:\n${picks.join("\n")}`;
 }
 

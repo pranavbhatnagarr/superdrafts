@@ -49,6 +49,25 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       </div>
     </div>
 
+    <section class="box-pick" aria-label="What goes in the box">
+      <h2 class="fm-head">What goes in the box</h2>
+      <p class="box-note">You choose this when you open a table. Your friend sees it before they sit down.</p>
+
+      <div class="chips" id="uniChips"></div>
+
+      <div class="band-row" id="bandRow"></div>
+
+      <label class="tier-toggle">
+        <input type="checkbox" id="showTiers" checked>
+        <span>
+          <b>Show each character's tier</b>
+          <em>S to E, printed on the card. Levels the field when one of you knows a universe better. Turn it off to bid purely on what you already know.</em>
+        </span>
+      </label>
+
+      <p class="box-count" id="boxCount"></p>
+    </section>
+
     <div class="doors">
       <section class="door">
         <h2 class="fm-head">Open a table</h2>
@@ -93,6 +112,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <div class="cover-rules" aria-hidden="true"></div>
     <p class="cover-edition">Table Reserved &middot; Two Buyers &middot; Awaiting the Second Chair</p>
     <h2 class="lobby-title">Table <span id="lobbyCode">----</span></h2>
+
+    <p class="lobby-box"><span id="lobbyBox"></span></p>
 
     <p class="lobby-copy">Send your friend this link. It carries the code, so all they do is type a name and sit down.</p>
     <div class="share-row">
@@ -140,10 +161,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <article class="cover" id="cover">
           <div class="cover-grain" aria-hidden="true"></div>
           <header class="cv-top">
-            <span class="cv-pub" id="cvPub">MARVEL</span>
+            <span class="cv-pub" id="cvPub">Marvel</span>
             <span class="cv-no" id="cvNo">No. 121</span>
           </header>
-          <div class="cv-box" id="cvBox" aria-hidden="true"><span id="cvInit">SM</span></div>
+          <div class="cv-box" id="cvBox"><span id="cvInit">SM</span><i class="cv-tier" id="cvTier" data-t="B">B</i></div>
           <h3 class="cv-name" id="cvName">Spider-Man</h3>
           <p class="cv-alias" id="cvAlias">Peter Parker</p>
           <div class="cv-hr" aria-hidden="true"></div>
@@ -268,6 +289,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <p class="story-foot"><span id="storyFoot"></span></p>
     </div>
 
+    <section class="box-pick fo-box" id="foBox" hidden>
+      <h2 class="fm-head">Change the box before the next one</h2>
+      <div class="chips" id="foChips"></div>
+      <div class="band-row" id="foBands"></div>
+      <p class="box-count" id="foCount"></p>
+    </section>
+
     <div class="fo-tail">
       <button id="copyBtn" class="ghost-btn" type="button">Copy the rosters</button>
       <button id="againBtn" class="ghost-btn" type="button">Run it again</button>
@@ -283,157 +311,236 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
  *  Beyonder, Galactus, Phoenix Force, Lucifer, Spectre, Darkseid, Presence).
  * ------------------------------------------------------------------ */
 const STOCK = [
-["Spider-Man","M","Peter Parker","Everybody's first back issue."],
-["Iron Man","M","Tony Stark","Runs on money and guilt."],
-["Captain America","M","Steve Rogers","The shield does the talking."],
-["Thor","M","Thor Odinson","Weather included, no extra charge."],
-["Hulk","M","Bruce Banner","Do not shelve near the door."],
-["Black Widow","M","Natasha Romanoff","Wins fights she never starts."],
-["Hawkeye","M","Clint Barton","Never misses. Often bleeding."],
-["Doctor Strange","M","Stephen Strange","Reality is a suggestion."],
-["Black Panther","M","T'Challa","King, scientist, problem."],
-["Wolverine","M","Logan","Bagged twice. Still smells of cigars."],
-["Deadpool","M","Wade Wilson","Reads the price sticker back to you."],
-["Daredevil","M","Matt Murdock","Blind. Still sees you coming."],
-["The Punisher","M","Frank Castle","A one-man clearance sale."],
-["Storm","M","Ororo Munroe","Brings her own climate."],
-["Cyclops","M","Scott Summers","Leads. Nobody enjoys it."],
-["Jean Grey","M","Jean Grey","Reads the room. Literally."],
-["Beast","M","Hank McCoy","Six doctorates and a left hook."],
-["Nightcrawler","M","Kurt Wagner","Gone before you finish the sentence."],
-["Rogue","M","Anna Marie","Borrow now, apologise later."],
-["Gambit","M","Remy LeBeau","Anything is a weapon if you charge it."],
-["Magneto","M","Erik Lehnsherr","Do not store in a metal box."],
-["Professor X","M","Charles Xavier","Wins before the bell."],
-["Venom","M","Eddie Brock","Comes with a passenger."],
-["Carnage","M","Cletus Kasady","Sold as-is. No returns."],
-["Green Goblin","M","Norman Osborn","Laughing all the way down."],
-["Doctor Doom","M","Victor Von Doom","Insists on the full title."],
-["Loki","M","Loki Laufeyson","The copy you got may not be the copy."],
-["Ultron","M","No civilian name","Keeps coming back, like a bad reprint."],
-["Vision","M","Synthezoid","Walks straight through the argument."],
-["Scarlet Witch","M","Wanda Maximoff","Rewrites the ending."],
-["Quicksilver","M","Pietro Maximoff","Already read it."],
-["Ant-Man","M","Scott Lang","Small print, big problem."],
-["Wasp","M","Janet Van Dyne","Stings well above her weight."],
-["Falcon","M","Sam Wilson","Owns the airspace."],
-["Winter Soldier","M","Bucky Barnes","Seventy years of practice."],
-["Star-Lord","M","Peter Quill","Confidence exceeds inventory."],
-["Gamora","M","Gamora","Raised by the worst."],
-["Drax the Destroyer","M","Drax","Takes everything literally."],
-["Rocket Raccoon","M","Rocket","Do not comment on the species."],
-["Groot","M","Groot","Three words, infinite range."],
-["Ghost Rider","M","Johnny Blaze","Judges you on sight."],
-["Moon Knight","M","Marc Spector","Four opinions, one body."],
-["Blade","M","Eric Brooks","Night shift specialist."],
-["Mister Fantastic","M","Reed Richards","Solves it on the way over."],
-["Invisible Woman","M","Sue Storm","The strongest one, quietly."],
-["Human Torch","M","Johnny Storm","Keep well away from the longbox."],
-["The Thing","M","Ben Grimm","Clobbering time, every time."],
-["Namor","M","Namor McKenzie","Rude. Correct. Amphibious."],
-["She-Hulk","M","Jennifer Walters","Will sue you and also throw you."],
-["Iron Fist","M","Danny Rand","One punch, fully funded."],
-["Luke Cage","M","Luke Cage","Sweet Christmas."],
-["Elektra","M","Elektra Natchios","Two sai, no small talk."],
-["Kingpin","M","Wilson Fisk","Owns the block you are standing on."],
-["Bullseye","M","Lester","Anything in his hand is a bullet."],
-["Doctor Octopus","M","Otto Octavius","Four arms, zero patience."],
-["Sandman","M","Flint Marko","Punching him is a waste of a turn."],
-["Rhino","M","Aleksei Sytsevich","Goes one direction. Fast."],
-["Mysterio","M","Quentin Beck","You already lost. Probably."],
-["Kraven the Hunter","M","Sergei Kravinoff","Hunts for sport, never for need."],
-["Juggernaut","M","Cain Marko","Nothing stops him. Nothing."],
-["Sabretooth","M","Victor Creed","Enjoys it far too much."],
-["War Machine","M","James Rhodes","Same suit, considerably more guns."],
-["Shang-Chi","M","Shang-Chi","Best hands in the box."],
-["Ms. Marvel","M","Kamala Khan","Fan first, hero second."],
-["Nova","M","Richard Rider","Space cop with a temper."],
-["Hercules","M","Hercules","Will arm-wrestle absolutely anyone."],
-["Taskmaster","M","Tony Masters","Copies your move once, keeps it."],
-["Red Skull","M","Johann Schmidt","The worst man in the box."],
-["Colossus","M","Piotr Rasputin","Gentle until he is not."],
-["Psylocke","M","Betsy Braddock","Cuts the mind first."],
-["Domino","M","Neena Thurman","Luck counts as a superpower."],
-["Cable","M","Nathan Summers","Pouches. So many pouches."],
-["Bishop","M","Lucas Bishop","Eats your energy blast."],
-["Silver Surfer","M","Norrin Radd","Rides in from somewhere sad."],
-["Thanos","M","Thanos","Base model. Still a problem."],
-["Apocalypse","M","En Sabah Nur","Survival of the loudest."],
-["Nick Fury","M","Nick Fury","Knows exactly what you did."],
-["Jessica Jones","M","Jessica Jones","Strong, tired, and correct."],
-["Squirrel Girl","M","Doreen Green","Undefeated. Look it up."],
-["Beta Ray Bill","M","Beta Ray Bill","Worthy, and nobody expected it."],
-["Wong","M","Wong","Sorcerer Supreme paperwork, handled."],
-["Hela","M","Hela","Death goddess, minus the throne."],
-["Green Lantern","D","Hal Jordan","Imagination with a battery."],
-["Superman","D","Clark Kent","The one everybody bids on."],
-["Batman","D","Bruce Wayne","Prepared for this exact auction."],
-["Wonder Woman","D","Diana Prince","Truth is not optional."],
-["The Flash","D","Barry Allen","His bid is already in."],
-["Aquaman","D","Arthur Curry","Stop laughing. Look at him."],
-["Cyborg","D","Victor Stone","Booyah, and a mainframe."],
-["Martian Manhunter","D","J'onn J'onzz","Superman with more powers."],
-["Green Arrow","D","Oliver Queen","Rich, loud, surprisingly right."],
-["Shazam","D","Billy Batson","A child with a god's account."],
-["Nightwing","D","Dick Grayson","Best acrobat in the building."],
-["Robin","D","Damian Wayne","Ten years old. Furious."],
-["Batgirl","D","Barbara Gordon","Smartest person in the cave."],
-["Supergirl","D","Kara Zor-El","Angrier, newer, same sun."],
-["Black Canary","D","Dinah Lance","Scream first, ask later."],
-["Zatanna","D","Zatanna Zatara","Sdrawkcab skaeps ehs."],
-["John Constantine","D","John Constantine","You will regret this purchase."],
-["Swamp Thing","D","Alec Holland","The whole planet backs him."],
-["Raven","D","Rachel Roth","Father issues, cosmic scale."],
-["Starfire","D","Koriand'r","Joy, and starbolts."],
-["Beast Boy","D","Garfield Logan","A whole zoo in one slot."],
-["Blue Beetle","D","Jaime Reyes","The scarab makes the decisions."],
-["Booster Gold","D","Michael Carter","Here for the endorsements."],
-["Hawkman","D","Carter Hall","Mace now, questions never."],
-["Firestorm","D","Ronnie Raymond","Two minds, one atom."],
-["Plastic Man","D","Eel O'Brian","Genuinely unkillable. Genuinely annoying."],
-["Red Hood","D","Jason Todd","Came back angry."],
-["The Joker","D","Name unknown","Priced high for no clear reason."],
-["Harley Quinn","D","Harleen Quinzel","Mallet included."],
-["Lex Luthor","D","Lex Luthor","Would buy this entire box."],
-["Deathstroke","D","Slade Wilson","Uses ninety percent. Still wins."],
-["Bane","D","Bane","Has read the file on you."],
-["Poison Ivy","D","Pamela Isley","The garden is on her side."],
-["Catwoman","D","Selina Kyle","Already took the good issue."],
-["The Riddler","D","Edward Nygma","Loses on purpose. Sort of."],
-["The Penguin","D","Oswald Cobblepot","Money, birds, leverage."],
-["Two-Face","D","Harvey Dent","Fifty-fifty on everything."],
-["Scarecrow","D","Jonathan Crane","Sells you your own fear."],
-["Mr. Freeze","D","Victor Fries","Saddest man in the box."],
-["Killer Croc","D","Waylon Jones","A sewer-level problem."],
-["Reverse-Flash","D","Eobard Thawne","Ruined your childhood retroactively."],
-["Sinestro","D","Thaal Sinestro","Better ring discipline than Hal."],
-["Black Manta","D","David Hyde","Hates one man completely."],
-["Cheetah","D","Barbara Minerva","Fast, cursed, personal."],
-["Brainiac","D","Vril Dox","Collects cities. Bottled."],
-["Doomsday","D","The Ultimate","Killed Superman once. Priced accordingly."],
-["Bizarro","D","Imperfect copy","Am not good bid."],
-["Solomon Grundy","D","Cyrus Gold","Born on a Monday."],
-["Vixen","D","Mari McCabe","Every animal, on tap."],
-["Static","D","Virgil Hawkins","Lightning with a bus pass."],
-["John Stewart","D","John Stewart","Marine, architect, Green Lantern."],
-["The Atom","D","Ray Palmer","Wins from inside your ear."],
-["Vandal Savage","D","Vandar Adg","Fifty thousand years of practice."],
-["Ra's al Ghul","D","Ra's al Ghul","Patient in a way that frightens."],
-["Talia al Ghul","D","Talia al Ghul","Better tactician than her father."],
-["Etrigan","D","Jason Blood","Answers only in rhyme."],
-["Doctor Fate","D","Kent Nelson","The helmet is in charge."],
-["Captain Cold","D","Leonard Snart","Has rules, and keeps them."],
-["Gorilla Grodd","D","Grodd","Telepathic gorilla. That is the pitch."],
-["Killer Frost","D","Caitlin Snow","Absolute zero, zero mercy."],
-["Huntress","D","Helena Bertinelli","Crossbow and a grudge."],
-["The Question","D","Vic Sage","No face, all answers."],
-["Metamorpho","D","Rex Mason","The whole periodic table."],
-["Blue Devil","D","Dan Cassidy","Stuck in the costume."],
-["Katana","D","Tatsu Yamashiro","The sword keeps the souls."],
-["Zauriel","D","Zauriel","An angel who resigned."]
+["Spider-Man","MAR","Peter Parker","Everybody's first back issue.","B"],
+["Iron Man","MAR","Tony Stark","Runs on money and guilt.","A"],
+["Captain America","MAR","Steve Rogers","The shield does the talking.","C"],
+["Thor","MAR","Thor Odinson","Weather included, no extra charge.","S"],
+["Hulk","MAR","Bruce Banner","Do not shelve near the door.","S"],
+["Black Widow","MAR","Natasha Romanoff","Wins fights she never starts.","D"],
+["Hawkeye","MAR","Clint Barton","Never misses. Often bleeding.","D"],
+["Doctor Strange","MAR","Stephen Strange","Reality is a suggestion.","S"],
+["Black Panther","MAR","T'Challa","King, scientist, problem.","C"],
+["Wolverine","MAR","Logan","Bagged twice. Still smells of cigars.","B"],
+["Deadpool","MAR","Wade Wilson","Reads the price sticker back to you.","C"],
+["Daredevil","MAR","Matt Murdock","Blind. Still sees you coming.","C"],
+["The Punisher","MAR","Frank Castle","A one-man clearance sale.","D"],
+["Storm","MAR","Ororo Munroe","Brings her own climate.","A"],
+["Cyclops","MAR","Scott Summers","Leads. Nobody enjoys it.","B"],
+["Jean Grey","MAR","Jean Grey","Reads the room. Literally.","A"],
+["Beast","MAR","Hank McCoy","Six doctorates and a left hook.","B"],
+["Nightcrawler","MAR","Kurt Wagner","Gone before you finish the sentence.","B"],
+["Rogue","MAR","Anna Marie","Borrow now, apologise later.","B"],
+["Gambit","MAR","Remy LeBeau","Anything is a weapon if you charge it.","B"],
+["Magneto","MAR","Erik Lehnsherr","Do not store in a metal box.","A"],
+["Professor X","MAR","Charles Xavier","Wins before the bell.","A"],
+["Venom","MAR","Eddie Brock","Comes with a passenger.","A"],
+["Carnage","MAR","Cletus Kasady","Sold as-is. No returns.","A"],
+["Green Goblin","MAR","Norman Osborn","Laughing all the way down.","B"],
+["Doctor Doom","MAR","Victor Von Doom","Insists on the full title.","A"],
+["Loki","MAR","Loki Laufeyson","The copy you got may not be the copy.","A"],
+["Ultron","MAR","No civilian name","Keeps coming back, like a bad reprint.","A"],
+["Vision","MAR","Synthezoid","Walks straight through the argument.","A"],
+["Scarlet Witch","MAR","Wanda Maximoff","Rewrites the ending.","S"],
+["Quicksilver","MAR","Pietro Maximoff","Already read it.","A"],
+["Ant-Man","MAR","Scott Lang","Small print, big problem.","B"],
+["Wasp","MAR","Janet Van Dyne","Stings well above her weight.","B"],
+["Falcon","MAR","Sam Wilson","Owns the airspace.","B"],
+["Winter Soldier","MAR","Bucky Barnes","Seventy years of practice.","C"],
+["Star-Lord","MAR","Peter Quill","Confidence exceeds inventory.","C"],
+["Gamora","MAR","Gamora","Raised by the worst.","B"],
+["Drax the Destroyer","MAR","Drax","Takes everything literally.","B"],
+["Rocket Raccoon","MAR","Rocket","Do not comment on the species.","C"],
+["Groot","MAR","Groot","Three words, infinite range.","B"],
+["Ghost Rider","MAR","Johnny Blaze","Judges you on sight.","B"],
+["Moon Knight","MAR","Marc Spector","Four opinions, one body.","C"],
+["Blade","MAR","Eric Brooks","Night shift specialist.","B"],
+["Mister Fantastic","MAR","Reed Richards","Solves it on the way over.","A"],
+["Invisible Woman","MAR","Sue Storm","The strongest one, quietly.","A"],
+["Human Torch","MAR","Johnny Storm","Keep well away from the longbox.","B"],
+["The Thing","MAR","Ben Grimm","Clobbering time, every time.","B"],
+["Namor","MAR","Namor McKenzie","Rude. Correct. Amphibious.","A"],
+["She-Hulk","MAR","Jennifer Walters","Will sue you and also throw you.","A"],
+["Iron Fist","MAR","Danny Rand","One punch, fully funded.","B"],
+["Luke Cage","MAR","Luke Cage","Sweet Christmas.","B"],
+["Elektra","MAR","Elektra Natchios","Two sai, no small talk.","C"],
+["Kingpin","MAR","Wilson Fisk","Owns the block you are standing on.","C"],
+["Bullseye","MAR","Lester","Anything in his hand is a bullet.","D"],
+["Doctor Octopus","MAR","Otto Octavius","Four arms, zero patience.","B"],
+["Sandman","MAR","Flint Marko","Punching him is a waste of a turn.","B"],
+["Rhino","MAR","Aleksei Sytsevich","Goes one direction. Fast.","B"],
+["Mysterio","MAR","Quentin Beck","You already lost. Probably.","D"],
+["Kraven the Hunter","MAR","Sergei Kravinoff","Hunts for sport, never for need.","D"],
+["Juggernaut","MAR","Cain Marko","Nothing stops him. Nothing.","A"],
+["Sabretooth","MAR","Victor Creed","Enjoys it far too much.","B"],
+["War Machine","MAR","James Rhodes","Same suit, considerably more guns.","B"],
+["Shang-Chi","MAR","Shang-Chi","Best hands in the box.","C"],
+["Ms. Marvel","MAR","Kamala Khan","Fan first, hero second.","B"],
+["Nova","MAR","Richard Rider","Space cop with a temper.","A"],
+["Hercules","MAR","Hercules","Will arm-wrestle absolutely anyone.","A"],
+["Taskmaster","MAR","Tony Masters","Copies your move once, keeps it.","C"],
+["Red Skull","MAR","Johann Schmidt","The worst man in the box.","B"],
+["Colossus","MAR","Piotr Rasputin","Gentle until he is not.","B"],
+["Psylocke","MAR","Betsy Braddock","Cuts the mind first.","B"],
+["Domino","MAR","Neena Thurman","Luck counts as a superpower.","C"],
+["Cable","MAR","Nathan Summers","Pouches. So many pouches.","B"],
+["Bishop","MAR","Lucas Bishop","Eats your energy blast.","B"],
+["Silver Surfer","MAR","Norrin Radd","Rides in from somewhere sad.","S"],
+["Thanos","MAR","Thanos","Base model. Still a problem.","S"],
+["Apocalypse","MAR","En Sabah Nur","Survival of the loudest.","S"],
+["Nick Fury","MAR","Nick Fury","Knows exactly what you did.","D"],
+["Jessica Jones","MAR","Jessica Jones","Strong, tired, and correct.","C"],
+["Squirrel Girl","MAR","Doreen Green","Undefeated. Look it up.","C"],
+["Beta Ray Bill","MAR","Beta Ray Bill","Worthy, and nobody expected it.","A"],
+["Wong","MAR","Wong","Sorcerer Supreme paperwork, handled.","B"],
+["Hela","MAR","Hela","Death goddess, minus the throne.","A"],
+["Green Lantern","DC","Hal Jordan","Imagination with a battery.","A"],
+["Superman","DC","Clark Kent","The one everybody bids on.","S"],
+["Batman","DC","Bruce Wayne","Prepared for this exact auction.","C"],
+["Wonder Woman","DC","Diana Prince","Truth is not optional.","A"],
+["The Flash","DC","Barry Allen","His bid is already in.","A"],
+["Aquaman","DC","Arthur Curry","Stop laughing. Look at him.","A"],
+["Cyborg","DC","Victor Stone","Booyah, and a mainframe.","A"],
+["Martian Manhunter","DC","J'onn J'onzz","Superman with more powers.","S"],
+["Green Arrow","DC","Oliver Queen","Rich, loud, surprisingly right.","C"],
+["Shazam","DC","Billy Batson","A child with a god's account.","S"],
+["Nightwing","DC","Dick Grayson","Best acrobat in the building.","C"],
+["Robin","DC","Damian Wayne","Ten years old. Furious.","C"],
+["Batgirl","DC","Barbara Gordon","Smartest person in the cave.","C"],
+["Supergirl","DC","Kara Zor-El","Angrier, newer, same sun.","S"],
+["Black Canary","DC","Dinah Lance","Scream first, ask later.","C"],
+["Zatanna","DC","Zatanna Zatara","Sdrawkcab skaeps ehs.","A"],
+["John Constantine","DC","John Constantine","You will regret this purchase.","C"],
+["Swamp Thing","DC","Alec Holland","The whole planet backs him.","A"],
+["Raven","DC","Rachel Roth","Father issues, cosmic scale.","A"],
+["Starfire","DC","Koriand'r","Joy, and starbolts.","B"],
+["Beast Boy","DC","Garfield Logan","A whole zoo in one slot.","B"],
+["Blue Beetle","DC","Jaime Reyes","The scarab makes the decisions.","B"],
+["Booster Gold","DC","Michael Carter","Here for the endorsements.","B"],
+["Hawkman","DC","Carter Hall","Mace now, questions never.","B"],
+["Firestorm","DC","Ronnie Raymond","Two minds, one atom.","A"],
+["Plastic Man","DC","Eel O'Brian","Genuinely unkillable. Genuinely annoying.","B"],
+["Red Hood","DC","Jason Todd","Came back angry.","C"],
+["The Joker","DC","Name unknown","Priced high for no clear reason.","D"],
+["Harley Quinn","DC","Harleen Quinzel","Mallet included.","C"],
+["Lex Luthor","DC","Lex Luthor","Would buy this entire box.","A"],
+["Deathstroke","DC","Slade Wilson","Uses ninety percent. Still wins.","B"],
+["Bane","DC","Bane","Has read the file on you.","B"],
+["Poison Ivy","DC","Pamela Isley","The garden is on her side.","B"],
+["Catwoman","DC","Selina Kyle","Already took the good issue.","C"],
+["The Riddler","DC","Edward Nygma","Loses on purpose. Sort of.","E"],
+["The Penguin","DC","Oswald Cobblepot","Money, birds, leverage.","E"],
+["Two-Face","DC","Harvey Dent","Fifty-fifty on everything.","C"],
+["Scarecrow","DC","Jonathan Crane","Sells you your own fear.","C"],
+["Mr. Freeze","DC","Victor Fries","Saddest man in the box.","B"],
+["Killer Croc","DC","Waylon Jones","A sewer-level problem.","B"],
+["Reverse-Flash","DC","Eobard Thawne","Ruined your childhood retroactively.","A"],
+["Sinestro","DC","Thaal Sinestro","Better ring discipline than Hal.","A"],
+["Black Manta","DC","David Hyde","Hates one man completely.","B"],
+["Cheetah","DC","Barbara Minerva","Fast, cursed, personal.","B"],
+["Brainiac","DC","Vril Dox","Collects cities. Bottled.","A"],
+["Doomsday","DC","The Ultimate","Killed Superman once. Priced accordingly.","S"],
+["Bizarro","DC","Imperfect copy","Am not good bid.","A"],
+["Solomon Grundy","DC","Cyrus Gold","Born on a Monday.","B"],
+["Vixen","DC","Mari McCabe","Every animal, on tap.","B"],
+["Static","DC","Virgil Hawkins","Lightning with a bus pass.","B"],
+["John Stewart","DC","John Stewart","Marine, architect, Green Lantern.","A"],
+["The Atom","DC","Ray Palmer","Wins from inside your ear.","B"],
+["Vandal Savage","DC","Vandar Adg","Fifty thousand years of practice.","A"],
+["Ra's al Ghul","DC","Ra's al Ghul","Patient in a way that frightens.","C"],
+["Talia al Ghul","DC","Talia al Ghul","Better tactician than her father.","C"],
+["Etrigan","DC","Jason Blood","Answers only in rhyme.","A"],
+["Doctor Fate","DC","Kent Nelson","The helmet is in charge.","S"],
+["Captain Cold","DC","Leonard Snart","Has rules, and keeps them.","B"],
+["Gorilla Grodd","DC","Grodd","Telepathic gorilla. That is the pitch.","A"],
+["Killer Frost","DC","Caitlin Snow","Absolute zero, zero mercy.","B"],
+["Huntress","DC","Helena Bertinelli","Crossbow and a grudge.","C"],
+["The Question","DC","Vic Sage","No face, all answers.","D"],
+["Metamorpho","DC","Rex Mason","The whole periodic table.","B"],
+["Blue Devil","DC","Dan Cassidy","Stuck in the costume.","B"],
+["Katana","DC","Tatsu Yamashiro","The sword keeps the souls.","C"],
+["Zauriel","DC","Zauriel","An angel who resigned.","B"],
+["Madara Uchiha","NAR","Madara","Woke up and chose the whole war.","A"],
+["Naruto Uzumaki","NAR","Naruto","Never once shut up, never once quit.","A"],
+["Sasuke Uchiha","NAR","Sasuke","Left the group chat permanently.","A"],
+["Pain","NAR","Nagato","Six bodies, one very sad man.","B"],
+["Itachi Uchiha","NAR","Itachi","Every plan inside another plan.","B"],
+["Jiraiya","NAR","Jiraiya","Terrible role model, excellent teacher.","B"],
+["Might Guy","NAR","Guy","Opens doors nobody should open.","B"],
+["Kakashi Hatake","NAR","Kakashi","Late to everything except the kill.","C"],
+["Gaara","NAR","Gaara","The sand gets there first.","C"],
+["Rock Lee","NAR","Lee","No talent whatsoever. Wins anyway.","D"],
+["Shikamaru Nara","NAR","Shikamaru","Cannot be bothered. Still out-thinks you.","D"],
+["Hinata Hyuga","NAR","Hinata","Sees exactly where it hurts.","D"],
+["Satoru Gojo","JJK","Gojo","The strongest, and unbearable about it.","S"],
+["Ryomen Sukuna","JJK","Sukuna","Twenty fingers of very old spite.","S"],
+["Toji Fushiguro","JJK","Toji","No cursed energy. Still the scariest.","B"],
+["Kento Nanami","JJK","Nanami","Clocks off at six. Lethal until then.","C"],
+["Yuji Itadori","JJK","Yuji","Punches far above his own weight class.","C"],
+["Megumi Fushiguro","JJK","Megumi","Shadows do the work.","C"],
+["Maki Zenin","JJK","Maki","Cursed tools and pure spite.","C"],
+["Nobara Kugisaki","JJK","Nobara","Hammer, nails, no hesitation.","D"],
+["Muzan Kibutsuji","DS","Muzan","Runs from everything, survives everything.","B"],
+["Akaza","DS","Akaza","Will not fight anyone weaker. Politely.","C"],
+["Kyojuro Rengoku","DS","Rengoku","Set his heart ablaze and meant it.","C"],
+["Giyu Tomioka","DS","Giyu","Says nothing. Cuts everything.","C"],
+["Shinobu Kocho","DS","Shinobu","Too small to behead, so she uses poison.","D"],
+["Tanjiro Kamado","DS","Tanjiro","Smells your intent before you move.","D"],
+["Zenitsu Agatsuma","DS","Zenitsu","Screams, faints, wins.","D"],
+["Inosuke Hashibira","DS","Inosuke","Boar head, no plan.","D"],
+["Lucius Zogratis","BC","Lucius","Time, and an unbearable smile.","A"],
+["Julius Novachrono","BC","Julius","Spends years he does not have.","A"],
+["Licht","BC","Licht","Sword saint with a grievance.","A"],
+["Yami Sukehiro","BC","Yami","Cuts the gap between here and there.","B"],
+["Mereoleona Vermillion","BC","Mereoleona","Fire, and absolutely no supervision.","B"],
+["Asta","BC","Asta","No magic at all. That is the problem.","B"],
+["Yuno","BC","Yuno","Everything comes easily, annoyingly.","B"],
+["Zenon Zogratis","BC","Zenon","Bone, and nothing behind the eyes.","B"],
+["Noelle Silva","BC","Noelle","Terrified, and a tidal wave anyway.","C"],
+["Sung Jinwoo","SL","Shadow Monarch","Levelled up past the whole system.","S"],
+["Beru","SL","Beru","Ant king, extremely loyal now.","A"],
+["Thomas Andre","SL","Goliath","America's national-level problem.","A"],
+["Cha Hae-In","SL","Cha Hae-In","Smells mana. Dislikes yours.","B"],
+["Baek Yoonho","SL","White Tiger Guild","Turns into the obvious answer.","B"],
+["Igris","SL","Blood-Red Commander","Bows first, then removes you.","B"],
+["Go Gunhee","SL","Go Gunhee","Old, tired, still S-rank.","B"],
+["Albus Dumbledore","HP","Dumbledore","Knew for years and said nothing.","B"],
+["Lord Voldemort","HP","Tom Riddle","Split himself seven ways to dodge one death.","B"],
+["Severus Snape","HP","Snape","Always.","C"],
+["Bellatrix Lestrange","HP","Bellatrix","Enjoying this far too much.","C"],
+["Minerva McGonagall","HP","McGonagall","The desks fight for her.","C"],
+["Sirius Black","HP","Padfoot","Twelve years angry.","D"],
+["Hermione Granger","HP","Hermione","Read the counter-curse in third year.","D"],
+["Harry Potter","HP","Harry","Survives things. That is the whole gimmick.","D"]
 ];
 
 const SLOTS = 5, PURSE = 20;
+
+const UNIVERSES = {
+  MAR: { name: "Marvel",         group: "Comics" },
+  DC:  { name: "DC",             group: "Comics" },
+  NAR: { name: "Naruto",         group: "Anime"  },
+  JJK: { name: "Jujutsu Kaisen", group: "Anime"  },
+  DS:  { name: "Demon Slayer",   group: "Anime"  },
+  BC:  { name: "Black Clover",   group: "Anime"  },
+  SL:  { name: "Solo Leveling",  group: "Anime"  },
+  HP:  { name: "Harry Potter",   group: "Other"  }
+};
+
+// Tiers are scaled honestly across universes, never rebalanced. A weaker world
+// simply sits lower: Demon Slayer tops out at B, Harry Potter at B, while Gojo,
+// Sukuna and Sung Jinwoo genuinely earn S alongside Superman and Thor.
+const BANDS = {
+  all:    { name: "Mixed",        tiers: ["S","A","B","C","D","E"], blurb: "Everything from Superman to the Riddler." },
+  heavy:  { name: "Heavyweight",  tiers: ["S","A"],                 blurb: "World-enders only. S and A." },
+  mid:    { name: "Middleweight", tiers: ["B","C"],                 blurb: "The workhorses. B and C." },
+  street: { name: "Street",       tiers: ["D","E"],                 blurb: "No powers worth the name. D and E." }
+};
+
+// What is in the box. The host owns this and it travels to the joiner.
+let BOX = { u: ["MAR","DC"], band: "all", tiers: true };
+
+const inBox = c => BOX.u.includes(c[1]) && BANDS[BOX.band].tiers.includes(c[4]);
+const boxCount = () => STOCK.filter(inBox).length;
 
 const $ = id => document.getElementById(id);
 const money = n => "$" + n;
@@ -524,7 +631,7 @@ function handle(m){
 }
 
 function snapshot(fx){
-  return { P, lot, lotNum, over, deckLeft: deck ? deck.length : 0, fx: fx || null };
+  return { P, lot, lotNum, over, box: BOX, deckLeft: deck ? deck.length : 0, fx: fx || null };
 }
 
 function pushState(fx){
@@ -539,6 +646,7 @@ function applyState(s, local){
   // publishes, so comparing state-to-state would never see the change.
   const lotChanged = drawnLot !== s.lotNum;
   P = s.P; lot = s.lot; lotNum = s.lotNum; over = s.over; deckLeft = s.deckLeft;
+  if (s.box) BOX = s.box;
   if (!local) started = true;
   if (over) return showFaceoff();
   showScreen("auction");
@@ -562,6 +670,73 @@ function showScreen(which){
   for (const id of ["setup","lobby","auction","faceoff"]) $(id).hidden = (id !== which);
 }
 
+/* ------------------------- the box picker ------------------------- */
+// Rendered in two places: the setup screen, and the face-off so the host can
+// swap universes in or out before running it again.
+function paintBox(chipsEl, bandEl, countEl, onChange){
+  chipsEl.innerHTML = "";
+  let group = "";
+  for (const [code, u] of Object.entries(UNIVERSES)){
+    if (u.group !== group){
+      group = u.group;
+      const h = document.createElement("span");
+      h.className = "chip-group"; h.textContent = group;
+      chipsEl.appendChild(h);
+    }
+    const on = BOX.u.includes(code);
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip" + (on ? " on" : "");
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.innerHTML = `<span class="chip-name"></span><span class="chip-n"></span>`;
+    b.querySelector(".chip-name").textContent = u.name;
+    b.querySelector(".chip-n").textContent =
+      STOCK.filter(c => c[1] === code && BANDS[BOX.band].tiers.includes(c[4])).length;
+    b.addEventListener("click", () => {
+      BOX.u = on ? BOX.u.filter(x => x !== code) : BOX.u.concat(code);
+      if (!BOX.u.length) BOX.u = [code];              // never empty the box
+      onChange();
+    });
+    chipsEl.appendChild(b);
+  }
+
+  bandEl.innerHTML = "";
+  for (const [key, band] of Object.entries(BANDS)){
+    const on = BOX.band === key;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "band" + (on ? " on" : "");
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.innerHTML = `<b></b><em></em>`;
+    b.querySelector("b").textContent = band.name;
+    b.querySelector("em").textContent = band.blurb;
+    b.addEventListener("click", () => { BOX.band = key; onChange(); });
+    bandEl.appendChild(b);
+  }
+
+  const n = boxCount();
+  countEl.textContent = n < 10
+    ? `Only ${n} characters match. A draft needs 10, so widen the box.`
+    : `${n} characters in the box.`;
+  countEl.classList.toggle("thin", n < 10);
+  return n;
+}
+
+const boxSummary = () =>
+  BOX.u.map(c => UNIVERSES[c].name).join(", ") +
+  (BOX.band === "all" ? "" : " · " + BANDS[BOX.band].name) +
+  (BOX.tiers ? "" : " · tiers hidden");
+
+function refreshFoBox(){
+  paintBox($("foChips"), $("foBands"), $("foCount"), refreshFoBox);
+  $("againBtn").disabled = boxCount() < 10;
+}
+
+function refreshSetupBox(){
+  BOX.tiers = $("showTiers").checked;
+  paintBox($("uniChips"), $("bandRow"), $("boxCount"), refreshSetupBox);
+}
+
 /* ---------------------------- tables ---------------------------- */
 function shuffle(a){
   for (let i = a.length - 1; i > 0; i--){
@@ -572,16 +747,19 @@ function shuffle(a){
 }
 
 function dealDeck(){
-  deck = shuffle(STOCK.map((c, i) => ({
-    name: c[0], pub: c[1], alias: c[2], note: c[3],
-    no: 1 + ((i * 37 + 11) % 480)
-  })));
+  deck = shuffle(STOCK
+    .map((c, i) => ({
+      name: c[0], pub: c[1], alias: c[2], note: c[3], tier: c[4],
+      no: 1 + ((i * 37 + 11) % 480)
+    }))
+    .filter(c => BOX.u.includes(c.pub) && BANDS[BOX.band].tiers.includes(c.tier)));
   lotNum = 0; over = false;
 }
 
 async function openTable(){
   const n = myName();
   if (!n) return nudge("Put your name on the tab first.");
+  if (boxCount() < 10) return nudge("The box is too thin for a draft. Add a universe or widen the tiers.");
   HOST = true; ME = 0; started = false;
   ROOM = code4();
   P = [{ name: n, purse: PURSE, roster: [] }, { name: "…", purse: PURSE, roster: [] }];
@@ -589,6 +767,7 @@ async function openTable(){
   try { await connect(); } catch { return nudge("Could not reach the table service. Check your connection and try again."); }
   $("setupMsg").textContent = "";
   $("lobbyCode").textContent = ROOM;
+  $("lobbyBox").textContent = boxSummary();
   $("shareLink").value = location.origin + location.pathname + "?r=" + ROOM;
   showScreen("lobby");
 }
@@ -733,14 +912,18 @@ function renderLot(){
   const c = lot.char;
   const cover = $("cover"), issue = $("issue");
   cover.dataset.pub = c.pub;
-  $("cvPub").textContent = c.pub === "M" ? "Marvel" : "DC";
+  cover.dataset.grp = (UNIVERSES[c.pub] || {}).group || "Other";
+  $("cvPub").textContent = (UNIVERSES[c.pub] || {}).name || c.pub;
   $("cvNo").textContent = "No. " + c.no;
   $("cvName").textContent = c.name;
   $("cvInit").textContent = initials(c.name);
   fitName();
   $("cvAlias").textContent = c.alias;
   $("cvNote").textContent = c.note;
-  $("cvPubFoot").textContent = c.pub === "M" ? "Marvel Comics Group" : "DC Comics";
+  $("cvPubFoot").textContent = (UNIVERSES[c.pub] || {}).name || c.pub;
+  $("cvTier").textContent = c.tier;
+  $("cvTier").dataset.t = c.tier;
+  $("cvTier").hidden = !BOX.tiers;
   $("cvLot").textContent = String(lotNum).padStart(2, "0");
   $("lotNo").textContent = "Lot " + lotNum;
   $("stockLeft").textContent = deckLeft + " left in box";
@@ -887,6 +1070,8 @@ function finish(){
 function showFaceoff(){
   showScreen("faceoff");
   $("againBtn").hidden = !HOST;
+  $("foBox").hidden = !HOST;
+  if (HOST) refreshFoBox();
   for (const p of [0, 1]){
     $("foName" + p).textContent = P[p].name;
     const ol = $("foList" + p);
@@ -896,7 +1081,7 @@ function showFaceoff(){
       li.className = "fo-item";
       li.innerHTML = `<span class="fi-name"></span><span class="fi-pub"></span><span class="fi-price"></span>`;
       li.querySelector(".fi-name").textContent = r.char.name;
-      li.querySelector(".fi-pub").textContent = r.char.pub === "M" ? "Marvel" : "DC";
+      li.querySelector(".fi-pub").textContent = (UNIVERSES[r.char.pub] || {}).name || r.char.pub;
       li.querySelector(".fi-price").textContent = money(r.price);
       ol.appendChild(li);
     });
@@ -961,8 +1146,8 @@ async function writeFight(){
   send({ t: "writing", mode });
   const payload = {
     mode,
-    a: { name: P[0].name, picks: P[0].roster.map(r => ({ name: r.char.name, pub: r.char.pub, price: r.price })) },
-    b: { name: P[1].name, picks: P[1].roster.map(r => ({ name: r.char.name, pub: r.char.pub, price: r.price })) }
+    a: { name: P[0].name, picks: P[0].roster.map(r => ({ name: r.char.name, world: (UNIVERSES[r.char.pub]||{}).name || r.char.pub, tier: r.char.tier, price: r.price })) },
+    b: { name: P[1].name, picks: P[1].roster.map(r => ({ name: r.char.name, world: (UNIVERSES[r.char.pub]||{}).name || r.char.pub, tier: r.char.tier, price: r.price })) }
   };
   try {
     const r = await fetch("/api/scenario", {
@@ -985,7 +1170,7 @@ async function writeFight(){
 
 function rosterText(){
   const side = p => P[p].roster
-    .map((r, i) => `${i + 1}. ${r.char.name} (${r.char.pub === "M" ? "Marvel" : "DC"}), ${money(r.price)}`)
+    .map((r, i) => `${i + 1}. ${r.char.name} (${(UNIVERSES[r.char.pub] || {}).name || r.char.pub}${r.char.tier ? ", tier " + r.char.tier : ""}), ${money(r.price)}`)
     .join("\n");
   return `COVER PRICE / FINAL ROSTERS
 Base versions. Random encounter. $20 purse each.
@@ -1021,6 +1206,8 @@ $("cancelBtn").addEventListener("click", () => {
 });
 
 try { $("myName").value = localStorage.getItem("longbox.name") || ""; } catch {}
+$("showTiers").addEventListener("change", refreshSetupBox);
+refreshSetupBox();
 
 // A code in the link means they were invited, prefill it and say so.
 const invited = new URLSearchParams(location.search).get("r");
@@ -1090,8 +1277,9 @@ $("againBtn").addEventListener("click", () => {
   $("story").hidden = true; $("storyBody").innerHTML = ""; window.__story = null;
   $("writeBtn").disabled = false;
   $("writeHint").textContent = "One issue, written from the two rosters above.";
+  if (boxCount() < 10) return;
   P = [{ name: P[0].name, purse: PURSE, roster: [] }, { name: P[1].name, purse: PURSE, roster: [] }];
-  lot = null; lastFx = 0;
+  lot = null; lastFx = 0; drawnLot = -1;
   dealDeck();
   nextLot();
 });
@@ -1310,6 +1498,90 @@ body{
 .stamp-btn:hover span{ transform:rotate(-1.6deg) scale(1.014); background:rgba(176,46,36,.11); }
 .stamp-btn:active span{ transform:rotate(-.4deg) scale(.985); box-shadow:none; }
 .stamp-btn-sm span{ padding:12px 20px; font-size:clamp(17px,3vw,22px); }
+
+/* ---------- what goes in the box ---------- */
+.box-pick{
+  margin-bottom:28px; padding-top:20px;
+  border-top:3px double var(--rule);
+}
+.box-note{
+  margin:0 0 14px; font-size:13.5px; line-height:1.5;
+  color:var(--ink-2); max-width:60ch;
+}
+.chips{ display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin-bottom:16px; }
+.chip-group{
+  width:100%; margin:8px 0 2px;
+  font-size:10px; font-weight:700; letter-spacing:.19em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+.chip-group:first-child{ margin-top:0; }
+.chip{
+  display:inline-flex; align-items:baseline; gap:7px;
+  padding:7px 12px; cursor:pointer;
+  background:rgba(255,255,255,.26);
+  border:1px solid rgba(70,52,28,.42); border-radius:2px;
+  font-family:var(--data); font-size:13px; font-weight:600; color:var(--ink-2);
+  transition:background-color .14s, color .14s, border-color .14s;
+}
+.chip-n{ font-size:10.5px; font-weight:700; opacity:.6; font-variant-numeric:tabular-nums; }
+.chip:hover{ border-color:var(--ink); }
+.chip.on{ background:var(--ink); border-color:var(--ink); color:var(--pulp); }
+
+.band-row{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:16px; }
+.band{
+  padding:9px 11px; text-align:left; cursor:pointer;
+  background:rgba(255,255,255,.26);
+  border:1px solid rgba(70,52,28,.42); border-top:4px solid rgba(70,52,28,.42);
+  transition:border-top-color .14s, background-color .14s;
+}
+.band b{
+  display:block; font-family:var(--slab); font-size:13.5px;
+  text-transform:uppercase; letter-spacing:-.02em; color:var(--ink);
+}
+.band em{ display:block; margin-top:3px; font-size:11.5px; line-height:1.35; color:var(--ink-3); font-style:italic; }
+.band:hover{ border-top-color:var(--ink-3); }
+.band.on{ border-top-color:var(--red); background:rgba(255,255,255,.5); }
+
+.tier-toggle{ display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:12px; }
+.tier-toggle input{ flex:0 0 auto; margin:3px 0 0; width:15px; height:15px; accent-color:var(--red); }
+.tier-toggle b{ display:block; font-size:13.5px; color:var(--ink); }
+.tier-toggle em{ display:block; margin-top:3px; font-size:12.5px; line-height:1.45; color:var(--ink-3); max-width:56ch; }
+
+.box-count{
+  margin:0; font-size:11px; font-weight:700; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+.box-count.thin{ color:var(--red-dk); }
+
+.lobby-box{
+  margin:14px 0 0; font-family:var(--type);
+  font-size:13.5px; color:var(--ink-2);
+}
+.fo-box{
+  width:min(720px,100%); margin:0 0 4px; padding:18px 20px 16px;
+  border-top:0;
+  background:linear-gradient(180deg, rgba(255,255,255,.20), rgba(120,90,50,.13)), var(--pulp-3);
+  border:1px solid rgba(70,52,28,.5);
+  text-align:left;
+}
+.fo-box .fm-head{ color:var(--ink-2); }
+
+/* tier badge on the cover */
+.cv-box{ position:relative; }
+.cv-tier{
+  position:absolute; left:-2px; right:-2px; bottom:-14px;
+  display:block; padding:1px 0 0;
+  font-family:var(--slab); font-style:normal; font-size:12px; line-height:1.2;
+  text-align:center; letter-spacing:.06em; color:var(--pulp);
+  background:var(--ink-2); border:2px solid var(--ink);
+}
+.cv-tier[hidden]{ display:none; }
+.cv-tier[data-t="S"]{ background:var(--red); }
+.cv-tier[data-t="A"]{ background:var(--red-dk); }
+.cv-tier[data-t="B"]{ background:var(--ink); }
+.cv-tier[data-t="C"]{ background:var(--ink-2); }
+.cv-tier[data-t="D"],
+.cv-tier[data-t="E"]{ background:var(--ink-3); }
 
 /* ---------- lobby: opening or joining a table ---------- */
 .tabs-solo{ grid-template-columns:minmax(0,320px); justify-content:center; }
@@ -1585,8 +1857,9 @@ body{
   font-family:var(--slab); font-size:14px; letter-spacing:.01em;
   text-transform:uppercase;
 }
-.cover[data-pub="M"] .cv-pub{ color:var(--red-dk); }
-.cover[data-pub="D"] .cv-pub{ color:var(--blue-dk); }
+.cover[data-grp="Comics"] .cv-pub{ color:var(--red-dk); }
+.cover[data-grp="Anime"]  .cv-pub{ color:var(--blue-dk); }
+.cover[data-grp="Other"]  .cv-pub{ color:#5c4a1f; }
 .cv-no{
   font-size:11px; font-weight:700; letter-spacing:.13em;
   text-transform:uppercase; color:var(--ink-3);
@@ -1600,8 +1873,9 @@ body{
   font-family:var(--slab); font-size:25px; line-height:1;
   letter-spacing:-.045em; color:var(--ink);
 }
-.cover[data-pub="M"] .cv-box{ background:rgba(192,54,31,.13); }
-.cover[data-pub="D"] .cv-box{ background:rgba(39,73,127,.13); }
+.cover[data-grp="Comics"] .cv-box{ background:rgba(192,54,31,.13); }
+.cover[data-grp="Anime"]  .cv-box{ background:rgba(39,73,127,.13); }
+.cover[data-grp="Other"]  .cv-box{ background:rgba(120,95,35,.15); }
 
 .cv-name{
   margin:0;
@@ -1980,6 +2254,7 @@ body{
   .tabs-row{ grid-template-columns:1fr; }
   .versus{ text-align:center; }
   .doors{ grid-template-columns:1fr; gap:22px; }
+  .band-row{ grid-template-columns:1fr 1fr; }
   .door-copy{ min-height:0; }
   .share-row{ flex-direction:column; }
   .floor{ gap:14px; }
