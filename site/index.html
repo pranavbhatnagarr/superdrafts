@@ -33,12 +33,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <main id="setup" class="screen setup-screen">
   <div class="guide-cover">
     <div class="cover-rules" aria-hidden="true"></div>
-    <p class="cover-edition">Two Buyers &middot; One Box &middot; Nothing Goes Back</p>
+    <p class="cover-edition">Twenty Lots &middot; Ten Sold &middot; Two Buyers</p>
     <h1 class="cover-title">Super Drafts</h1>
     <p class="cover-sub">Ten Characters. Twenty Dollars. One Fight.</p>
 
     <div class="cover-strip">
-      <span id="stockCount">Issues in Stock</span><i></i><span>Marvel &amp; DC</span><i></i><span>Base Versions Only</span><i></i><span>No Cosmic Gods</span>
+      <span id="stockCount">Issues in Stock</span><i></i><span>Comics &amp; Anime</span><i></i><span>Base Versions</span><i></i><span>No Cosmic Gods</span><i></i><span>Twenty a Sale</span>
     </div>
 
     <div class="tabs-row tabs-solo">
@@ -51,7 +51,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     <section class="box-pick" aria-label="What goes in the box">
       <h2 class="fm-head">What goes in the box</h2>
-      <p class="box-note">You choose this when you open a table. Your friend sees it before they sit down.</p>
+      <p class="box-note">Twenty characters are drawn from whatever you tick here. Your friend sees the list before they sit down.</p>
 
       <div class="chips" id="uniChips"></div>
 
@@ -69,7 +69,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <div class="doors">
       <section class="door">
         <h2 class="fm-head">Open a table</h2>
-        <p class="door-copy">You take the red pencil, name the box, and get a code to send your friend.</p>
+        <p class="door-copy">You take the red pencil, choose what goes in the box, and get a code to send over.</p>
         <button id="openBox" class="stamp-btn" type="button"><span>Open the Box</span></button>
       </section>
       <section class="door">
@@ -89,15 +89,16 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <section class="frontmatter" aria-label="How the sale runs">
       <h2 class="fm-head">How the sale runs</h2>
       <ol class="fm-list">
-        <li><b>One issue at a time.</b> A character is pulled from the box at random. Nobody knows what is coming next.</li>
-        <li><b>Nothing goes back in the box.</b> Every issue drawn ends up on a roster. Exactly ten come out, five each, and there is no passing or no-sale.</li>
-        <li><b>Someone has to open.</b> The obligation alternates each lot. The opener bids $1 or more; the other side raises, or says <b>Yours</b> and hands it over at the standing price.</li>
-        <li><b>Yours is a weapon.</b> Say it before anyone has bid and your opponent takes the issue for $1, whether they wanted it or not. A slot is a slot.</li>
-        <li><b>Keep a dollar per slot.</b> You can never bid so deep that you cannot afford $1 for each empty slot, so both teams always reach five.</li>
-        <li><b>Unopposed.</b> Once one roster is full, every remaining issue goes straight to the other buyer at $1.</li>
-        <li><b>Five against five.</b> Base versions, random encounter. Copy the rosters out at the end and get the fight written up.</li>
+        <li><b>Twenty lots, ten sold.</b> Twenty characters come out of the box one at a time, in a random order. You each buy five. The other ten pass in unsold.</li>
+        <li><b>Open outcry.</b> Bid against each other in dollars. When you stop bidding, hit <b>Pass</b> and the standing bid takes the lot at that price.</li>
+        <li><b>Nobody bids, it passes in.</b> If you both pass before anyone opens, that character is gone for good. That is how the other ten leave the box.</li>
+        <li><b>Passes are finite, and you never count them.</b> Ten lots have to be bought, so every lot you let go is one less chance to be choosy. The header shows what is left.</li>
+        <li><b>Then it becomes compulsory.</b> When the lots remaining equal the buys still owed, passing stops. Whatever comes up, somebody is buying it.</li>
+        <li><b>Keep a dollar per slot.</b> You can never bid so deep that you cannot afford $1 for each empty slot, so both rosters always reach five.</li>
+        <li><b>Buying alone costs to walk away.</b> Once the other side is full, each pass you make costs $1, so a fat purse buys patience and nothing else.</li>
+        <li><b>Five against five.</b> Base versions. Pick a random encounter or a week of prep, and the fight gets written up on the spot.</li>
       </ol>
-      <p class="fm-foot">Tiers are the only number on the table. Everything else is what you already know.</p>
+      <p class="fm-foot">Tiers are the only number on the table, and they decide the fight. Everything else is what you already know.</p>
     </section>
 
     <p class="cover-hint">Two devices, anywhere in the world. Every bid is public, so keep a call open and talk your way into a bargain.</p>
@@ -723,7 +724,7 @@ function paintBox(chipsEl, countEl, onChange){
   const n = boxCount();
   countEl.textContent = n < MIN_BOX
     ? `Only ${n} characters match. A sale needs ${MIN_BOX}, so widen the box.`
-    : `${n} characters in the box.`;
+    : `${n} to draw from. Twenty come out each sale.`;
   countEl.classList.toggle("thin", n < MIN_BOX);
   return n;
 }
@@ -1249,7 +1250,7 @@ Write the 5v5 as two comic-book scenarios.`;
 }
 
 /* ---------------------------- wiring ---------------------------- */
-$("stockCount").textContent = STOCK.length + " Issues in Stock";
+$("stockCount").textContent = STOCK.length + " Characters";
 $("openBox").addEventListener("click", openTable);
 $("joinBtn").addEventListener("click", joinTable);
 $("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") joinTable(); });
