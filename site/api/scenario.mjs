@@ -22,9 +22,16 @@ const MODELS = [
   "llama-3.1-8b-instant"
 ].filter(Boolean).filter((m, i, all) => all.indexOf(m) === i);
 
-// A finished issue runs well under this. It was 2200, which burned the daily
-// allowance in about thirty stories; this roughly doubles a day's play.
-const MAX_TOKENS = 1500;
+// Room to finish. At 1500 the model spent everything on the story and got cut
+// off before the ending, which is worse than costing a few more tokens.
+const MAX_TOKENS = 2600;
+
+// Appended to the prompt: finishing is the priority, length is not.
+const FINISH_RULE = `
+
+FINISHING IS MANDATORY. All four sections must appear, ending with "The draft
+read". If you are running out of room, write shorter paragraphs or fewer of
+them. Never stop in the middle. An issue without its ending is worthless.`;
 
 // Groq's raw errors are accurate and unreadable. Say what it means instead.
 function explain(msg, status){
@@ -147,7 +154,7 @@ export default async function handler(req, res){
   if (!a || !b) return res.status(400).json({ error: "Two full rosters are required." });
 
   const messages = [
-    { role: "system", content: SYSTEM },
+    { role: "system", content: SYSTEM + FINISH_RULE },
     { role: "user", content:
 `${MODES[mode]}
 
@@ -166,27 +173,45 @@ Write the issue.` }
 
     // Each model has its own daily token allowance, so a model that has run dry
     // is not the end of the night. Walk down the list until one answers.
-    for (const model of MODELS){
+    const ask = async (model, msgs) => {
       const r = await fetch(ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
-        body: JSON.stringify({ model, temperature: 0.9, max_tokens: MAX_TOKENS, messages })
+        body: JSON.stringify({ model, temperature: 0.9, max_tokens: MAX_TOKENS, messages: msgs })
       });
       const data = await r.json().catch(() => null);
+      const c = data && data.choices && data.choices[0];
+      return {
+        ok: r.ok, status: r.status,
+        text: (c && c.message && c.message.content) || "",
+        cut: !!c && c.finish_reason === "length",
+        err: (data && data.error && data.error.message) || `HTTP ${r.status}`
+      };
+    };
 
-      if (r.ok){
-        raw = (data && data.choices && data.choices[0] && data.choices[0].message)
-          ? data.choices[0].message.content : "";
-        if (raw){ used = model; break; }
-        lastErr = "The writer came back empty.";
-        continue;
+    for (const model of MODELS){
+      let out = await ask(model, messages);
+
+      // Ran out of room before the ending. Ask once more for a tighter issue,
+      // sending the brief again rather than the failed draft, which is cheaper.
+      if (out.ok && out.text && out.cut){
+        const tighter = [
+          { role: "system", content: SYSTEM + FINISH_RULE +
+            "\n\nYour previous attempt was cut off. Use at most FOUR short story " +
+            "paragraphs this time and make certain you reach the end." },
+          messages[1]
+        ];
+        const second = await ask(model, tighter);
+        if (second.ok && second.text) out = second;
       }
 
-      lastStatus = r.status;
-      lastErr = (data && data.error && data.error.message) || `HTTP ${r.status}`;
+      if (out.ok && out.text){ raw = out.text; used = model; break; }
+
+      if (out.ok){ lastErr = "The writer came back empty."; continue; }
+      lastStatus = out.status;
+      lastErr = out.err;
       // Out of quota, unknown model, retired model or overloaded: try the next.
-      const worthRetrying = [429, 400, 404, 413, 503].includes(r.status);
-      if (!worthRetrying) break;
+      if (![429, 400, 404, 413, 503].includes(out.status)) break;
     }
 
     if (!raw) return res.status(502).json({ error: explain(lastErr, lastStatus) });
