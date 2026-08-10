@@ -9,7 +9,39 @@
 // Both speak the OpenAI chat-completions shape, so nothing else changes.
 
 const ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+
+// Tried in order. Groq meters each model separately on the free tier, so when
+// the good one is out of tokens for the day the next still works. An id that
+// no longer exists just fails and we move on, which keeps this list safe to
+// leave alone as models come and go. GROQ_MODEL jumps the queue if set.
+const MODELS = [
+  process.env.GROQ_MODEL,
+  "llama-3.3-70b-versatile",
+  "openai/gpt-oss-120b",
+  "moonshotai/kimi-k2-instruct",
+  "llama-3.1-8b-instant"
+].filter(Boolean).filter((m, i, all) => all.indexOf(m) === i);
+
+// A finished issue runs well under this. It was 2200, which burned the daily
+// allowance in about thirty stories; this roughly doubles a day's play.
+const MAX_TOKENS = 1500;
+
+// Groq's raw errors are accurate and unreadable. Say what it means instead.
+function explain(msg, status){
+  const m = String(msg || "");
+  if (/tokens per day|TPD|rate limit/i.test(m)){
+    const hit = m.match(/try again in ([0-9hms.]+)/i);
+    const wait = hit ? hit[1].replace(/\.+$/, "") : "";
+    return "Every free model is out of tokens for today. The allowance resets at "
+      + "midnight UTC" + (wait ? `, or the top one frees up in about ${wait}` : "")
+      + ". The draft is safe, so you can write the fight later.";
+  }
+  if (/decommission|does not exist|not found|invalid.*model/i.test(m))
+    return "None of the writers are available right now. The model list may need updating.";
+  if (status === 401 || /api key/i.test(m))
+    return "The API key was rejected. Check GROQ_API_KEY in Vercel.";
+  return m || "The writer could not be reached.";
+}
 
 const SYSTEM = `You are a veteran comics writer scripting a crossover one-shot.
 
@@ -114,17 +146,9 @@ export default async function handler(req, res){
   const mode = MODES[body && body.mode] ? body.mode : "random";
   if (!a || !b) return res.status(400).json({ error: "Two full rosters are required." });
 
-  try {
-    const r = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
-      body: JSON.stringify({
-        model: MODEL,
-        temperature: 0.9,
-        max_tokens: 2200,
-        messages: [
-          { role: "system", content: SYSTEM },
-          { role: "user", content:
+  const messages = [
+    { role: "system", content: SYSTEM },
+    { role: "user", content:
 `${MODES[mode]}
 
 These are the two sides. Refer to them by these owner names throughout, never as
@@ -135,25 +159,44 @@ ${a}
 ${b}
 
 Write the issue.` }
-        ]
-      })
-    });
+  ];
 
-    const data = await r.json().catch(() => null);
-    if (!r.ok){
-      const msg = (data && data.error && data.error.message) || `Upstream returned ${r.status}.`;
-      return res.status(502).json({ error: msg });
+  try {
+    let raw = "", used = "", lastErr = "", lastStatus = 0;
+
+    // Each model has its own daily token allowance, so a model that has run dry
+    // is not the end of the night. Walk down the list until one answers.
+    for (const model of MODELS){
+      const r = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
+        body: JSON.stringify({ model, temperature: 0.9, max_tokens: MAX_TOKENS, messages })
+      });
+      const data = await r.json().catch(() => null);
+
+      if (r.ok){
+        raw = (data && data.choices && data.choices[0] && data.choices[0].message)
+          ? data.choices[0].message.content : "";
+        if (raw){ used = model; break; }
+        lastErr = "The writer came back empty.";
+        continue;
+      }
+
+      lastStatus = r.status;
+      lastErr = (data && data.error && data.error.message) || `HTTP ${r.status}`;
+      // Out of quota, unknown model, retired model or overloaded: try the next.
+      const worthRetrying = [429, 400, 404, 413, 503].includes(r.status);
+      if (!worthRetrying) break;
     }
-    const raw = data && data.choices && data.choices[0] && data.choices[0].message
-      ? data.choices[0].message.content : "";
-    if (!raw) return res.status(502).json({ error: "The writer came back empty. Try again." });
+
+    if (!raw) return res.status(502).json({ error: explain(lastErr, lastStatus) });
 
     // Asking a model not to use em dashes is a suggestion; this makes it a fact.
     const text = raw
       .replace(/^[ \t]*[—–][ \t]*/gm, "")     // a dash opening a line is a bullet
       .replace(/[ \t]*[—–][ \t]*/g, ", ");    // anything else becomes a comma
 
-    return res.status(200).json({ text, model: MODEL });
+    return res.status(200).json({ text, model: used });
   } catch (e){
     return res.status(502).json({ error: "Could not reach the writer: " + (e && e.message) });
   }
