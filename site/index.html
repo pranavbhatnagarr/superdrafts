@@ -55,8 +55,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
       <div class="chips" id="uniChips"></div>
 
-      <div class="band-row" id="bandRow"></div>
-
       <label class="tier-toggle">
         <input type="checkbox" id="showTiers" checked>
         <span>
@@ -133,7 +131,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <h2 class="gh-title">Super Drafts</h2>
     <div class="gh-rule" aria-hidden="true"></div>
     <p class="gh-meta">
-      <span id="lotNo">Lot 1</span><i></i><span id="stockLeft">144 left in box</span><i></i>
+      <span id="lotNo">Lot 1</span><i></i><span id="stockLeft">20 of 20 left</span><i></i><span id="passLeft">10 passes</span><i></i>
       <span class="wire" id="wire"><b class="wire-dot"></b><span id="wireText">connected</span></span>
     </p>
   </header>
@@ -146,7 +144,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <p class="purse-line">Purse remaining</p>
       <p class="purse-figure" id="purse0">$20</p>
       <ol class="slots" id="slots0"></ol>
-      <p class="ledger-foot"><span id="spent0">$0 spent</span> &middot; <span id="left0">5 slots open</span> &middot; <span id="skips0">3 skips</span></p>
+      <p class="ledger-foot"><span id="spent0">$0 spent</span> &middot; <span id="left0">5 slots open</span></p>
     </aside>
 
     <!-- CENTRE: THE ISSUE -->
@@ -192,7 +190,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <p class="purse-line">Purse remaining</p>
       <p class="purse-figure" id="purse1">$20</p>
       <ol class="slots" id="slots1"></ol>
-      <p class="ledger-foot"><span id="spent1">$0 spent</span> &middot; <span id="left1">5 slots open</span> &middot; <span id="skips1">3 skips</span></p>
+      <p class="ledger-foot"><span id="spent1">$0 spent</span> &middot; <span id="left1">5 slots open</span></p>
     </aside>
   </div>
 
@@ -206,8 +204,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <span>Other</span>
           <input type="number" id="other0" min="1" step="1" inputmode="numeric" aria-label="Custom bid for player one">
         </label>
-        <button class="pn-pass" type="button" data-pass="0">Yours</button>
-        <button class="pn-skip" type="button" data-skip="0">Skip</button>
+        <button class="pn-pass" type="button" data-pass="0">Pass</button>
       </div>
       <p class="pn-state" id="state0"></p>
     </div>
@@ -220,8 +217,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <span>Other</span>
           <input type="number" id="other1" min="1" step="1" inputmode="numeric" aria-label="Custom bid for player two">
         </label>
-        <button class="pn-pass" type="button" data-pass="1">Yours</button>
-        <button class="pn-skip" type="button" data-skip="1">Skip</button>
+        <button class="pn-pass" type="button" data-pass="1">Pass</button>
       </div>
       <p class="pn-state" id="state1"></p>
     </div>
@@ -295,7 +291,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <section class="box-pick fo-box" id="foBox" hidden>
       <h2 class="fm-head">Change the box before the next one</h2>
       <div class="chips" id="foChips"></div>
-      <div class="band-row" id="foBands"></div>
       <p class="box-count" id="foCount"></p>
     </section>
 
@@ -532,13 +527,6 @@ const UNIVERSES = {
 // Tiers are scaled honestly across universes, never rebalanced. A weaker world
 // simply sits lower: Demon Slayer tops out at B, Harry Potter at B, while Gojo,
 // Sukuna and Sung Jinwoo genuinely earn S alongside Superman and Thor.
-const BANDS = {
-  all:    { name: "Mixed",        tiers: ["S","A","B","C","D","E"], blurb: "Everything from Superman to the Riddler." },
-  heavy:  { name: "Heavyweight",  tiers: ["S","A"],                 blurb: "World-enders only. S and A." },
-  mid:    { name: "Middleweight", tiers: ["B","C"],                 blurb: "The workhorses. B and C." },
-  street: { name: "Street",       tiers: ["D","E"],                 blurb: "No powers worth the name. D and E." }
-};
-
 // Tier points are deliberately steep. One S has to outweigh a handful of Cs,
 // otherwise a tier is just a label and the draft is decided by volume.
 const LADDER = ["S","A","B","C","D","E"];
@@ -565,13 +553,13 @@ function verdict(mode){
   return { a, b, gap, close: gap <= CLOSE, winner: gap <= CLOSE ? null : (a > b ? 0 : 1) };
 }
 
-const SKIPS = 3;
+const POOL = 20;      // characters drawn per sale: ten bought, the rest passed in
 
 // What is in the box. The host owns this and it travels to the joiner.
-let BOX = { u: ["MAR","DC"], band: "all", tiers: true };
+let BOX = { u: ["MAR","DC"], tiers: true };
 
-const MIN_BOX = 16;   // ten sold, plus up to six thrown out
-const inBox = c => BOX.u.includes(c[1]) && BANDS[BOX.band].tiers.includes(c[4]);
+const MIN_BOX = 20;   // one full sale
+const inBox = c => BOX.u.includes(c[1]);
 const boxCount = () => STOCK.filter(inBox).length;
 
 const $ = id => document.getElementById(id);
@@ -648,7 +636,7 @@ function handle(m){
   }
   if (m.t === "act" && HOST && started){
     if (m.p !== 1) return;                       // the guest only ever moves for themselves
-    m.kind === "bid" ? bid(1, m.amount) : m.kind === "skip" ? skip(1) : concede(1);
+    m.kind === "bid" ? bid(1, m.amount) : pass(1);
   }
   if (m.t === "state" && !HOST) applyState(m.s);
   // The story is written once and shared, so both sides read the same issue.
@@ -695,9 +683,7 @@ function applyState(s, local){
 /* An action either runs here (host) or travels to the referee (guest). */
 function act(kind, amount){
   if (!HOST) return send({ t: "act", p: 1, kind, amount });
-  if (kind === "bid") return bid(0, amount);
-  if (kind === "skip") return skip(0);
-  return concede(0);
+  return kind === "bid" ? bid(0, amount) : pass(0);
 }
 
 function showScreen(which){
@@ -707,7 +693,7 @@ function showScreen(which){
 /* ------------------------- the box picker ------------------------- */
 // Rendered in two places: the setup screen, and the face-off so the host can
 // swap universes in or out before running it again.
-function paintBox(chipsEl, bandEl, countEl, onChange){
+function paintBox(chipsEl, countEl, onChange){
   chipsEl.innerHTML = "";
   let group = "";
   for (const [code, u] of Object.entries(UNIVERSES)){
@@ -725,7 +711,7 @@ function paintBox(chipsEl, bandEl, countEl, onChange){
     b.innerHTML = `<span class="chip-name"></span><span class="chip-n"></span>`;
     b.querySelector(".chip-name").textContent = u.name;
     b.querySelector(".chip-n").textContent =
-      STOCK.filter(c => c[1] === code && BANDS[BOX.band].tiers.includes(c[4])).length;
+      STOCK.filter(c => c[1] === code).length;
     b.addEventListener("click", () => {
       BOX.u = on ? BOX.u.filter(x => x !== code) : BOX.u.concat(code);
       if (!BOX.u.length) BOX.u = [code];              // never empty the box
@@ -734,41 +720,25 @@ function paintBox(chipsEl, bandEl, countEl, onChange){
     chipsEl.appendChild(b);
   }
 
-  bandEl.innerHTML = "";
-  for (const [key, band] of Object.entries(BANDS)){
-    const on = BOX.band === key;
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "band" + (on ? " on" : "");
-    b.setAttribute("aria-pressed", on ? "true" : "false");
-    b.innerHTML = `<b></b><em></em>`;
-    b.querySelector("b").textContent = band.name;
-    b.querySelector("em").textContent = band.blurb;
-    b.addEventListener("click", () => { BOX.band = key; onChange(); });
-    bandEl.appendChild(b);
-  }
-
   const n = boxCount();
   countEl.textContent = n < MIN_BOX
-    ? `Only ${n} characters match. A draft plus skips needs ${MIN_BOX}, so widen the box.`
+    ? `Only ${n} characters match. A sale needs ${MIN_BOX}, so widen the box.`
     : `${n} characters in the box.`;
   countEl.classList.toggle("thin", n < MIN_BOX);
   return n;
 }
 
 const boxSummary = () =>
-  BOX.u.map(c => UNIVERSES[c].name).join(", ") +
-  (BOX.band === "all" ? "" : " · " + BANDS[BOX.band].name) +
-  (BOX.tiers ? "" : " · tiers hidden");
+  BOX.u.map(c => UNIVERSES[c].name).join(", ") + (BOX.tiers ? "" : " · tiers hidden");
 
 function refreshFoBox(){
-  paintBox($("foChips"), $("foBands"), $("foCount"), refreshFoBox);
+  paintBox($("foChips"), $("foCount"), refreshFoBox);
   $("againBtn").disabled = boxCount() < MIN_BOX;
 }
 
 function refreshSetupBox(){
   BOX.tiers = $("showTiers").checked;
-  paintBox($("uniChips"), $("bandRow"), $("boxCount"), refreshSetupBox);
+  paintBox($("uniChips"), $("boxCount"), refreshSetupBox);
 }
 
 /* ---------------------------- tables ---------------------------- */
@@ -786,7 +756,8 @@ function dealDeck(){
       name: c[0], pub: c[1], alias: c[2], note: c[3], tier: c[4],
       no: 1 + ((i * 37 + 11) % 480)
     }))
-    .filter(c => BOX.u.includes(c.pub) && BANDS[BOX.band].tiers.includes(c.tier)));
+    .filter(c => BOX.u.includes(c.pub)));
+  deck = deck.slice(0, POOL);
   lotNum = 0; over = false;
 }
 
@@ -796,7 +767,7 @@ async function openTable(){
   if (boxCount() < MIN_BOX) return nudge("The box is too thin. Add a universe or widen the tiers.");
   HOST = true; ME = 0; started = false;
   ROOM = code4();
-  P = [{ name: n, purse: PURSE, roster: [], skips: SKIPS }, { name: "…", purse: PURSE, roster: [], skips: SKIPS }];
+  P = [{ name: n, purse: PURSE, roster: [] }, { name: "…", purse: PURSE, roster: [] }];
   $("setupMsg").textContent = "Opening the table…";
   try { await connect(); } catch { return nudge("Could not reach the table service. Check your connection and try again."); }
   $("setupMsg").textContent = "";
@@ -848,48 +819,43 @@ const soloRun   = () => inPlay(0) !== inPlay(1);
 const askPrice  = () => lot.high === null ? 1 : lot.price + 1;
 
 /* Host only from here down, the guest never runs the rules. */
+
+// A sale is exactly POOL characters long. Ten of them get bought, five each.
+// Everything else is passed in, so the number of passes left is simply the
+// lots remaining minus the buys still owed. When that reaches zero the rest
+// are compulsory, which is what stops anyone passing their way out of a roster.
+const bought      = () => P[0].roster.length + P[1].roster.length;
+const buysOwed    = () => (SLOTS * 2) - bought();
+const lotsLeft    = () => POOL - lotNum + 1;          // counting the one on the block
+const passesLeft  = () => Math.max(0, lotsLeft() - buysOwed());
+const compulsory  = () => passesLeft() <= 0;
+
+// Once one buyer is finished, walking away costs a dollar. Before that it is free.
+const passCost = p => (soloRun() && inPlay(p)) ? 1 : 0;
+
+// Who is on the hook when a lot cannot be passed in.
+function obliged(){
+  if (!compulsory()) return null;
+  if (soloRun()) return inPlay(0) ? 0 : 1;
+  return lot.opener;
+}
+
+function canPass(p){
+  if (over || !lot || lot.sold || !inPlay(p) || lot.passed[p]) return false;
+  if (lot.high === p) return false;                       // you are winning it
+  if (lot.high !== null) return true;                     // dropping out is always allowed
+  if (obliged() === p) return false;                      // somebody has to buy this one
+  const cost = passCost(p);
+  return P[p].purse - cost >= slotsLeft(p);               // must still be able to fill up
+}
+
 function nextLot(){
-  if (!inPlay(0) && !inPlay(1)) return finish();
-  if (!deck.length) return finish();
+  if (bought() >= SLOTS * 2) return finish();
+  if (lotNum >= POOL || !deck.length) return finish();
   lotNum++;
-  // Every issue sells, so the obligation to open has to sit somewhere. It
-  // alternates, which also stops both sides racing to dump a dud on the other
-  //, a race the player with the slower connection would always lose.
-  lot = { char: deck.shift(), price: 0, high: null, opener: (lotNum - 1) % 2 };
-
-  if (soloRun()){
-    // Nobody left to bid against. It is theirs for a dollar, but if they can
-    // still afford a skip they get the choice rather than a forced hand.
-    const p = inPlay(0) ? 0 : 1;
-    lot.price = 1; lot.high = p;
-    pushState();
-    if (!canSkip(p)) return setTimeout(() => award(p, 1), 800);
-    return;
-  }
+  lot = { char: deck.shift(), price: 0, high: null, opener: (lotNum - 1) % 2,
+          passed: [false, false] };
   pushState();
-}
-
-/* Skips. Three each. Free while both are still bidding, $2 once you are
-   buying alone, because by then it is a luxury rather than a mercy. */
-const skipCost = p => (soloRun() && inPlay(p)) ? 2 : 0;
-function canSkip(p){
-  if (over || !lot || lot.sold || !inPlay(p)) return false;
-  if ((P[p].skips || 0) < 1) return false;
-  const cost = skipCost(p);
-  if (cost === 0) return lot.high === null;              // only before any bid
-  return P[p].purse - cost >= slotsLeft(p);              // must still fill the roster
-}
-
-function skip(p){
-  if (!canSkip(p)) return;
-  const cost = skipCost(p);
-  P[p].skips -= 1;
-  P[p].purse -= cost;
-  lot.sold = true; lot.skipped = true;                   // finished with, and nobody bought it
-  pushState({ id: ++fxSeq, word: "Skipped",
-    line: `${lot.char.name}, thrown out by ${P[p].name}` + (cost ? ` for ${money(cost)}` : ""),
-    tone: "grey" });
-  setTimeout(nextLot, 1000);
 }
 
 /* ---------------------------- actions ---------------------------- */
@@ -900,19 +866,36 @@ function bid(p, amount){
   if (!(amt >= min) || amt > ceiling(p)) return;
   lot.price = amt;
   lot.high = p;
+  lot.passed = [false, false];
   $("other0").value = "";
   $("other1").value = "";
+  // Nobody left who could answer: it is theirs.
+  if (![0,1].some(q => q !== p && inPlay(q))) return award(p, amt);
   pushState();
 }
 
-/* "Yours", hand the issue over. Nothing ever goes back in the box. */
-function concede(p){
-  if (over || lot.sold || !inPlay(p) || lot.high === p) return;
-  if (lot.high === null){
-    if (p === lot.opener) return;        // the opener has to open
-    return award(1 - p, 1);
-  }
-  return award(lot.high, lot.price);
+/* Pass does the two things it does in a real saleroom: drop out of the bidding
+   and let the standing bid take it, or, if nobody has bid at all, decline the
+   lot entirely so it passes in unsold. */
+function pass(p){
+  if (!canPass(p)) return;
+  if (lot.high !== null) return award(lot.high, lot.price);
+
+  const cost = passCost(p);
+  if (cost) P[p].purse -= cost;
+  lot.passed[p] = true;
+
+  const stillIn = [0,1].filter(q => q !== p && inPlay(q) && !lot.passed[q]);
+  if (!stillIn.length) return passIn(cost);
+  pushState();
+}
+
+function passIn(cost){
+  lot.sold = true; lot.passedIn = true;
+  pushState({ id: ++fxSeq, word: "Passed",
+    line: `${lot.char.name}, nobody wanted it` + (cost ? `, ${money(cost)} to walk away` : ""),
+    tone: "grey" });
+  setTimeout(nextLot, 1000);
 }
 
 function award(p, price){
@@ -985,7 +968,8 @@ function renderLot(){
   $("cvTier").hidden = !BOX.tiers;
   $("cvLot").textContent = String(lotNum).padStart(2, "0");
   $("lotNo").textContent = "Lot " + lotNum;
-  $("stockLeft").textContent = deckLeft + " left in box";
+  $("passLeft").textContent = passesLeft() + (passesLeft() === 1 ? " pass left" : " passes left");
+  $("stockLeft").textContent = lotsLeft() + " of " + POOL + " left";
   issue.classList.remove("pulled");
   void issue.offsetWidth;
   issue.classList.add("pulled");
@@ -998,8 +982,6 @@ function render(){
     $("spent" + p).textContent = money(PURSE - me.purse) + " spent";
     const sl = slotsLeft(p);
     $("left" + p).textContent = sl === 0 ? "roster full" : sl + (sl === 1 ? " slot open" : " slots open");
-    const sk = me.skips || 0;
-    $("skips" + p).textContent = sk === 1 ? "1 skip left" : sk + " skips left";
 
     const ol = $("slots" + p);
     ol.innerHTML = "";
@@ -1026,11 +1008,11 @@ function renderSticker(){
   const solo = soloRun();
   const lbl = $("stLabel"), pr = $("stPrice"), who = $("stWho"), st = $("sticker");
   st.className = "sticker" + (lot.high === null ? "" : lot.high === 0 ? " tone-red" : " tone-blue");
-  if (lot.skipped){
-    lbl.textContent = "Thrown out";
+  if (lot.passedIn){
+    lbl.textContent = "Passed";
     pr.textContent = "--";
-    who.textContent = "";
-    $("call").textContent = `${lot.char.name} goes back in the box. Nobody paid for that.`;
+    who.textContent = "unsold";
+    $("call").textContent = `${lot.char.name} passes in. Nobody wanted it.`;
   } else if (lot.sold){
     lbl.textContent = "Sold";
     pr.textContent = money(lot.price);
@@ -1040,14 +1022,15 @@ function renderSticker(){
     lbl.textContent = "Opening";
     pr.textContent = money(1);
     who.textContent = "no bids yet";
-    $("call").textContent = `${P[lot.opener].name} has to open this one. $1 or more.`;
+    const ob = obliged();
+    $("call").textContent = ob === null
+      ? "Open at $1, or pass and let it go by."
+      : `${P[ob].name} has to buy this one. No passes left.`;
   } else {
     lbl.textContent = solo ? "Unopposed" : "Standing bid";
     pr.textContent = money(lot.price);
     who.textContent = P[lot.high].name;
-    $("call").textContent = solo
-      ? `No one left to bid. ${P[lot.high].name} takes it for a dollar.`
-      : `${P[1 - lot.high].name}, raise to ${money(askPrice())} or say Yours and let it go.`;
+    $("call").textContent = `${P[1 - lot.high].name}, raise to ${money(askPrice())} or pass and let it go.`;
   }
 }
 
@@ -1056,31 +1039,32 @@ function renderPanels(){
   for (const p of [0, 1]){
     const panel = $("panel" + p), bids = $("bids" + p), state = $("state" + p),
           other = $("other" + p), passBtn = panel.querySelector(".pn-pass"),
-          skipBtn = panel.querySelector(".pn-skip");
-    const mySkip = p === ME && canSkip(p);
-    skipBtn.hidden = !mySkip;
-    skipBtn.textContent = skipCost(p) ? `Skip ${money(skipCost(p))}` : "Skip";
+          passBtn2 = null;
     bids.innerHTML = "";
     panel.classList.toggle("out", !inPlay(p));
     panel.classList.toggle("standing", lot.high === p);
     // Their panel is a window, not a control surface.
     panel.classList.toggle("remote", p !== ME);
 
-    const mustOpen = lot.high === null && p === lot.opener;
+    const ob = obliged(), mustBuy = lot.high === null && ob === p;
+    const myTurn = p === ME && !lot.sold && inPlay(p) && lot.high !== p && !lot.passed[p];
+    // Dim whoever is not being waited on, so the turn is never in doubt.
+    panel.classList.toggle("idle", !myTurn);
+    $("ledger" + p).classList.toggle("idle", !(inPlay(p) && !lot.sold && lot.high !== p && !lot.passed[p]));
 
     if (lot.sold){
-      state.textContent = lot.skipped ? "Thrown out." : (lot.high === p ? "Sold to you." : "Gone.");
+      state.textContent = lot.passedIn ? "Passed in." : (lot.high === p ? "Sold to you." : "Gone.");
       other.disabled = true; passBtn.disabled = true;
       continue;
     }
 
     if (p !== ME){
       state.textContent =
-        !inPlay(p)         ? "Roster full. Done buying." :
-        solo               ? "Taking it unopposed." :
-        lot.high === p     ? `Standing bid ${money(lot.price)}. Over to you.` :
-        mustOpen           ? "Has to open this one…" :
-                             "Deciding…";
+        !inPlay(p)      ? "Roster full. Done buying." :
+        lot.passed[p]   ? "Out on this one." :
+        lot.high === p  ? `Standing bid ${money(lot.price)}. Over to you.` :
+        mustBuy         ? "Has to buy this one…" :
+                          "Deciding…";
       other.disabled = true; passBtn.disabled = true;
       continue;
     }
@@ -1090,8 +1074,8 @@ function renderPanels(){
       other.disabled = true; passBtn.disabled = true;
       continue;
     }
-    if (solo){
-      state.textContent = "Unopposed. This one is yours for $1.";
+    if (lot.passed[p]){
+      state.textContent = "You are out on this one.";
       other.disabled = true; passBtn.disabled = true;
       continue;
     }
@@ -1104,8 +1088,8 @@ function renderPanels(){
     const ask = askPrice(), cap = ceiling(p);
 
     if (ask > cap){
-      state.textContent = `Tapped out. ${money(cap)} is your ceiling with ${slotsLeft(p)} slots to fill. Let it go.`;
-      other.disabled = true; passBtn.disabled = false;
+      state.textContent = `Tapped out. ${money(cap)} is your ceiling with ${slotsLeft(p)} slots to fill.`;
+      other.disabled = true; passBtn.disabled = !canPass(p);
       continue;
     }
 
@@ -1121,13 +1105,16 @@ function renderPanels(){
     other.disabled = false;
     other.min = ask; other.max = cap;
     other.placeholder = `${ask} to ${cap}`;
-    passBtn.disabled = mustOpen;
-    passBtn.textContent = "Yours";
-    state.textContent = mustOpen
-      ? "Your turn to open. Bid at least $1. Nothing goes back in the box."
-      : lot.high === null
-        ? `Say Yours and ${P[1 - p].name} takes it for $1.`
-        : `Ceiling ${money(cap)} · keeps ${money(slotsLeft(p) - 1)} back for ${slotsLeft(p) - 1} more slot${slotsLeft(p) - 1 === 1 ? "" : "s"}.`;
+    const cost = passCost(p);
+    passBtn.disabled = !canPass(p);
+    passBtn.textContent = cost ? `Pass ${money(cost)}` : "Pass";
+    state.textContent = mustBuy
+      ? "No passes left. This one is yours, bid at least $1."
+      : lot.high !== null
+        ? `Ceiling ${money(cap)} · pass and ${P[1 - p].name} takes it.`
+        : cost
+          ? `Ceiling ${money(cap)} · passing now costs ${money(cost)}.`
+          : `Ceiling ${money(cap)} · ${passesLeft()} pass${passesLeft() === 1 ? "" : "es"} left in this sale.`;
   }
 }
 
@@ -1311,10 +1298,6 @@ addEventListener("resize", () => {
   fitTimer = setTimeout(() => { if (lot) fitName(); }, 120);
 });
 
-document.querySelectorAll(".pn-skip[data-skip]").forEach(b =>
-  b.addEventListener("click", () => { if (Number(b.dataset.skip) === ME) act("skip"); })
-);
-
 document.querySelectorAll(".pn-pass[data-pass]").forEach(b =>
   b.addEventListener("click", () => { if (Number(b.dataset.pass) === ME) act("pass"); })
 );
@@ -1359,7 +1342,7 @@ $("againBtn").addEventListener("click", () => {
   $("writeBtn").disabled = false;
   $("writeHint").textContent = "One issue, written from the ten characters above.";
   if (boxCount() < MIN_BOX) return;
-  P = [{ name: P[0].name, purse: PURSE, roster: [], skips: SKIPS }, { name: P[1].name, purse: PURSE, roster: [], skips: SKIPS }];
+  P = [{ name: P[0].name, purse: PURSE, roster: [] }, { name: P[1].name, purse: PURSE, roster: [] }];
   lot = null; lastFx = 0; drawnLot = -1;
   dealDeck();
   nextLot();
@@ -2040,6 +2023,11 @@ body{
 .panel-red { border-top-color:var(--red); }
 .panel-blue{ border-top-color:var(--blue); }
 .panel.out{ opacity:.42; filter:saturate(.5); }
+/* Whoever is not being waited on fades back, so the turn is obvious. */
+.panel.idle,
+.ledger.idle{ opacity:.5; filter:saturate(.45); }
+.panel, .ledger{ transition:opacity .22s ease, filter .22s ease; }
+.ledger.idle .purse-figure{ color:var(--ink-3); }
 /* the opponent's side: something you watch, not something you press */
 .panel.remote{ background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(120,90,50,.16)), var(--pulp-3); }
 .panel.remote .pn-bids,
@@ -2309,16 +2297,6 @@ body{
   text-transform:uppercase; color:var(--red-dk);
 }
 .story-score:empty{ display:none; }
-.pn-skip{
-  flex:0 0 auto; padding:8px 14px;
-  font-family:var(--data); font-size:11.5px; font-weight:700;
-  letter-spacing:.14em; text-transform:uppercase;
-  color:var(--pulp); background:var(--ink-3);
-  border:2px solid var(--ink-3); border-radius:2px; cursor:pointer;
-  transition:background-color .14s, border-color .14s;
-}
-.pn-skip:hover{ background:var(--ink); border-color:var(--ink); }
-.pn-skip[hidden]{ display:none; }
 .story-foot{
   position:relative; margin:18px 0 0; padding-top:10px;
   border-top:1px solid var(--rule);
