@@ -3,7 +3,7 @@
 A two-player superhero back-issue auction. Two devices, anywhere in the world.
 
 Everything lives in this folder. Nothing was installed globally on your machine -
-delete this folder and it is as if it never existed.
+delete this folder and it is as if it never existed..
 
 ```
 site/index.html          the game (this is what gets deployed)
