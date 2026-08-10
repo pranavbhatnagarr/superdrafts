@@ -90,19 +90,24 @@ cannot reach that address, so this is only for looking at it yourself.
 ## The rules
 
 - $20 each, five characters each, minimum bid $1.
-- **Nothing goes unsold.** Exactly ten characters come out of the box and all ten
-  end up on a roster. There is no pass and no no-sale.
-- **Someone has to open, and it alternates.** The opener must bid $1 or more. The
-  other side raises, or says **Yours** and hands it over at the standing price.
-- **Yours is a weapon.** Say it before anyone has bid and your opponent takes the
-  character for $1 whether they wanted it or not, a slot is a slot.
+- **Twenty lots, ten sold.** Twenty characters come out of the box one at a time
+  in random order. You buy five each. The other ten pass in unsold.
+- **Open outcry.** Bid against each other. Hit **Pass** to stop bidding and the
+  standing bid takes the lot at that price.
+- **Both pass before anyone opens and it passes in**, gone for good. That is how
+  the other ten leave the box.
+- **Passes run out on their own.** When the lots remaining equal the buys still
+  owed, passing stops and whatever comes up gets bought by somebody.
 - You can never bid so deep that you cannot cover $1 per empty slot, so both
   rosters always reach five.
-- Once one roster is full, every remaining character goes straight to the other
-  buyer at $1.
-
-The alternating opener exists to stop both players racing to dump a dud on the
-other, a race the player with the slower connection would always lose.
+- **Once the other side is full, each pass costs $1**, so spare money buys
+  patience and nothing else.
+- Tiers decide the fight. The server scores both teams (S=16, A=8, B=4, C=2,
+  D=1, E=0.5) and hands the writer a verdict it must narrate. Inside 20% it is
+  called close and tactics decide it.
+- **A week of prep re-tiers everybody.** Batman climbs from C to S, Shikamaru
+  from D to B, the Hulk does not move, and Superman slides to A because a week
+  is long enough to find kryptonite.
 
 ## Notes
 
