@@ -1,4 +1,4 @@
-# Cover Price
+# Super Drafts
 
 A two-player superhero back-issue auction. Two devices, anywhere in the world.
 
