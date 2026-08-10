@@ -1,0 +1,2029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Superhero Drafts: Superhero Back-Issue Auction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Ultra&family=Archivo+Narrow:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Special+Elite&family=Permanent+Marker&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<!--
+THESIS: A superhero draft is really an act of pricing, so this is the comic SHOP,
+not the comic PAGE. It refuses Ben-Day dots, POW bursts and primary red/blue/yellow -
+the arrangement every superhero interface ships.
+OWN-WORLD: Kraft longbox and yellowed pulp newsprint under one overhead shop lamp.
+Heavy slab masthead, condensed price-guide tables with rules and tabular figures,
+typewritten manila divider tabs, two grease pencils (waxy red, waxy blue) that write
+every number on screen, mylar bag sheen, and a red rubber SOLD stamp.
+STORY: Two friends see a bagged back issue come out of the box, argue over what it is
+worth in dollars, and watch the stamp land. Ten lots later they own two divider sections.
+FIRST VIEWPORT: Guide masthead across the top; the box rim below it; centre stage is one
+bagged-and-boarded issue lifted from the box with its price sticker; a grease-pencil ledger
+flanks it on each side; the two bid panels sit at thumb height across the bottom.
+FORM: Comic-shop longbox and price guide, candidate 7 of 7 on my grounded list. Seed key cda537d4.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+
+<div class="lamp" aria-hidden="true"></div>
+
+<!-- ============================ SETUP ============================ -->
+<main id="setup" class="screen setup-screen">
+  <div class="guide-cover">
+    <div class="cover-rules" aria-hidden="true"></div>
+    <p class="cover-edition">Forty-Ninth Edition &middot; Two-Player Saleroom Rules &middot; Prices in US Dollars</p>
+    <h1 class="cover-title">The Draft</h1>
+    <p class="cover-sub">Official Superhero Price Guide &amp; Back-Issue Auction</p>
+
+    <div class="cover-strip">
+      <span id="stockCount">Issues in Stock</span><i></i><span>Marvel &amp; DC</span><i></i><span>Base Versions Only</span><i></i><span>No Cosmic Gods</span>
+    </div>
+
+    <div class="tabs-row tabs-solo">
+      <div class="tab tab-red">
+        <label class="tab-label" for="myName">Your name</label>
+        <input id="myName" class="tab-input" type="text" maxlength="14" autocomplete="off" spellcheck="false" placeholder="write it here">
+        <p class="tab-purse">Purse <b>$20</b></p>
+      </div>
+    </div>
+
+    <div class="doors">
+      <section class="door">
+        <h2 class="fm-head">Open a table</h2>
+        <p class="door-copy">You take the red pencil. You get a four-letter code and a link to send your friend.</p>
+        <button id="openBox" class="stamp-btn" type="button"><span>Open the Box</span></button>
+      </section>
+      <section class="door">
+        <h2 class="fm-head">Sit down at one</h2>
+        <p class="door-copy">Your friend opened a table and sent you a code. You take the blue pencil.</p>
+        <div class="join-row">
+          <input id="joinCode" class="code-input" type="text" maxlength="4" autocomplete="off" spellcheck="false" placeholder="CODE" aria-label="Four-letter table code">
+          <button id="joinBtn" class="pn-pass join-btn" type="button">Join</button>
+        </div>
+      </section>
+    </div>
+
+    <p class="netmsg" id="setupMsg" role="status"></p>
+
+    <button id="resumeBtn" class="ghost-btn resume-btn" type="button" hidden></button>
+
+    <section class="frontmatter" aria-label="How the sale runs">
+      <h2 class="fm-head">How the sale runs</h2>
+      <ol class="fm-list">
+        <li><b>One issue at a time.</b> A character is pulled from the box at random. Nobody knows what is coming next.</li>
+        <li><b>Nothing goes back in the box.</b> Every issue drawn ends up on a roster. Exactly ten come out, five each, and there is no passing or no-sale.</li>
+        <li><b>Someone has to open.</b> The obligation alternates each lot. The opener bids $1 or more; the other side raises, or says <b>Yours</b> and hands it over at the standing price.</li>
+        <li><b>Yours is a weapon.</b> Say it before anyone has bid and your opponent takes the issue for $1, whether they wanted it or not. A slot is a slot.</li>
+        <li><b>Keep a dollar per slot.</b> You can never bid so deep that you cannot afford $1 for each empty slot, so both teams always reach five.</li>
+        <li><b>Unopposed.</b> Once one roster is full, every remaining issue goes straight to the other buyer at $1.</li>
+        <li><b>Five against five.</b> Base versions, random encounter. Copy the rosters out at the end and get the fight written up.</li>
+      </ol>
+      <p class="fm-foot">No stats, no power levels. You are bidding on what you already know about them.</p>
+    </section>
+
+    <p class="cover-hint">Two devices, anywhere in the world. Bids are public, so keep a call open and argue about the prices.</p>
+  </div>
+</main>
+
+<!-- ============================ LOBBY ============================ -->
+<main id="lobby" class="screen setup-screen" hidden>
+  <div class="guide-cover lobby-cover">
+    <div class="cover-rules" aria-hidden="true"></div>
+    <p class="cover-edition">Table Reserved &middot; Two Buyers &middot; Awaiting the Second Chair</p>
+    <h2 class="lobby-title">Table <span id="lobbyCode">----</span></h2>
+
+    <p class="lobby-copy">Send your friend this link. It carries the code, so all they do is type a name and sit down.</p>
+    <div class="share-row">
+      <input id="shareLink" class="share-input" type="text" readonly aria-label="Link to send your friend">
+      <button id="shareBtn" class="pn-pass" type="button">Copy</button>
+    </div>
+
+    <p class="netmsg lobby-wait" id="lobbyMsg" role="status">Waiting for the second buyer…</p>
+    <button id="cancelBtn" class="ghost-btn" type="button">Close the table</button>
+  </div>
+</main>
+
+<!-- ============================ AUCTION ============================ -->
+<main id="auction" class="screen auction-screen" hidden>
+
+  <header class="guide-head">
+    <h2 class="gh-title">Cover Price</h2>
+    <div class="gh-rule" aria-hidden="true"></div>
+    <p class="gh-meta">
+      <span id="lotNo">Lot 1</span><i></i><span id="stockLeft">144 left in box</span><i></i>
+      <span class="wire" id="wire"><b class="wire-dot"></b><span id="wireText">connected</span></span>
+    </p>
+  </header>
+
+  <div class="floor">
+
+    <!-- LEFT LEDGER -->
+    <aside class="ledger ledger-red" id="ledger0">
+      <div class="ledger-tab"><span class="lt-name" id="name0">Player One</span></div>
+      <p class="purse-line">Purse remaining</p>
+      <p class="purse-figure" id="purse0">$20</p>
+      <ol class="slots" id="slots0"></ol>
+      <p class="ledger-foot"><span id="spent0">$0 spent</span> &middot; <span id="left0">5 slots open</span></p>
+    </aside>
+
+    <!-- CENTRE: THE ISSUE -->
+    <section class="stage" aria-live="polite">
+      <div class="crate">
+      <div class="box-rim" aria-hidden="true">
+        <div class="rim-dividers"></div>
+      </div>
+
+      <div class="issue" id="issue">
+        <div class="mylar" aria-hidden="true"></div>
+        <article class="cover" id="cover">
+          <div class="cover-grain" aria-hidden="true"></div>
+          <header class="cv-top">
+            <span class="cv-pub" id="cvPub">MARVEL</span>
+            <span class="cv-no" id="cvNo">No. 121</span>
+          </header>
+          <div class="cv-box" id="cvBox" aria-hidden="true"><span id="cvInit">SM</span></div>
+          <h3 class="cv-name" id="cvName">Spider-Man</h3>
+          <p class="cv-alias" id="cvAlias">Peter Parker</p>
+          <div class="cv-hr" aria-hidden="true"></div>
+          <p class="cv-note" id="cvNote">Everybody&rsquo;s first back issue.</p>
+          <footer class="cv-bot">
+            <span class="cv-cond" id="cvPubFoot">Marvel Comics Group</span>
+            <span class="cv-cond cv-lot">Lot <b id="cvLot">01</b></span>
+          </footer>
+        </article>
+
+        <div class="sticker" id="sticker">
+          <span class="st-label" id="stLabel">Opening</span>
+          <span class="st-price" id="stPrice">$1</span>
+          <span class="st-who" id="stWho">no bids yet</span>
+        </div>
+      </div>
+      </div>
+
+      <p class="call" id="call">Either buyer may open the lot.</p>
+    </section>
+
+    <!-- RIGHT LEDGER -->
+    <aside class="ledger ledger-blue" id="ledger1">
+      <div class="ledger-tab"><span class="lt-name" id="name1">Player Two</span></div>
+      <p class="purse-line">Purse remaining</p>
+      <p class="purse-figure" id="purse1">$20</p>
+      <ol class="slots" id="slots1"></ol>
+      <p class="ledger-foot"><span id="spent1">$0 spent</span> &middot; <span id="left1">5 slots open</span></p>
+    </aside>
+  </div>
+
+  <!-- BID PANELS -->
+  <div class="panels">
+    <div class="panel panel-red" id="panel0">
+      <p class="pn-name" id="pn0">Player One</p>
+      <div class="pn-bids" id="bids0"></div>
+      <div class="pn-row">
+        <label class="pn-other">
+          <span>Other</span>
+          <input type="number" id="other0" min="1" step="1" inputmode="numeric" aria-label="Custom bid for player one">
+        </label>
+        <button class="pn-pass" type="button" data-pass="0">Yours</button>
+      </div>
+      <p class="pn-state" id="state0"></p>
+    </div>
+
+    <div class="panel panel-blue" id="panel1">
+      <p class="pn-name" id="pn1">Player Two</p>
+      <div class="pn-bids" id="bids1"></div>
+      <div class="pn-row">
+        <label class="pn-other">
+          <span>Other</span>
+          <input type="number" id="other1" min="1" step="1" inputmode="numeric" aria-label="Custom bid for player two">
+        </label>
+        <button class="pn-pass" type="button" data-pass="1">Yours</button>
+      </div>
+      <p class="pn-state" id="state1"></p>
+    </div>
+  </div>
+
+  <!-- STAMP OVERLAY -->
+  <div class="stamp-layer" id="stampLayer" hidden>
+    <div class="stamp-mark" id="stampMark">
+      <span class="sm-word" id="smWord">Sold</span>
+      <span class="sm-line" id="smLine">Spider-Man &mdash; $6 &mdash; Pranav</span>
+    </div>
+  </div>
+</main>
+
+<!-- ============================ FACE-OFF ============================ -->
+<main id="faceoff" class="screen faceoff-screen" hidden>
+  <header class="fo-head">
+    <h2 class="fo-title">Five Against Five</h2>
+    <div class="gh-rule" aria-hidden="true"></div>
+  </header>
+
+  <div class="fo-body">
+    <section class="fo-side fo-red">
+      <div class="ledger-tab"><span class="lt-name" id="foName0">Player One</span></div>
+      <ol class="fo-list" id="foList0"></ol>
+      <p class="fo-total" id="foTotal0"></p>
+    </section>
+
+    <div class="fo-mid" aria-hidden="true">
+      <div class="fo-divider"></div>
+      <span class="fo-vs">vs</span>
+      <div class="fo-divider"></div>
+    </div>
+
+    <section class="fo-side fo-blue">
+      <div class="ledger-tab"><span class="lt-name" id="foName1">Player Two</span></div>
+      <ol class="fo-list" id="foList1"></ol>
+      <p class="fo-total" id="foTotal1"></p>
+    </section>
+  </div>
+
+  <div class="fo-actions">
+    <fieldset class="encounter">
+      <legend class="fm-head">How do they meet?</legend>
+      <label class="enc-opt">
+        <input type="radio" name="encounter" value="random" checked>
+        <span class="enc-body">
+          <b>Random encounter</b>
+          <em>They collide with no warning. Nobody picked the ground, nobody has a plan. Instinct and raw capability decide it.</em>
+        </span>
+      </label>
+      <label class="enc-opt">
+        <input type="radio" name="encounter" value="prep">
+        <span class="enc-body">
+          <b>A week of prep</b>
+          <em>Both sides know the full opposing roster and have planned for it. Tacticians and gadget-builders come alive; raw power counts for less.</em>
+        </span>
+      </label>
+    </fieldset>
+
+    <button id="writeBtn" class="stamp-btn stamp-btn-sm" type="button"><span>Write the Fight</span></button>
+    <p class="fo-hint" id="writeHint">One issue, written from the two rosters above.</p>
+
+    <div class="story" id="story" hidden>
+      <div class="story-grain" aria-hidden="true"></div>
+      <div class="story-body" id="storyBody" aria-live="polite"></div>
+      <p class="story-foot"><span id="storyFoot"></span></p>
+    </div>
+
+    <div class="fo-tail">
+      <button id="copyBtn" class="ghost-btn" type="button">Copy the rosters</button>
+      <button id="againBtn" class="ghost-btn" type="button">Run it again</button>
+    </div>
+    <p class="fo-hint" id="copyHint"></p>
+  </div>
+</main>
+
+<script>
+/* ------------------------------------------------------------------ *
+ *  STOCK, Marvel & DC, A-list through mid-tier, base versions.
+ *  Deliberately excludes cosmic-god tier (One-Above-All, Living Tribunal,
+ *  Beyonder, Galactus, Phoenix Force, Lucifer, Spectre, Darkseid, Presence).
+ * ------------------------------------------------------------------ */
+const STOCK = [
+["Spider-Man","M","Peter Parker","Everybody's first back issue."],
+["Iron Man","M","Tony Stark","Runs on money and guilt."],
+["Captain America","M","Steve Rogers","The shield does the talking."],
+["Thor","M","Thor Odinson","Weather included, no extra charge."],
+["Hulk","M","Bruce Banner","Do not shelve near the door."],
+["Black Widow","M","Natasha Romanoff","Wins fights she never starts."],
+["Hawkeye","M","Clint Barton","Never misses. Often bleeding."],
+["Doctor Strange","M","Stephen Strange","Reality is a suggestion."],
+["Black Panther","M","T'Challa","King, scientist, problem."],
+["Wolverine","M","Logan","Bagged twice. Still smells of cigars."],
+["Deadpool","M","Wade Wilson","Reads the price sticker back to you."],
+["Daredevil","M","Matt Murdock","Blind. Still sees you coming."],
+["The Punisher","M","Frank Castle","A one-man clearance sale."],
+["Storm","M","Ororo Munroe","Brings her own climate."],
+["Cyclops","M","Scott Summers","Leads. Nobody enjoys it."],
+["Jean Grey","M","Jean Grey","Reads the room. Literally."],
+["Beast","M","Hank McCoy","Six doctorates and a left hook."],
+["Nightcrawler","M","Kurt Wagner","Gone before you finish the sentence."],
+["Rogue","M","Anna Marie","Borrow now, apologise later."],
+["Gambit","M","Remy LeBeau","Anything is a weapon if you charge it."],
+["Magneto","M","Erik Lehnsherr","Do not store in a metal box."],
+["Professor X","M","Charles Xavier","Wins before the bell."],
+["Venom","M","Eddie Brock","Comes with a passenger."],
+["Carnage","M","Cletus Kasady","Sold as-is. No returns."],
+["Green Goblin","M","Norman Osborn","Laughing all the way down."],
+["Doctor Doom","M","Victor Von Doom","Insists on the full title."],
+["Loki","M","Loki Laufeyson","The copy you got may not be the copy."],
+["Ultron","M","No civilian name","Keeps coming back, like a bad reprint."],
+["Vision","M","Synthezoid","Walks straight through the argument."],
+["Scarlet Witch","M","Wanda Maximoff","Rewrites the ending."],
+["Quicksilver","M","Pietro Maximoff","Already read it."],
+["Ant-Man","M","Scott Lang","Small print, big problem."],
+["Wasp","M","Janet Van Dyne","Stings well above her weight."],
+["Falcon","M","Sam Wilson","Owns the airspace."],
+["Winter Soldier","M","Bucky Barnes","Seventy years of practice."],
+["Star-Lord","M","Peter Quill","Confidence exceeds inventory."],
+["Gamora","M","Gamora","Raised by the worst."],
+["Drax the Destroyer","M","Drax","Takes everything literally."],
+["Rocket Raccoon","M","Rocket","Do not comment on the species."],
+["Groot","M","Groot","Three words, infinite range."],
+["Ghost Rider","M","Johnny Blaze","Judges you on sight."],
+["Moon Knight","M","Marc Spector","Four opinions, one body."],
+["Blade","M","Eric Brooks","Night shift specialist."],
+["Mister Fantastic","M","Reed Richards","Solves it on the way over."],
+["Invisible Woman","M","Sue Storm","The strongest one, quietly."],
+["Human Torch","M","Johnny Storm","Keep well away from the longbox."],
+["The Thing","M","Ben Grimm","Clobbering time, every time."],
+["Namor","M","Namor McKenzie","Rude. Correct. Amphibious."],
+["She-Hulk","M","Jennifer Walters","Will sue you and also throw you."],
+["Iron Fist","M","Danny Rand","One punch, fully funded."],
+["Luke Cage","M","Luke Cage","Sweet Christmas."],
+["Elektra","M","Elektra Natchios","Two sai, no small talk."],
+["Kingpin","M","Wilson Fisk","Owns the block you are standing on."],
+["Bullseye","M","Lester","Anything in his hand is a bullet."],
+["Doctor Octopus","M","Otto Octavius","Four arms, zero patience."],
+["Sandman","M","Flint Marko","Punching him is a waste of a turn."],
+["Rhino","M","Aleksei Sytsevich","Goes one direction. Fast."],
+["Mysterio","M","Quentin Beck","You already lost. Probably."],
+["Kraven the Hunter","M","Sergei Kravinoff","Hunts for sport, never for need."],
+["Juggernaut","M","Cain Marko","Nothing stops him. Nothing."],
+["Sabretooth","M","Victor Creed","Enjoys it far too much."],
+["War Machine","M","James Rhodes","Same suit, considerably more guns."],
+["Shang-Chi","M","Shang-Chi","Best hands in the box."],
+["Ms. Marvel","M","Kamala Khan","Fan first, hero second."],
+["Nova","M","Richard Rider","Space cop with a temper."],
+["Hercules","M","Hercules","Will arm-wrestle absolutely anyone."],
+["Taskmaster","M","Tony Masters","Copies your move once, keeps it."],
+["Red Skull","M","Johann Schmidt","The worst man in the box."],
+["Colossus","M","Piotr Rasputin","Gentle until he is not."],
+["Psylocke","M","Betsy Braddock","Cuts the mind first."],
+["Domino","M","Neena Thurman","Luck counts as a superpower."],
+["Cable","M","Nathan Summers","Pouches. So many pouches."],
+["Bishop","M","Lucas Bishop","Eats your energy blast."],
+["Silver Surfer","M","Norrin Radd","Rides in from somewhere sad."],
+["Thanos","M","Thanos","Base model. Still a problem."],
+["Apocalypse","M","En Sabah Nur","Survival of the loudest."],
+["Nick Fury","M","Nick Fury","Knows exactly what you did."],
+["Jessica Jones","M","Jessica Jones","Strong, tired, and correct."],
+["Squirrel Girl","M","Doreen Green","Undefeated. Look it up."],
+["Beta Ray Bill","M","Beta Ray Bill","Worthy, and nobody expected it."],
+["Wong","M","Wong","Sorcerer Supreme paperwork, handled."],
+["Hela","M","Hela","Death goddess, minus the throne."],
+["Green Lantern","D","Hal Jordan","Imagination with a battery."],
+["Superman","D","Clark Kent","The one everybody bids on."],
+["Batman","D","Bruce Wayne","Prepared for this exact auction."],
+["Wonder Woman","D","Diana Prince","Truth is not optional."],
+["The Flash","D","Barry Allen","His bid is already in."],
+["Aquaman","D","Arthur Curry","Stop laughing. Look at him."],
+["Cyborg","D","Victor Stone","Booyah, and a mainframe."],
+["Martian Manhunter","D","J'onn J'onzz","Superman with more powers."],
+["Green Arrow","D","Oliver Queen","Rich, loud, surprisingly right."],
+["Shazam","D","Billy Batson","A child with a god's account."],
+["Nightwing","D","Dick Grayson","Best acrobat in the building."],
+["Robin","D","Damian Wayne","Ten years old. Furious."],
+["Batgirl","D","Barbara Gordon","Smartest person in the cave."],
+["Supergirl","D","Kara Zor-El","Angrier, newer, same sun."],
+["Black Canary","D","Dinah Lance","Scream first, ask later."],
+["Zatanna","D","Zatanna Zatara","Sdrawkcab skaeps ehs."],
+["John Constantine","D","John Constantine","You will regret this purchase."],
+["Swamp Thing","D","Alec Holland","The whole planet backs him."],
+["Raven","D","Rachel Roth","Father issues, cosmic scale."],
+["Starfire","D","Koriand'r","Joy, and starbolts."],
+["Beast Boy","D","Garfield Logan","A whole zoo in one slot."],
+["Blue Beetle","D","Jaime Reyes","The scarab makes the decisions."],
+["Booster Gold","D","Michael Carter","Here for the endorsements."],
+["Hawkman","D","Carter Hall","Mace now, questions never."],
+["Firestorm","D","Ronnie Raymond","Two minds, one atom."],
+["Plastic Man","D","Eel O'Brian","Genuinely unkillable. Genuinely annoying."],
+["Red Hood","D","Jason Todd","Came back angry."],
+["The Joker","D","Name unknown","Priced high for no clear reason."],
+["Harley Quinn","D","Harleen Quinzel","Mallet included."],
+["Lex Luthor","D","Lex Luthor","Would buy this entire box."],
+["Deathstroke","D","Slade Wilson","Uses ninety percent. Still wins."],
+["Bane","D","Bane","Has read the file on you."],
+["Poison Ivy","D","Pamela Isley","The garden is on her side."],
+["Catwoman","D","Selina Kyle","Already took the good issue."],
+["The Riddler","D","Edward Nygma","Loses on purpose. Sort of."],
+["The Penguin","D","Oswald Cobblepot","Money, birds, leverage."],
+["Two-Face","D","Harvey Dent","Fifty-fifty on everything."],
+["Scarecrow","D","Jonathan Crane","Sells you your own fear."],
+["Mr. Freeze","D","Victor Fries","Saddest man in the box."],
+["Killer Croc","D","Waylon Jones","A sewer-level problem."],
+["Reverse-Flash","D","Eobard Thawne","Ruined your childhood retroactively."],
+["Sinestro","D","Thaal Sinestro","Better ring discipline than Hal."],
+["Black Manta","D","David Hyde","Hates one man completely."],
+["Cheetah","D","Barbara Minerva","Fast, cursed, personal."],
+["Brainiac","D","Vril Dox","Collects cities. Bottled."],
+["Doomsday","D","The Ultimate","Killed Superman once. Priced accordingly."],
+["Bizarro","D","Imperfect copy","Am not good bid."],
+["Solomon Grundy","D","Cyrus Gold","Born on a Monday."],
+["Vixen","D","Mari McCabe","Every animal, on tap."],
+["Static","D","Virgil Hawkins","Lightning with a bus pass."],
+["John Stewart","D","John Stewart","Marine, architect, Green Lantern."],
+["The Atom","D","Ray Palmer","Wins from inside your ear."],
+["Vandal Savage","D","Vandar Adg","Fifty thousand years of practice."],
+["Ra's al Ghul","D","Ra's al Ghul","Patient in a way that frightens."],
+["Talia al Ghul","D","Talia al Ghul","Better tactician than her father."],
+["Etrigan","D","Jason Blood","Answers only in rhyme."],
+["Doctor Fate","D","Kent Nelson","The helmet is in charge."],
+["Captain Cold","D","Leonard Snart","Has rules, and keeps them."],
+["Gorilla Grodd","D","Grodd","Telepathic gorilla. That is the pitch."],
+["Killer Frost","D","Caitlin Snow","Absolute zero, zero mercy."],
+["Huntress","D","Helena Bertinelli","Crossbow and a grudge."],
+["The Question","D","Vic Sage","No face, all answers."],
+["Metamorpho","D","Rex Mason","The whole periodic table."],
+["Blue Devil","D","Dan Cassidy","Stuck in the costume."],
+["Katana","D","Tatsu Yamashiro","The sword keeps the souls."],
+["Zauriel","D","Zauriel","An angel who resigned."]
+];
+
+const SLOTS = 5, PURSE = 20;
+
+const $ = id => document.getElementById(id);
+const money = n => "$" + n;
+
+let P, deck, lot, lotNum, over, deckLeft = 0;
+
+/* ==================================================================
+ *  NETWORK
+ *  Supabase Realtime broadcast only, no tables, nothing stored.
+ *  The player who opens the table is authoritative: they hold the deck,
+ *  apply every rule, and publish the whole state. The joiner sends
+ *  intents ("I bid 4") and renders whatever comes back. One referee
+ *  means a simultaneous click can never sell the same issue twice.
+ * ================================================================== */
+// These two are meant to be public and cannot be hidden: the browser itself
+// has to open the socket, so anything it needs, a reader can see. This is a
+// PUBLISHABLE key, which is why that is fine. It grants nothing except joining
+// broadcast channels. Keep it that way: create no tables in this project, and
+// if you ever do, turn on row level security. Secrets that must stay secret
+// (the LLM key) live in Vercel environment variables and are read only by
+// api/scenario.mjs on the server, never here.
+const SB_URL = "https://aexgfybbydtxjzpluiwo.supabase.co";
+const SB_KEY = "sb_publishable_Cr0FVJXaMsn3rsdgV9pWPw_et4aHvcL";
+const SAVE_KEY = "longbox.table";
+
+let sb, chan, ROOM = "", ME = 0, HOST = false, started = false, peerOn = false,
+    fxSeq = 0, lastFx = 0, drawnLot = -1;
+
+const code4 = () => Array.from({length:4}, () =>
+  "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random()*32)]).join("");
+
+const myName = () => {
+  const n = ($("myName").value || "").trim().slice(0,14);
+  if (n) try { localStorage.setItem("longbox.name", n); } catch {}
+  return n;
+};
+
+function setWire(on, text){
+  peerOn = on;
+  $("wire").classList.toggle("off", !on);
+  $("wireText").textContent = text;
+}
+
+async function connect(){
+  if (!window.supabase) throw new Error("offline");
+  sb = sb || window.supabase.createClient(SB_URL, SB_KEY);
+  chan = sb.channel("longbox-" + ROOM, { config: { broadcast: { self: false } } });
+
+  chan.on("broadcast", { event: "msg" }, ({ payload }) => handle(payload));
+  chan.on("presence", { event: "sync" }, () => {
+    const others = Object.values(chan.presenceState()).flat().filter(x => x.me !== ME);
+    if (others.length) setWire(true, (P && P[1-ME] ? P[1-ME].name : "friend") + " connected");
+    else setWire(false, started ? "friend dropped, they can rejoin" : "waiting…");
+  });
+
+  await new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("timeout")), 12000);
+    chan.subscribe(status => {
+      if (status === "SUBSCRIBED"){ clearTimeout(t); chan.track({ me: ME }); resolve(); }
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT"){ clearTimeout(t); reject(new Error(status)); }
+    });
+  });
+}
+
+const send = payload => chan && chan.send({ type: "broadcast", event: "msg", payload });
+
+function handle(m){
+  if (m.t === "join" && HOST){
+    // Idempotent: first join starts the sale, a later one is a reconnect.
+    P[1].name = m.name || "Blue";
+    if (!started){ started = true; dealDeck(); nextLot(); }
+    pushState();
+  }
+  if (m.t === "act" && HOST && started){
+    if (m.p !== 1) return;                       // the guest only ever moves for themselves
+    m.kind === "bid" ? bid(1, m.amount) : concede(1);
+  }
+  if (m.t === "state" && !HOST) applyState(m.s);
+  // The story is written once and shared, so both sides read the same issue.
+  if (m.t === "writing") showWriting(m.mode);
+  if (m.t === "story") showStory(m.text, m.mode);
+  if (m.t === "storyfail") showStoryError(m.error);
+  if (m.t === "closed" && !HOST){
+    setWire(false, "table closed");
+    $("setupMsg").textContent = "Your friend closed the table.";
+    showScreen("setup");
+  }
+}
+
+function snapshot(fx){
+  return { P, lot, lotNum, over, deckLeft: deck ? deck.length : 0, fx: fx || null };
+}
+
+function pushState(fx){
+  const s = snapshot(fx);
+  send({ t: "state", s });
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ ROOM, deck, ...s })); } catch {}
+  applyState(s, true);
+}
+
+function applyState(s, local){
+  // Track what is actually on the cover. The host mutates lotNum before it
+  // publishes, so comparing state-to-state would never see the change.
+  const lotChanged = drawnLot !== s.lotNum;
+  P = s.P; lot = s.lot; lotNum = s.lotNum; over = s.over; deckLeft = s.deckLeft;
+  if (!local) started = true;
+  if (over) return showFaceoff();
+  showScreen("auction");
+  $("name0").textContent = P[0].name + (ME === 0 ? " (you)" : "");
+  $("name1").textContent = P[1].name + (ME === 1 ? " (you)" : "");
+  $("pn0").textContent = P[0].name + (ME === 0 ? " (you)" : "");
+  $("pn1").textContent = P[1].name + (ME === 1 ? " (you)" : "");
+  if (peerOn) setWire(true, P[1-ME].name + " connected");   // names arrive after presence
+  if (lotChanged){ drawnLot = s.lotNum; renderLot(); }
+  render();
+  if (s.fx && s.fx.id !== lastFx){ lastFx = s.fx.id; stamp(s.fx.word, s.fx.line, s.fx.tone); }
+}
+
+/* An action either runs here (host) or travels to the referee (guest). */
+function act(kind, amount){
+  if (HOST) kind === "bid" ? bid(0, amount) : concede(0);
+  else send({ t: "act", p: 1, kind, amount });
+}
+
+function showScreen(which){
+  for (const id of ["setup","lobby","auction","faceoff"]) $(id).hidden = (id !== which);
+}
+
+/* ---------------------------- tables ---------------------------- */
+function shuffle(a){
+  for (let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function dealDeck(){
+  deck = shuffle(STOCK.map((c, i) => ({
+    name: c[0], pub: c[1], alias: c[2], note: c[3],
+    no: 1 + ((i * 37 + 11) % 480)
+  })));
+  lotNum = 0; over = false;
+}
+
+async function openTable(){
+  const n = myName();
+  if (!n) return nudge("Put your name on the tab first.");
+  HOST = true; ME = 0; started = false;
+  ROOM = code4();
+  P = [{ name: n, purse: PURSE, roster: [] }, { name: "…", purse: PURSE, roster: [] }];
+  $("setupMsg").textContent = "Opening the table…";
+  try { await connect(); } catch { return nudge("Could not reach the table service. Check your connection and try again."); }
+  $("setupMsg").textContent = "";
+  $("lobbyCode").textContent = ROOM;
+  $("shareLink").value = location.origin + location.pathname + "?r=" + ROOM;
+  showScreen("lobby");
+}
+
+async function joinTable(){
+  const n = myName();
+  if (!n) return nudge("Put your name on the tab first.");
+  const c = ($("joinCode").value || "").trim().toUpperCase();
+  if (c.length !== 4) return nudge("A table code is four letters.");
+  HOST = false; ME = 1; ROOM = c;
+  $("setupMsg").textContent = "Looking for table " + c + "…";
+  try { await connect(); } catch { return nudge("Could not reach the table service. Check your connection and try again."); }
+  // Keep the code in the URL so a refresh or a dropped connection can rejoin.
+  try { history.replaceState(null, "", location.pathname + "?r=" + c); } catch {}
+  send({ t: "join", name: n });
+  let waited = 0;
+  const poke = setInterval(() => {
+    if (!$("auction").hidden){ clearInterval(poke); return; }
+    if ((waited += 1500) > 9000){
+      clearInterval(poke);
+      nudge("No table " + c + " answered. Check the code, and make sure your friend still has their page open.");
+      chan && sb.removeChannel(chan);
+    } else send({ t: "join", name: n });
+  }, 1500);
+}
+
+function nudge(msg){ $("setupMsg").textContent = msg; showScreen("setup"); }
+
+function resumeTable(){
+  let sv;
+  try { sv = JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); } catch {}
+  if (!sv) return;
+  HOST = true; ME = 0; started = true;
+  ROOM = sv.ROOM; deck = sv.deck; P = sv.P; lot = sv.lot; lotNum = sv.lotNum; over = sv.over;
+  connect().then(() => { pushState(); }).catch(() => nudge("Could not reopen that table."));
+}
+
+/* ------------------------- rules helpers ------------------------- */
+const slotsLeft = p => SLOTS - P[p].roster.length;
+const inPlay    = p => slotsLeft(p) > 0;
+// Must always keep $1 in reserve for every slot that stays empty after this buy.
+const ceiling   = p => P[p].purse - (slotsLeft(p) - 1);
+const soloRun   = () => inPlay(0) !== inPlay(1);
+const askPrice  = () => lot.high === null ? 1 : lot.price + 1;
+
+/* Host only from here down, the guest never runs the rules. */
+function nextLot(){
+  if (!inPlay(0) && !inPlay(1)) return finish();
+  if (!deck.length) return finish();
+  lotNum++;
+  // Every issue sells, so the obligation to open has to sit somewhere. It
+  // alternates, which also stops both sides racing to dump a dud on the other
+  //, a race the player with the slower connection would always lose.
+  lot = { char: deck.shift(), price: 0, high: null, opener: (lotNum - 1) % 2 };
+
+  if (soloRun()){
+    // Nobody left to bid against: the remaining buyer takes it for a dollar.
+    const p = inPlay(0) ? 0 : 1;
+    lot.price = 1; lot.high = p;
+    pushState();
+    return setTimeout(() => award(p, 1), 800);
+  }
+  pushState();
+}
+
+/* ---------------------------- actions ---------------------------- */
+function bid(p, amount){
+  if (over || lot.sold || !inPlay(p)) return;
+  const min = (lot.high === p) ? lot.price + 1 : askPrice();
+  const amt = Math.floor(amount);
+  if (!(amt >= min) || amt > ceiling(p)) return;
+  lot.price = amt;
+  lot.high = p;
+  $("other0").value = "";
+  $("other1").value = "";
+  pushState();
+}
+
+/* "Yours", hand the issue over. Nothing ever goes back in the box. */
+function concede(p){
+  if (over || lot.sold || !inPlay(p) || lot.high === p) return;
+  if (lot.high === null){
+    if (p === lot.opener) return;        // the opener has to open
+    return award(1 - p, 1);
+  }
+  return award(lot.high, lot.price);
+}
+
+function award(p, price){
+  // A lot settles exactly once. Controls stay on screen through the stamp
+  // animation, so without this a second click resells the same issue.
+  if (lot.sold) return;
+  lot.sold = true;
+  lot.high = p; lot.price = price;
+  P[p].purse -= price;
+  P[p].roster.push({ char: lot.char, price });
+  pushState({ id: ++fxSeq, word: "Sold",
+    line: `${lot.char.name} to ${P[p].name} for ${money(price)}`,
+    tone: p === 0 ? "red" : "blue" });
+  setTimeout(() => {
+    if (P[0].roster.length === SLOTS && P[1].roster.length === SLOTS) finish();
+    else nextLot();
+  }, 1250);
+}
+
+/* ---------------------------- stamp ---------------------------- */
+function stamp(word, line, tone){
+  const layer = $("stampLayer"), mark = $("stampMark");
+  $("smWord").textContent = word;
+  $("smLine").textContent = line;
+  mark.className = "stamp-mark tone-" + tone;
+  layer.hidden = false;
+  mark.style.animation = "none";
+  void mark.offsetWidth;
+  mark.style.animation = "";
+  mark.classList.add("hit");
+  setTimeout(() => { layer.hidden = true; mark.classList.remove("hit"); }, 1100);
+}
+
+/* ---------------------------- render ---------------------------- */
+function initials(name){
+  return (name.match(/[A-Za-z]+/g) || [])
+    .filter(w => !/^(the|of|al)$/i.test(w))
+    .map(w => w[0]).join("").slice(0, 2).toUpperCase();
+}
+
+/* Ultra is a very wide face and the stock runs from "Hulk" to "Drax the
+   Destroyer", so the cover name is measured and shrunk to fit rather than
+   guessed from character count. */
+function fitName(){
+  const el = $("cvName"), cover = $("cover");
+  if (!el || !cover.clientWidth) return;
+  let s = Math.min(52, Math.max(20, cover.clientWidth * 0.163));
+  el.style.fontSize = s + "px";
+  const fits = () =>
+    el.scrollWidth <= el.clientWidth + 1 &&
+    el.getBoundingClientRect().height <= s * 0.86 * 3 + 4;
+  while (s > 15 && !fits()){ s -= 1; el.style.fontSize = s + "px"; }
+}
+
+function renderLot(){
+  const c = lot.char;
+  const cover = $("cover"), issue = $("issue");
+  cover.dataset.pub = c.pub;
+  $("cvPub").textContent = c.pub === "M" ? "Marvel" : "DC";
+  $("cvNo").textContent = "No. " + c.no;
+  $("cvName").textContent = c.name;
+  $("cvInit").textContent = initials(c.name);
+  fitName();
+  $("cvAlias").textContent = c.alias;
+  $("cvNote").textContent = c.note;
+  $("cvPubFoot").textContent = c.pub === "M" ? "Marvel Comics Group" : "DC Comics";
+  $("cvLot").textContent = String(lotNum).padStart(2, "0");
+  $("lotNo").textContent = "Lot " + lotNum;
+  $("stockLeft").textContent = deckLeft + " left in box";
+  issue.classList.remove("pulled");
+  void issue.offsetWidth;
+  issue.classList.add("pulled");
+}
+
+function render(){
+  for (const p of [0, 1]){
+    const me = P[p];
+    $("purse" + p).textContent = money(me.purse);
+    $("spent" + p).textContent = money(PURSE - me.purse) + " spent";
+    const sl = slotsLeft(p);
+    $("left" + p).textContent = sl === 0 ? "roster full" : sl + (sl === 1 ? " slot open" : " slots open");
+
+    const ol = $("slots" + p);
+    ol.innerHTML = "";
+    for (let i = 0; i < SLOTS; i++){
+      const li = document.createElement("li");
+      const pick = me.roster[i];
+      if (pick){
+        li.className = "slot filled";
+        li.innerHTML = `<span class="sl-name"></span><span class="sl-price"></span>`;
+        li.querySelector(".sl-name").textContent = pick.char.name;
+        li.querySelector(".sl-price").textContent = money(pick.price);
+      } else {
+        li.className = "slot empty";
+        li.innerHTML = `<span class="sl-name">&nbsp;</span>`;
+      }
+      ol.appendChild(li);
+    }
+  }
+  renderPanels();
+  renderSticker();
+}
+
+function renderSticker(){
+  const solo = soloRun();
+  const lbl = $("stLabel"), pr = $("stPrice"), who = $("stWho"), st = $("sticker");
+  st.className = "sticker" + (lot.high === null ? "" : lot.high === 0 ? " tone-red" : " tone-blue");
+  if (lot.sold){
+    lbl.textContent = "Sold";
+    pr.textContent = money(lot.price);
+    who.textContent = P[lot.high].name;
+    $("call").textContent = `${lot.char.name} goes to ${P[lot.high].name} for ${money(lot.price)}.`;
+  } else if (lot.high === null){
+    lbl.textContent = "Opening";
+    pr.textContent = money(1);
+    who.textContent = "no bids yet";
+    $("call").textContent = `${P[lot.opener].name} has to open this one. $1 or more.`;
+  } else {
+    lbl.textContent = solo ? "Unopposed" : "Standing bid";
+    pr.textContent = money(lot.price);
+    who.textContent = P[lot.high].name;
+    $("call").textContent = solo
+      ? `No one left to bid. ${P[lot.high].name} takes it for a dollar.`
+      : `${P[1 - lot.high].name}, raise to ${money(askPrice())} or say Yours and let it go.`;
+  }
+}
+
+function renderPanels(){
+  const solo = soloRun();
+  for (const p of [0, 1]){
+    const panel = $("panel" + p), bids = $("bids" + p), state = $("state" + p),
+          other = $("other" + p), passBtn = panel.querySelector(".pn-pass");
+    bids.innerHTML = "";
+    panel.classList.toggle("out", !inPlay(p));
+    panel.classList.toggle("standing", lot.high === p);
+    // Their panel is a window, not a control surface.
+    panel.classList.toggle("remote", p !== ME);
+
+    const mustOpen = lot.high === null && p === lot.opener;
+
+    if (lot.sold){
+      state.textContent = lot.high === p ? "Sold to you." : "Gone.";
+      other.disabled = true; passBtn.disabled = true;
+      continue;
+    }
+
+    if (p !== ME){
+      state.textContent =
+        !inPlay(p)         ? "Roster full. Done buying." :
+        solo               ? "Taking it unopposed." :
+        lot.high === p     ? `Standing bid ${money(lot.price)}. Over to you.` :
+        mustOpen           ? "Has to open this one…" :
+                             "Deciding…";
+      other.disabled = true; passBtn.disabled = true;
+      continue;
+    }
+
+    if (!inPlay(p)){
+      state.textContent = "Roster full. Done buying.";
+      other.disabled = true; passBtn.disabled = true;
+      continue;
+    }
+    if (solo){
+      state.textContent = "Unopposed. This one is yours for $1.";
+      other.disabled = true; passBtn.disabled = true;
+      continue;
+    }
+    if (lot.high === p){
+      state.textContent = `Standing bid ${money(lot.price)}. Waiting on the other side.`;
+      other.disabled = true; passBtn.disabled = true;
+      continue;
+    }
+
+    const ask = askPrice(), cap = ceiling(p);
+
+    if (ask > cap){
+      state.textContent = `Tapped out. ${money(cap)} is your ceiling with ${slotsLeft(p)} slots to fill. Let it go.`;
+      other.disabled = true; passBtn.disabled = false;
+      continue;
+    }
+
+    for (const v of [ask, ask + 1, ask + 2]){
+      if (v > cap) continue;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "bid-btn";
+      b.textContent = money(v);
+      b.addEventListener("click", () => act("bid", v));
+      bids.appendChild(b);
+    }
+    other.disabled = false;
+    other.min = ask; other.max = cap;
+    other.placeholder = `${ask} to ${cap}`;
+    passBtn.disabled = mustOpen;
+    passBtn.textContent = "Yours";
+    state.textContent = mustOpen
+      ? "Your turn to open. Bid at least $1. Nothing goes back in the box."
+      : lot.high === null
+        ? `Say Yours and ${P[1 - p].name} takes it for $1.`
+        : `Ceiling ${money(cap)} · keeps ${money(slotsLeft(p) - 1)} back for ${slotsLeft(p) - 1} more slot${slotsLeft(p) - 1 === 1 ? "" : "s"}.`;
+  }
+}
+
+/* ---------------------------- finish ---------------------------- */
+function finish(){
+  over = true;
+  pushState();
+}
+
+function showFaceoff(){
+  showScreen("faceoff");
+  $("againBtn").hidden = !HOST;
+  for (const p of [0, 1]){
+    $("foName" + p).textContent = P[p].name;
+    const ol = $("foList" + p);
+    ol.innerHTML = "";
+    P[p].roster.forEach(r => {
+      const li = document.createElement("li");
+      li.className = "fo-item";
+      li.innerHTML = `<span class="fi-name"></span><span class="fi-pub"></span><span class="fi-price"></span>`;
+      li.querySelector(".fi-name").textContent = r.char.name;
+      li.querySelector(".fi-pub").textContent = r.char.pub === "M" ? "Marvel" : "DC";
+      li.querySelector(".fi-price").textContent = money(r.price);
+      ol.appendChild(li);
+    });
+    $("foTotal" + p).textContent = `${money(PURSE - P[p].purse)} spent · ${money(P[p].purse)} unspent`;
+  }
+}
+
+/* ------------------------- the writer ------------------------- */
+const MODE_NAME = { random: "Random encounter", prep: "A week of prep" };
+
+function chosenMode(){
+  const el = document.querySelector('input[name="encounter"]:checked');
+  return el ? el.value : "random";
+}
+
+// Minimal markdown: ## headings, **bold**, blank-line paragraphs. Enough for
+// what the writer returns, and it keeps the page free of outside libraries.
+function renderStory(md){
+  const esc = s => s.replace(/[&<>]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" }[c]));
+  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\*(.+?)\*/g, "<i>$1</i>");
+  const out = [];
+  let para = [];
+  const flush = () => { if (para.length){ out.push(`<p>${inline(para.join(" "))}</p>`); para = []; } };
+
+  for (const raw of md.trim().split("\n")){
+    const line = raw.trim();
+    if (!line){ flush(); continue; }
+    const h = line.match(/^#{1,4}\s+(.*)$/);          // heading owns its line only
+    if (h){ flush(); out.push(`<h3>${inline(h[1].trim())}</h3>`); continue; }
+    para.push(line.replace(/^[-*]\s+/, "\u2022 "));
+  }
+  flush();
+  return out.join("");
+}
+
+function showWriting(mode){
+  $("story").hidden = false;
+  $("storyBody").innerHTML = `<p class="story-wait">Inking ${MODE_NAME[mode] || ""}…</p>`;
+  $("storyFoot").textContent = "";
+  $("writeBtn").disabled = true;
+}
+
+function showStory(text, mode){
+  window.__story = text;
+  $("story").hidden = false;
+  $("storyBody").innerHTML = renderStory(text);
+  $("storyFoot").textContent = MODE_NAME[mode] || "";
+  $("writeBtn").disabled = false;
+  $("writeHint").textContent = "Change the encounter and write it again, it plays out differently.";
+}
+
+function showStoryError(msg){
+  $("story").hidden = false;
+  $("storyBody").innerHTML = `<p class="story-err"></p>`;
+  $("storyBody").querySelector(".story-err").textContent = msg;
+  $("writeBtn").disabled = false;
+}
+
+async function writeFight(){
+  const mode = chosenMode();
+  showWriting(mode);
+  send({ t: "writing", mode });
+  const payload = {
+    mode,
+    a: { name: P[0].name, picks: P[0].roster.map(r => ({ name: r.char.name, pub: r.char.pub, price: r.price })) },
+    b: { name: P[1].name, picks: P[1].roster.map(r => ({ name: r.char.name, pub: r.char.pub, price: r.price })) }
+  };
+  try {
+    const r = await fetch("/api/scenario", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await r.json().catch(() => null);
+    if (!r.ok || !data || !data.text){
+      const msg = (data && data.error) || `The writer failed (${r.status}).`;
+      showStoryError(msg); send({ t: "storyfail", error: msg }); return;
+    }
+    showStory(data.text, mode);
+    send({ t: "story", text: data.text, mode });
+  } catch (e){
+    const msg = "Could not reach the writer. Check your connection.";
+    showStoryError(msg); send({ t: "storyfail", error: msg });
+  }
+}
+
+function rosterText(){
+  const side = p => P[p].roster
+    .map((r, i) => `${i + 1}. ${r.char.name} (${r.char.pub === "M" ? "Marvel" : "DC"}), ${money(r.price)}`)
+    .join("\n");
+  return `COVER PRICE / FINAL ROSTERS
+Base versions. Random encounter. $20 purse each.
+
+${P[0].name}: ${money(PURSE - P[0].purse)} spent, ${money(P[0].purse)} unspent
+${side(0)}
+
+${P[1].name}: ${money(PURSE - P[1].purse)} spent, ${money(P[1].purse)} unspent
+${side(1)}
+
+Write the 5v5 as two comic-book scenarios.`;
+}
+
+/* ---------------------------- wiring ---------------------------- */
+$("stockCount").textContent = STOCK.length + " Issues in Stock";
+$("openBox").addEventListener("click", openTable);
+$("joinBtn").addEventListener("click", joinTable);
+$("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") joinTable(); });
+$("myName").addEventListener("keydown", e => { if (e.key === "Enter") openTable(); });
+
+$("shareBtn").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("shareLink").value); $("shareBtn").textContent = "Copied"; }
+  catch { $("shareLink").select(); }
+  setTimeout(() => { $("shareBtn").textContent = "Copy"; }, 1600);
+});
+
+$("cancelBtn").addEventListener("click", () => {
+  send({ t: "closed" });
+  if (chan) sb.removeChannel(chan);
+  try { localStorage.removeItem(SAVE_KEY); } catch {}
+  started = false;
+  showScreen("setup");
+});
+
+try { $("myName").value = localStorage.getItem("longbox.name") || ""; } catch {}
+
+// A code in the link means they were invited, prefill it and say so.
+const invited = new URLSearchParams(location.search).get("r");
+if (invited){
+  $("joinCode").value = invited.toUpperCase().slice(0, 4);
+  $("setupMsg").textContent = "You have been invited to table " + $("joinCode").value + ". Put your name on the tab and join.";
+}
+
+// Offer to reopen a table this browser was hosting (a refresh loses nothing).
+try {
+  const sv = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+  if (sv && sv.ROOM && !sv.over && !invited){
+    $("resumeBtn").hidden = false;
+    $("resumeBtn").textContent = "Reopen table " + sv.ROOM;
+    $("resumeBtn").addEventListener("click", resumeTable);
+  }
+} catch {}
+
+// Ultra arrives after first paint, so re-measure once the webfont lands.
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (lot) fitName(); });
+let fitTimer;
+addEventListener("resize", () => {
+  clearTimeout(fitTimer);
+  fitTimer = setTimeout(() => { if (lot) fitName(); }, 120);
+});
+
+document.querySelectorAll(".pn-pass[data-pass]").forEach(b =>
+  b.addEventListener("click", () => { if (Number(b.dataset.pass) === ME) act("pass"); })
+);
+
+for (const p of [0, 1]){
+  $("other" + p).addEventListener("keydown", e => {
+    if (e.key === "Enter"){
+      e.preventDefault();
+      const v = Number(e.currentTarget.value);
+      if (v && p === ME) act("bid", v);
+    }
+  });
+}
+
+$("writeBtn").addEventListener("click", writeFight);
+
+$("copyBtn").addEventListener("click", async () => {
+  const text = rosterText() + (window.__story ? "\n\n" + window.__story : "");
+  try {
+    await navigator.clipboard.writeText(text);
+    $("copyHint").textContent = window.__story
+      ? "Copied. Rosters and the issue."
+      : "Copied.";
+  } catch {
+    // Clipboard is blocked on file:// in some browsers, fall back to a selectable box.
+    const ta = document.createElement("textarea");
+    ta.className = "fallback-ta";
+    ta.value = text;
+    ta.setAttribute("aria-label", "Final rosters, select and copy");
+    $("copyHint").textContent = "Clipboard blocked here. Select the text below and copy it.";
+    $("copyHint").after(ta);
+    ta.select();
+  }
+});
+
+// Host only, a fresh sale at the same table, so nobody has to swap links again.
+$("againBtn").addEventListener("click", () => {
+  if (!HOST) return;
+  document.querySelectorAll(".fallback-ta").forEach(n => n.remove());
+  $("copyHint").textContent = "";
+  $("story").hidden = true; $("storyBody").innerHTML = ""; window.__story = null;
+  $("writeBtn").disabled = false;
+  $("writeHint").textContent = "One issue, written from the two rosters above.";
+  P = [{ name: P[0].name, purse: PURSE, roster: [] }, { name: P[1].name, purse: PURSE, roster: [] }];
+  lot = null; lastFx = 0;
+  dealDeck();
+  nextLot();
+});
+</script>
+
+<style>
+/* ==================================================================
+   COVER PRICE, the comic-shop back room.
+   Kraft box, yellowed pulp, two grease pencils, one rubber stamp.
+   ================================================================== */
+:root{
+  --pulp:      #e7ddc2;
+  --pulp-2:    #d9cca8;
+  --pulp-3:    #cbbb92;
+  --manila:    #dcc391;
+  --kraft:     #a97c4e;
+  --kraft-dk:  #6f4d2d;
+  --kraft-lt:  #c69a67;
+  --ink:       #17140f;
+  --ink-2:     #4b4234;
+  --ink-3:     #6d6252;
+  --red:       #c0361f;
+  --red-dk:    #8e2415;
+  --blue:      #27497f;
+  --blue-dk:   #1a3560;
+  --stamp:     #b02e24;
+  --room:      #150f0a;
+  --rule:      rgba(23,20,15,.34);
+
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+
+  --slab: "Ultra", Georgia, serif;
+  --data: "Archivo Narrow", "Helvetica Neue", Arial, sans-serif;
+  --type: "Special Elite", "Courier New", monospace;
+  --wax:  "Permanent Marker", "Comic Sans MS", cursive;
+}
+
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; }
+html{ background:var(--room); }
+
+body{
+  min-height:100vh;
+  background:
+    radial-gradient(120% 85% at 50% -12%, #3a2a1c 0%, #221810 45%, var(--room) 100%);
+  background-attachment:fixed;
+  color:var(--ink);
+  font-family:var(--data);
+  font-size:16px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* one overhead shop lamp */
+.lamp{
+  position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(65% 45% at 50% 0%, rgba(255,226,168,.20), rgba(255,226,168,0) 70%),
+    radial-gradient(140% 100% at 50% 40%, rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 100%);
+}
+
+.screen{ position:relative; z-index:1; }
+[hidden]{ display:none !important; }
+
+::selection{ background:var(--stamp); color:var(--pulp); }
+
+:where(button,input):focus-visible{
+  outline:3px solid #f0c04a;
+  outline-offset:2px;
+}
+
+/* ============================ SETUP ============================ */
+.setup-screen{
+  min-height:100vh;
+  display:grid; place-items:start center;
+  padding:clamp(20px,5vw,64px) 20px 72px;
+}
+
+.guide-cover{
+  position:relative;
+  width:min(760px,100%);
+  padding:clamp(26px,4.5vw,52px) clamp(22px,4.5vw,54px) clamp(30px,4vw,48px);
+  background:
+    linear-gradient(178deg, rgba(255,255,255,.30), rgba(0,0,0,.05) 40%, rgba(120,90,50,.16)),
+    var(--pulp);
+  border:1px solid rgba(80,60,35,.5);
+  box-shadow:
+    0 2px 0 rgba(255,255,255,.30) inset,
+    0 26px 60px -18px rgba(0,0,0,.75),
+    0 70px 90px -50px rgba(0,0,0,.9);
+}
+.guide-cover::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:var(--grain); opacity:.30; mix-blend-mode:multiply;
+}
+.cover-rules{
+  position:absolute; left:0; right:0; top:9px; height:6px;
+  border-top:3px solid var(--ink); border-bottom:1px solid var(--ink);
+}
+
+.cover-edition{
+  margin:6px 0 18px;
+  font-family:var(--data); font-size:11.5px; font-weight:600;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--ink-2);
+  text-align:center;
+}
+
+.cover-title{
+  margin:0; text-align:center;
+  font-family:var(--slab);
+  font-size:clamp(52px,11.5vw,116px);
+  line-height:.80; letter-spacing:-.035em;
+  text-transform:uppercase; color:var(--ink);
+  text-shadow:2px 3px 0 rgba(176,46,36,.24);
+}
+.cover-title span{
+  display:block;
+  font-family:var(--data); font-weight:700; font-style:italic;
+  font-size:clamp(15px,2.6vw,24px); letter-spacing:.30em;
+  text-shadow:none; margin-bottom:.35em; color:var(--red-dk);
+}
+.cover-sub{
+  margin:18px 0 0; text-align:center;
+  font-family:var(--type); font-size:clamp(12px,2vw,15px);
+  letter-spacing:.04em; color:var(--ink-2);
+}
+
+.cover-strip{
+  display:flex; flex-wrap:wrap; justify-content:center; align-items:center;
+  gap:10px; margin:22px 0 30px; padding:9px 0;
+  border-top:1px solid var(--rule); border-bottom:3px double var(--rule);
+  font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ink-2);
+}
+.cover-strip i{ width:3px; height:3px; background:var(--ink-3); border-radius:50%; }
+
+/* manila divider tabs */
+.tabs-row{
+  display:grid; grid-template-columns:1fr auto 1fr; align-items:center;
+  gap:clamp(10px,2.5vw,22px); margin-bottom:30px;
+}
+.tab{
+  position:relative; padding:16px 18px 15px;
+  background:linear-gradient(180deg, #e6d1a4, var(--manila));
+  border:1px solid rgba(90,66,32,.55);
+  border-radius:3px 14px 3px 3px;
+  box-shadow:0 8px 18px -8px rgba(0,0,0,.6), 0 1px 0 rgba(255,255,255,.45) inset;
+}
+.tab::before{
+  content:""; position:absolute; left:0; top:0; bottom:0; width:5px;
+}
+.tab-red::before{ background:var(--red); }
+.tab-blue::before{ background:var(--blue); }
+.tab-label{
+  display:block; margin:0 0 6px 8px;
+  font-family:var(--data); font-size:10.5px; font-weight:700;
+  letter-spacing:.16em; text-transform:uppercase; color:#6a4f26;
+}
+.tab-input{
+  display:block; width:100%; margin-left:8px; padding:0 0 3px;
+  background:transparent; border:0; border-bottom:2px dashed rgba(90,66,32,.5);
+  font-family:var(--type); font-size:clamp(17px,3vw,23px); color:var(--ink);
+}
+.tab-input:focus{ outline:none; border-bottom-color:var(--ink); }
+.tab-red .tab-input{ caret-color:var(--red); }
+.tab-blue .tab-input{ caret-color:var(--blue); }
+.tab-purse{
+  margin:9px 0 0 8px; font-family:var(--data);
+  font-size:11px; font-weight:600; letter-spacing:.13em;
+  text-transform:uppercase; color:#6a4f26;
+}
+.tab-purse b{ font-family:var(--wax); font-size:19px; letter-spacing:0; }
+.tab-red .tab-purse b{ color:var(--red); }
+.tab-blue .tab-purse b{ color:var(--blue); }
+.versus{
+  font-family:var(--slab); font-size:clamp(16px,3vw,26px);
+  text-transform:uppercase; color:var(--ink-3); letter-spacing:-.02em;
+}
+
+/* front matter */
+.frontmatter{ margin-bottom:32px; }
+.fm-head{
+  margin:0 0 12px;
+  font-family:var(--data); font-size:11px; font-weight:700;
+  letter-spacing:.20em; text-transform:uppercase; color:var(--ink-2);
+  padding-bottom:6px; border-bottom:1px solid var(--rule);
+}
+.fm-list{
+  margin:0; padding:0 0 0 1.35em;
+  font-size:14.5px; line-height:1.62; color:var(--ink-2);
+  max-width:66ch;
+}
+.fm-list li{ margin-bottom:8px; padding-left:4px; }
+.fm-list li::marker{ font-weight:700; color:var(--red-dk); }
+.fm-list b{ color:var(--ink); font-weight:700; }
+.fm-foot{
+  margin:14px 0 0; font-family:var(--type);
+  font-size:12.5px; color:var(--ink-3);
+}
+
+/* rubber-stamp button */
+.stamp-btn{
+  display:block; width:100%; padding:0; border:0; background:none;
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+.stamp-btn span{
+  display:block; padding:16px 22px;
+  border:3px solid var(--stamp); border-radius:4px;
+  color:var(--stamp); background:rgba(176,46,36,.05);
+  font-family:var(--slab); font-size:clamp(21px,4vw,31px);
+  letter-spacing:.02em; text-transform:uppercase; text-align:center;
+  transform:rotate(-1.1deg);
+  transition:transform .16s cubic-bezier(.2,.9,.25,1), background-color .16s, box-shadow .16s;
+  box-shadow:0 8px 18px -12px rgba(40,26,14,.75);
+}
+.stamp-btn:hover span{ transform:rotate(-1.6deg) scale(1.014); background:rgba(176,46,36,.11); }
+.stamp-btn:active span{ transform:rotate(-.4deg) scale(.985); box-shadow:none; }
+.stamp-btn-sm span{ padding:12px 20px; font-size:clamp(17px,3vw,22px); }
+
+/* ---------- lobby: opening or joining a table ---------- */
+.tabs-solo{ grid-template-columns:minmax(0,320px); justify-content:center; }
+
+.doors{
+  display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:clamp(16px,3vw,32px); margin-bottom:26px;
+  padding-top:22px; border-top:3px double var(--rule);
+}
+.door .stamp-btn span{ font-size:clamp(18px,2.5vw,26px); padding:14px 16px; }
+.door-copy{
+  margin:0 0 14px; font-size:13.5px; line-height:1.5;
+  color:var(--ink-2); max-width:34ch; min-height:4.4em;
+}
+.join-row{ display:flex; gap:8px; }
+.code-input{
+  flex:1 1 auto; min-width:0; padding:12px 14px;
+  background:rgba(255,255,255,.34);
+  border:1px solid rgba(70,52,28,.45); border-radius:2px;
+  font-family:var(--slab); font-size:26px; line-height:1;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--ink);
+}
+.code-input::placeholder{
+  font-family:var(--data); font-size:13px; font-weight:700;
+  letter-spacing:.18em; color:var(--ink-3); text-transform:uppercase;
+}
+.code-input:focus{ outline:none; border-color:var(--ink); background:rgba(255,255,255,.55); }
+.join-btn{ flex:0 0 auto; padding:10px 22px; }
+
+.netmsg{
+  margin:0 0 18px; min-height:1.4em; text-align:center;
+  font-family:var(--type); font-size:13.5px; color:var(--red-dk);
+}
+.resume-btn{
+  display:block; margin:0 auto;
+  border-color:rgba(70,52,28,.45); color:var(--ink-2);
+}
+.resume-btn:hover{ background:var(--ink); color:var(--pulp); border-color:var(--ink); }
+
+.lobby-cover{ text-align:center; }
+.lobby-title{
+  margin:8px 0 0; font-family:var(--slab);
+  font-size:clamp(30px,6vw,58px); line-height:.92;
+  letter-spacing:-.03em; text-transform:uppercase; color:var(--ink);
+}
+.lobby-title span{
+  display:block; margin-top:6px;
+  font-size:clamp(52px,13vw,124px); letter-spacing:.06em;
+  color:var(--red);
+  text-shadow:2px 3px 0 rgba(23,20,15,.16);
+}
+.lobby-copy{
+  margin:22px auto 14px; max-width:44ch;
+  font-size:14.5px; line-height:1.55; color:var(--ink-2);
+}
+.share-row{ display:flex; gap:8px; max-width:520px; margin:0 auto 22px; }
+.share-input{
+  flex:1 1 auto; min-width:0; padding:10px 12px;
+  background:rgba(255,255,255,.34);
+  border:1px solid rgba(70,52,28,.45); border-radius:2px;
+  font-family:var(--data); font-size:13px; color:var(--ink-2);
+}
+.share-input:focus{ outline:none; border-color:var(--ink); }
+.lobby-wait{
+  color:var(--ink-3);
+  animation:breathe 2.4s ease-in-out infinite;
+}
+@keyframes breathe{ 0%,100%{ opacity:.55; } 50%{ opacity:1; } }
+.lobby-cover .ghost-btn{ border-color:rgba(70,52,28,.4); color:var(--ink-3); }
+.lobby-cover .ghost-btn:hover{ background:var(--ink); color:var(--pulp); border-color:var(--ink); }
+
+.cover-hint{
+  margin:16px 0 0; text-align:center;
+  font-family:var(--data); font-size:12.5px; color:var(--ink-3);
+}
+
+/* ============================ AUCTION ============================ */
+.auction-screen{
+  min-height:100vh;
+  display:flex; flex-direction:column;
+  padding:clamp(12px,2.2vw,24px) clamp(12px,2.4vw,32px) clamp(14px,2vw,24px);
+  gap:clamp(10px,1.6vw,18px);
+}
+
+.guide-head{ flex:0 0 auto; }
+.gh-title{
+  margin:0; text-align:center;
+  font-family:var(--slab); font-size:clamp(19px,2.7vw,30px);
+  text-transform:uppercase; letter-spacing:-.02em; color:var(--pulp-2);
+}
+.gh-rule{
+  height:5px; margin:7px 0;
+  border-top:2px solid rgba(215,198,160,.5);
+  border-bottom:1px solid rgba(215,198,160,.28);
+}
+.gh-meta{
+  margin:0; display:flex; justify-content:center; align-items:center; gap:10px;
+  font-size:11px; font-weight:700; letter-spacing:.18em;
+  text-transform:uppercase; color:rgba(226,211,175,.62);
+}
+.gh-meta i{ width:3px; height:3px; border-radius:50%; background:currentColor; }
+.wire{ display:inline-flex; align-items:center; gap:6px; }
+.wire-dot{
+  width:7px; height:7px; border-radius:50%;
+  background:#7fa864; box-shadow:0 0 0 2px rgba(127,168,100,.22);
+}
+.wire.off{ color:#c98a5e; }
+.wire.off .wire-dot{ background:#c26a3a; box-shadow:0 0 0 2px rgba(194,106,58,.22); }
+
+.floor{
+  flex:1 1 auto;
+  display:grid;
+  grid-template-columns:minmax(190px,1fr) minmax(300px,1.45fr) minmax(190px,1fr);
+  gap:clamp(12px,2vw,28px);
+  align-items:start;
+}
+
+/* ---------- ledgers ---------- */
+.ledger{
+  position:relative;
+  padding:14px 15px 13px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.22), rgba(120,90,50,.14)),
+    var(--pulp-2);
+  border:1px solid rgba(70,52,28,.5);
+  box-shadow:0 16px 34px -20px rgba(0,0,0,.85), 0 1px 0 rgba(255,255,255,.28) inset;
+}
+.ledger::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:var(--grain); opacity:.24; mix-blend-mode:multiply;
+}
+.ledger-tab{
+  margin:-14px -15px 12px; padding:9px 15px 8px;
+  background:linear-gradient(180deg,#e6d1a4,var(--manila));
+  border-bottom:1px solid rgba(90,66,32,.5);
+}
+.ledger-red   .ledger-tab{ box-shadow:inset 0 -4px 0 var(--red); }
+.ledger-blue  .ledger-tab{ box-shadow:inset 0 -4px 0 var(--blue); }
+.lt-name{
+  font-family:var(--type); font-size:16px; color:var(--ink);
+  overflow-wrap:anywhere;
+}
+.purse-line{
+  margin:0; font-size:10px; font-weight:700;
+  letter-spacing:.17em; text-transform:uppercase; color:var(--ink-3);
+}
+.purse-figure{
+  margin:0 0 10px; font-family:var(--wax);
+  font-size:clamp(34px,4.6vw,50px); line-height:1;
+  transform:rotate(-1.6deg); transform-origin:left center;
+}
+.ledger-red  .purse-figure{ color:var(--red); }
+.ledger-blue .purse-figure{ color:var(--blue); }
+
+.slots{ list-style:none; margin:0 0 10px; padding:0; }
+.slot{
+  display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+  padding:5px 0; border-bottom:1px solid var(--rule);
+  font-size:13.5px; font-variant-numeric:tabular-nums;
+}
+.slot:first-child{ border-top:1px solid var(--rule); }
+.slot.empty .sl-name{ color:rgba(23,20,15,.32); }
+.slot.filled .sl-name{ font-weight:600; color:var(--ink); overflow-wrap:anywhere; }
+.sl-price{
+  font-family:var(--wax); font-size:16px; flex:0 0 auto;
+  transform:rotate(-2deg);
+}
+.ledger-red  .sl-price{ color:var(--red); }
+.ledger-blue .sl-price{ color:var(--blue); }
+.ledger-foot{
+  margin:0; font-size:10.5px; font-weight:600;
+  letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3);
+}
+
+/* ---------- centre stage ---------- */
+.stage{
+  position:relative;
+  align-self:stretch;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:4px; padding-top:6px;
+}
+
+/* the issue and the box it came out of, sized off each other */
+.crate{
+  position:relative;
+  width:min(330px,84%);
+  display:flex; justify-content:center;
+}
+
+/* the kraft box rim behind the issue */
+.box-rim{
+  position:absolute; left:50%; transform:translateX(-50%);
+  bottom:-16px; width:206%; height:48%;
+  background:
+    linear-gradient(180deg,
+      #3a2614 0 3px,          /* the dark slot you are reaching into */
+      #4e341b 3px 13px,
+      var(--kraft-lt) 13px 20px,
+      var(--kraft) 52%,
+      var(--kraft-dk) 100%);
+  border:1px solid #432d15;
+  border-radius:2px 2px 5px 5px;
+  box-shadow:
+    0 14px 22px -18px rgba(0,0,0,.95) inset,
+    0 34px 56px -24px rgba(0,0,0,.95),
+    0 1px 0 rgba(255,222,175,.22) inset;
+}
+.box-rim::after{
+  content:""; position:absolute; inset:0;
+  background:var(--grain); opacity:.34; mix-blend-mode:multiply;
+}
+/* manila dividers standing up inside the box, behind the issue */
+.rim-dividers{
+  position:absolute; left:14px; right:14px; top:-13px; height:30px;
+  background:
+    repeating-linear-gradient(90deg,
+      rgba(226,203,155,.92) 0 30px,
+      rgba(0,0,0,0) 30px 78px);
+  -webkit-mask-image:linear-gradient(180deg, #000 0 62%, transparent 100%);
+          mask-image:linear-gradient(180deg, #000 0 62%, transparent 100%);
+  border-radius:2px 2px 0 0;
+  filter:drop-shadow(0 2px 2px rgba(0,0,0,.5));
+}
+
+/* the bagged & boarded issue */
+.issue{
+  position:relative; z-index:2;
+  width:100%;
+  aspect-ratio:5 / 6.3;
+}
+.issue.pulled{ animation:pull .62s cubic-bezier(.16,.9,.24,1) both; }
+@keyframes pull{
+  from{ transform:translateY(46px) rotate(-2.4deg) scale(.965); opacity:0; filter:blur(3px); }
+  to  { transform:translateY(0) rotate(-1deg) scale(1); opacity:1; filter:blur(0); }
+}
+
+/* mylar bag sheen */
+.mylar{
+  position:absolute; inset:-9px -8px -14px -8px; z-index:3;
+  border-radius:2px; pointer-events:none;
+  background:linear-gradient(112deg,
+    rgba(255,255,255,0) 22%,
+    rgba(255,255,255,.30) 38%,
+    rgba(255,255,255,.05) 47%,
+    rgba(255,255,255,0) 62%);
+  border:1px solid rgba(255,255,255,.24);
+  box-shadow:0 0 0 1px rgba(255,255,255,.08) inset;
+}
+.mylar::after{
+  content:""; position:absolute; left:0; right:0; top:-1px; height:12px;
+  background:rgba(255,255,255,.14);
+  border-bottom:1px solid rgba(255,255,255,.22);
+}
+
+.cover{
+  position:absolute; inset:0;
+  display:flex; flex-direction:column;
+  padding:15px 16px 13px;
+  transform:rotate(-1deg);
+  background:linear-gradient(174deg, rgba(255,255,255,.24), rgba(120,90,50,.20)), var(--pulp);
+  border:1px solid rgba(70,52,28,.6);
+  box-shadow:0 26px 50px -22px rgba(0,0,0,.9);
+}
+.cover-grain{
+  position:absolute; inset:0; pointer-events:none;
+  background:var(--grain); opacity:.30; mix-blend-mode:multiply;
+}
+.cv-top{
+  display:flex; justify-content:space-between; align-items:center;
+  padding-bottom:7px; border-bottom:3px solid var(--ink);
+}
+.cv-pub{
+  font-family:var(--slab); font-size:14px; letter-spacing:.01em;
+  text-transform:uppercase;
+}
+.cover[data-pub="M"] .cv-pub{ color:var(--red-dk); }
+.cover[data-pub="D"] .cv-pub{ color:var(--blue-dk); }
+.cv-no{
+  font-size:11px; font-weight:700; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--ink-3);
+  font-variant-numeric:tabular-nums;
+}
+/* corner box, the head-shot panel every back issue carries, set as initials */
+.cv-box{
+  width:58px; height:58px; margin:16px 0 14px;
+  display:grid; place-items:center;
+  border:2px solid var(--ink);
+  font-family:var(--slab); font-size:25px; line-height:1;
+  letter-spacing:-.045em; color:var(--ink);
+}
+.cover[data-pub="M"] .cv-box{ background:rgba(192,54,31,.13); }
+.cover[data-pub="D"] .cv-box{ background:rgba(39,73,127,.13); }
+
+.cv-name{
+  margin:0;
+  font-family:var(--slab);
+  font-size:44px;                 /* measured and overridden by fitName() */
+  line-height:.86; letter-spacing:-.038em;
+  text-transform:uppercase; color:var(--ink);
+  text-wrap:balance;
+  text-shadow:1.5px 2px 0 rgba(176,46,36,.20);
+}
+.cv-alias{
+  margin:9px 0 0; font-family:var(--type);
+  font-size:13px; color:var(--ink-2);
+}
+.cv-hr{
+  margin:11px 0 9px; height:4px;
+  border-top:1px solid var(--rule); border-bottom:3px double var(--rule);
+}
+.cv-note{
+  margin:0; font-size:14.5px; font-style:italic;
+  line-height:1.44; color:var(--ink-2); max-width:34ch;
+}
+.cv-bot{
+  display:flex; justify-content:space-between; gap:10px;
+  margin-top:auto; padding-top:10px; border-top:1px solid var(--rule);
+}
+.cv-cond{
+  font-size:10px; font-weight:700; letter-spacing:.15em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+.cv-cond b{ color:var(--ink-2); font-size:12px; }
+
+/* grease-pencil price sticker on the bag */
+.sticker{
+  position:absolute; z-index:4;
+  right:-16px; top:-20px;
+  width:120px; padding:9px 8px 8px;
+  display:flex; flex-direction:column; align-items:center; gap:1px;
+  background:#f3efe2;
+  border:1px solid rgba(70,52,28,.45);
+  border-radius:2px;
+  transform:rotate(5deg);
+  box-shadow:0 10px 20px -10px rgba(0,0,0,.85);
+  transition:transform .2s cubic-bezier(.2,.9,.25,1);
+}
+.st-label{
+  font-size:9px; font-weight:700; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+.st-price{
+  font-family:var(--wax); font-size:38px; line-height:1.05;
+  color:var(--ink-2); transform:rotate(-3deg);
+}
+.sticker.tone-red  .st-price{ color:var(--red); }
+.sticker.tone-blue .st-price{ color:var(--blue); }
+.st-who{
+  font-family:var(--type); font-size:10.5px; color:var(--ink-3);
+  text-align:center; line-height:1.25; overflow-wrap:anywhere;
+}
+
+.call{
+  margin:22px 0 0; text-align:center; max-width:44ch;
+  font-family:var(--type); font-size:clamp(13px,1.6vw,16px);
+  color:rgba(232,219,188,.86);
+}
+
+/* ---------- bid panels ---------- */
+.panels{
+  flex:0 0 auto;
+  display:grid; grid-template-columns:1fr 1fr; align-items:start;
+  gap:clamp(12px,2vw,28px);
+}
+.panel{
+  padding:13px 15px 12px;
+  background:linear-gradient(180deg, rgba(255,255,255,.20), rgba(120,90,50,.13)), var(--pulp-3);
+  border:1px solid rgba(70,52,28,.55);
+  border-top-width:5px;
+  box-shadow:0 -10px 30px -20px rgba(0,0,0,.9);
+  transition:opacity .2s, filter .2s;
+}
+.panel-red { border-top-color:var(--red); }
+.panel-blue{ border-top-color:var(--blue); }
+.panel.out{ opacity:.42; filter:saturate(.5); }
+/* the opponent's side: something you watch, not something you press */
+.panel.remote{ background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(120,90,50,.16)), var(--pulp-3); }
+.panel.remote .pn-bids,
+.panel.remote .pn-row{ display:none; }
+.panel.remote .pn-state{
+  margin:2px 0 0; min-height:0;
+  font-family:var(--type); font-size:15px; color:var(--ink-2);
+}
+.panel.standing{ box-shadow:0 0 0 2px rgba(23,20,15,.28) inset, 0 -10px 30px -20px rgba(0,0,0,.9); }
+
+.pn-name{
+  margin:0 0 9px; font-family:var(--type); font-size:15px;
+  color:var(--ink); overflow-wrap:anywhere;
+}
+.pn-bids{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:9px; min-height:44px; }
+.pn-bids:empty{ min-height:0; margin-bottom:0; }
+
+.bid-btn{
+  flex:1 1 0; min-width:64px; padding:10px 8px;
+  font-family:var(--wax); font-size:23px; line-height:1;
+  color:var(--pulp); background:var(--ink);
+  border:1px solid var(--ink); border-radius:2px; cursor:pointer;
+  transition:transform .13s cubic-bezier(.2,.9,.25,1), background-color .13s;
+}
+.bid-btn.wide{ flex:1 1 100%; font-size:20px; }
+.panel-red  .bid-btn{ background:var(--red);  border-color:var(--red-dk); }
+.panel-blue .bid-btn{ background:var(--blue); border-color:var(--blue-dk); }
+.bid-btn:hover{ transform:translateY(-2px) rotate(-1deg); }
+.panel-red  .bid-btn:hover{ background:var(--red-dk); }
+.panel-blue .bid-btn:hover{ background:var(--blue-dk); }
+.bid-btn:active{ transform:translateY(0) scale(.97); }
+
+.pn-row{ display:flex; gap:8px; align-items:stretch; }
+.pn-other{
+  flex:1 1 auto; display:flex; align-items:center; gap:7px;
+  padding:6px 9px; background:rgba(255,255,255,.32);
+  border:1px solid rgba(70,52,28,.4);
+}
+.pn-other span{
+  font-size:10px; font-weight:700; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+.pn-other input{
+  flex:1 1 auto; width:100%; min-width:0;
+  background:transparent; border:0;
+  font-family:var(--wax); font-size:19px; color:var(--ink);
+}
+.pn-other input:focus{ outline:none; }
+.pn-other input::placeholder{ font-family:var(--data); font-size:12px; color:var(--ink-3); }
+.pn-other input:disabled{ color:var(--ink-3); }
+
+.pn-pass{
+  flex:0 0 auto; padding:8px 18px;
+  font-family:var(--data); font-size:12px; font-weight:700;
+  letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-2); background:transparent;
+  border:2px solid rgba(70,52,28,.55); border-radius:2px; cursor:pointer;
+  transition:background-color .14s, color .14s;
+}
+.pn-pass:hover:not(:disabled){ background:var(--ink); color:var(--pulp); border-color:var(--ink); }
+.pn-pass:disabled, .pn-other input:disabled{ opacity:.4; cursor:not-allowed; }
+
+.pn-state{
+  margin:8px 0 0; min-height:2.6em;
+  font-size:11.5px; line-height:1.35; color:var(--ink-3);
+}
+
+/* ---------- the stamp ---------- */
+.stamp-layer{
+  position:fixed; inset:0; z-index:60;
+  display:grid; place-items:center; pointer-events:none;
+}
+.stamp-mark{
+  padding:16px 30px 14px;
+  border:5px solid var(--stamp); border-radius:5px;
+  background:rgba(176,46,36,.07);
+  text-align:center;
+  opacity:0;
+}
+.stamp-mark.tone-blue{ border-color:var(--blue); background:rgba(39,73,127,.07); }
+.stamp-mark.tone-grey{ border-color:#59503f; background:rgba(89,80,63,.07); }
+.sm-word{
+  display:block; font-family:var(--slab);
+  font-size:clamp(46px,10vw,96px); line-height:.9;
+  letter-spacing:-.03em; text-transform:uppercase; color:var(--stamp);
+}
+.tone-blue .sm-word{ color:var(--blue); }
+.tone-grey .sm-word{ color:#6c6250; }
+.sm-line{
+  display:block; margin-top:7px;
+  font-family:var(--data); font-size:clamp(11px,1.6vw,14px);
+  font-weight:700; letter-spacing:.15em; text-transform:uppercase;
+  color:var(--stamp);
+}
+.tone-blue .sm-line{ color:var(--blue); }
+.tone-grey .sm-line{ color:#6c6250; }
+
+.stamp-mark.hit{ animation:thud .58s cubic-bezier(.2,1.1,.3,1) both; }
+@keyframes thud{
+  0%  { opacity:0; transform:scale(2.6) rotate(-15deg); filter:blur(9px); }
+  55% { opacity:1; transform:scale(.94) rotate(-6.5deg); filter:blur(0); }
+  70% { transform:scale(1.02) rotate(-7.6deg); }
+  100%{ opacity:1; transform:scale(1) rotate(-7deg); }
+}
+
+/* ============================ FACE-OFF ============================ */
+.faceoff-screen{
+  min-height:100vh;
+  display:flex; flex-direction:column;
+  padding:clamp(20px,4vw,52px) clamp(16px,3.5vw,44px) 56px;
+  gap:clamp(16px,2.6vw,30px);
+}
+.fo-head{ text-align:center; }
+.fo-title{
+  margin:0; font-family:var(--slab);
+  font-size:clamp(34px,7vw,72px); line-height:.9;
+  letter-spacing:-.035em; text-transform:uppercase; color:var(--pulp);
+  text-shadow:2px 3px 0 rgba(176,46,36,.32);
+}
+
+.fo-body{
+  flex:0 0 auto;
+  display:grid; grid-template-columns:1fr auto 1fr;
+  gap:clamp(12px,2.4vw,30px); align-items:start;
+}
+.fo-side{
+  padding:14px 16px 15px;
+  background:linear-gradient(180deg, rgba(255,255,255,.22), rgba(120,90,50,.14)), var(--pulp-2);
+  border:1px solid rgba(70,52,28,.5);
+  box-shadow:0 22px 46px -24px rgba(0,0,0,.9);
+}
+.fo-red  .ledger-tab{ box-shadow:inset 0 -4px 0 var(--red); }
+.fo-blue .ledger-tab{ box-shadow:inset 0 -4px 0 var(--blue); }
+.fo-side .ledger-tab{
+  margin:-14px -16px 14px; padding:9px 16px 8px;
+  background:linear-gradient(180deg,#e6d1a4,var(--manila));
+  border-bottom:1px solid rgba(90,66,32,.5);
+}
+.fo-list{ list-style:none; margin:0; padding:0; counter-reset:pick; }
+.fo-item{
+  display:grid; grid-template-columns:1fr auto auto;
+  gap:10px; align-items:baseline;
+  padding:9px 0; border-bottom:1px solid var(--rule);
+}
+.fo-item:first-child{ border-top:1px solid var(--rule); }
+.fi-name{
+  font-family:var(--slab); font-size:clamp(15px,2vw,21px);
+  text-transform:uppercase; letter-spacing:-.02em;
+  color:var(--ink); overflow-wrap:anywhere;
+}
+.fi-pub{
+  font-size:9.5px; font-weight:700; letter-spacing:.15em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+.fi-price{
+  font-family:var(--wax); font-size:20px; transform:rotate(-2deg);
+}
+.fo-red  .fi-price{ color:var(--red); }
+.fo-blue .fi-price{ color:var(--blue); }
+.fo-total{
+  margin:12px 0 0; font-size:10.5px; font-weight:700;
+  letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3);
+}
+
+.fo-mid{
+  align-self:stretch;
+  display:flex; flex-direction:column; align-items:center; gap:14px;
+  padding-top:30px;
+}
+.fo-divider{ flex:1 1 auto; min-height:36px; width:2px; background:rgba(215,198,160,.28); }
+.fo-vs{
+  font-family:var(--slab); font-size:clamp(20px,3vw,34px);
+  text-transform:uppercase; color:rgba(226,211,175,.7);
+}
+
+.fo-actions{
+  display:flex; flex-direction:column; align-items:center; gap:12px;
+}
+.fo-actions .stamp-btn{ width:min(340px,100%); }
+.ghost-btn{
+  padding:8px 20px; background:transparent;
+  border:2px solid rgba(215,198,160,.4); border-radius:2px;
+  color:rgba(226,211,175,.8); cursor:pointer;
+  font-family:var(--data); font-size:11.5px; font-weight:700;
+  letter-spacing:.16em; text-transform:uppercase;
+  transition:background-color .15s, color .15s;
+}
+.ghost-btn:hover{ background:rgba(226,211,175,.9); color:var(--room); }
+.fo-hint{
+  margin:0; text-align:center; max-width:52ch;
+  font-family:var(--type); font-size:13px; color:rgba(226,211,175,.62);
+}
+.fo-hint:empty{ display:none; }
+.fo-tail{ display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+
+/* ---------- encounter picker ---------- */
+.encounter{
+  width:min(720px,100%); margin:0; padding:0; border:0;
+  display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px;
+}
+.encounter .fm-head{
+  grid-column:1 / -1; margin:0; text-align:center;
+  color:rgba(226,211,175,.62); border-bottom-color:rgba(215,198,160,.26);
+}
+.enc-opt{
+  display:flex; gap:10px; align-items:flex-start;
+  padding:13px 15px; cursor:pointer;
+  background:linear-gradient(180deg, rgba(255,255,255,.20), rgba(120,90,50,.13)), var(--pulp-3);
+  border:1px solid rgba(70,52,28,.5);
+  border-top:4px solid rgba(70,52,28,.45);
+  transition:border-top-color .15s, box-shadow .15s;
+}
+.enc-opt input{
+  flex:0 0 auto; margin:3px 0 0; width:15px; height:15px;
+  accent-color:var(--red);
+}
+.enc-body{ display:block; }
+.enc-body b{
+  display:block; font-family:var(--slab); font-size:16px;
+  text-transform:uppercase; letter-spacing:-.02em; color:var(--ink);
+}
+.enc-body em{
+  display:block; margin-top:5px; font-style:italic;
+  font-size:13px; line-height:1.45; color:var(--ink-2);
+}
+.enc-opt:hover{ border-top-color:var(--ink-3); }
+.enc-opt:has(input:checked){
+  border-top-color:var(--red);
+  box-shadow:0 0 0 2px rgba(23,20,15,.22) inset;
+}
+.enc-opt:has(input:focus-visible){ outline:3px solid #f0c04a; outline-offset:2px; }
+
+/* ---------- the printed issue ---------- */
+.story{
+  position:relative; width:min(720px,100%);
+  padding:clamp(22px,4vw,42px) clamp(20px,4vw,46px);
+  text-align:left;
+  background:linear-gradient(178deg, rgba(255,255,255,.28), rgba(120,90,50,.16)), var(--pulp);
+  border:1px solid rgba(70,52,28,.5);
+  box-shadow:0 26px 60px -26px rgba(0,0,0,.85);
+}
+.story-grain{
+  position:absolute; inset:0; pointer-events:none;
+  background:var(--grain); opacity:.28; mix-blend-mode:multiply;
+}
+.story-body{ position:relative; }
+.story-body h3{
+  margin:26px 0 10px;
+  font-family:var(--slab); font-size:clamp(19px,2.6vw,27px);
+  line-height:1.02; letter-spacing:-.03em; text-transform:uppercase;
+  color:var(--ink); text-wrap:balance;
+}
+.story-body h3:first-child{ margin-top:0; }
+.story-body p{
+  margin:0 0 13px; font-size:15px; line-height:1.62;
+  color:var(--ink-2); max-width:68ch;
+}
+.story-body p b{ color:var(--ink); }
+.story-wait{
+  font-family:var(--type); color:var(--ink-3) !important;
+  animation:breathe 1.8s ease-in-out infinite;
+}
+.story-err{ color:var(--red-dk) !important; font-family:var(--type); }
+.story-foot{
+  position:relative; margin:18px 0 0; padding-top:10px;
+  border-top:1px solid var(--rule);
+  font-size:10.5px; font-weight:700; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+.story-foot:has(span:empty){ display:none; }
+.stamp-btn:disabled{ cursor:progress; }
+.stamp-btn:disabled span{ opacity:.55; }
+.fallback-ta{
+  width:min(620px,100%); height:220px; margin-top:10px; padding:12px;
+  font-family:var(--data); font-size:13px; line-height:1.5;
+  background:var(--pulp); color:var(--ink);
+  border:1px solid rgba(70,52,28,.5);
+}
+
+/* ============================ RESPONSIVE ============================ */
+@media (max-width: 1000px){
+  .floor{
+    grid-template-columns:1fr 1fr;
+    grid-template-areas:"stage stage" "l0 l1";
+  }
+  .stage{ grid-area:stage; }
+  #ledger0{ grid-area:l0; }
+  #ledger1{ grid-area:l1; }
+  .purse-figure{ font-size:38px; }
+}
+
+@media (max-width: 620px){
+  .tabs-row{ grid-template-columns:1fr; }
+  .versus{ text-align:center; }
+  .doors{ grid-template-columns:1fr; gap:22px; }
+  .door-copy{ min-height:0; }
+  .share-row{ flex-direction:column; }
+  .floor{ gap:14px; }
+  .crate{ width:min(280px,88%); }
+
+  /* Reach the bid buttons without scrolling past both ledgers. */
+  .auction-screen{
+    display:grid; align-content:start;
+    grid-template-columns:1fr 1fr;
+    grid-template-areas:"head head" "stage stage" "panels panels" "l0 l1";
+  }
+  .floor{ display:contents; }
+  .guide-head{ grid-area:head; }
+  .stage{ grid-area:stage; }
+  .panels{ grid-area:panels; grid-template-columns:1fr 1fr; gap:8px; }
+  #ledger0{ grid-area:l0; }
+  #ledger1{ grid-area:l1; }
+  .panel{ padding:10px 11px 11px; }
+  .pn-bids{ gap:6px; min-height:40px; }
+  .bid-btn{ min-width:0; padding:9px 4px; font-size:19px; }
+  .pn-pass{ padding:8px 12px; letter-spacing:.1em; }
+  .pn-other{ padding:5px 7px; }
+  .pn-other span{ display:none; }
+  .sticker{ width:96px; right:-10px; top:-14px; }
+  .st-price{ font-size:31px; }
+  .slot{ font-size:12.5px; }
+  .purse-figure{ font-size:32px; }
+  .pn-state{ min-height:0; }
+  .fo-body{ grid-template-columns:1fr; }
+  .encounter{ grid-template-columns:1fr; }
+  .fo-mid{ flex-direction:row; padding:0; }
+  .fo-divider{ height:2px; width:auto; }
+  .auction-screen{ padding-bottom:20px; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{
+    animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+  }
+  .issue.pulled{ animation:none; }
+  .stamp-mark.hit{ opacity:1; transform:rotate(-7deg); }
+}
+</style>
+</body>
+</html>

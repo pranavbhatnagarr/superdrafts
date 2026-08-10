@@ -1,0 +1,9 @@
+# Never commit these. The first two contain live credentials.
+.vercel-cli/
+.env
+.env.*
+*.pem
+
+node_modules/
+.vercel/
+.DS_Store
