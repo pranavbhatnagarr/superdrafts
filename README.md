@@ -8,7 +8,6 @@ delete this folder and it is as if it never existed..
 ```
 site/index.html          the game (this is what gets deployed)
 site/api/scenario.mjs    server-side call to the LLM that writes the fight
-site/longbox-local.html  older single-screen version, for screen sharing
 node_modules/            the Vercel CLI, local to this folder only
 .vercel-cli/             the Vercel login, local to this folder only
 ```
