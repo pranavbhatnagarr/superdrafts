@@ -11,6 +11,4 @@ create table characters (
   unique(name, universe)
 );
 
-create index idx_characters_universe on characters(universe);git add supabase/migrations
-git commit -m "Add characters table"
-git push
+create index idx_characters_universe on characters(universe);
