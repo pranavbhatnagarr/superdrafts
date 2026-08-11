@@ -156,22 +156,29 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       </div>
 
       <div class="issue" id="issue">
-        <div class="mylar" aria-hidden="true"></div>
         <article class="cover" id="cover">
-          <div class="cover-grain" aria-hidden="true"></div>
-          <header class="cv-top">
-            <span class="cv-pub" id="cvPub">Marvel</span>
-            <span class="cv-no" id="cvNo">No. 121</span>
-          </header>
-          <div class="cv-box" id="cvBox"><span id="cvInit">SM</span><i class="cv-tier" id="cvTier" data-t="B">B</i></div>
-          <h3 class="cv-name" id="cvName">Spider-Man</h3>
-          <p class="cv-alias" id="cvAlias">Peter Parker</p>
-          <div class="cv-hr" aria-hidden="true"></div>
-          <p class="cv-note" id="cvNote">Everybody&rsquo;s first back issue.</p>
-          <footer class="cv-bot">
-            <span class="cv-cond" id="cvPubFoot">Marvel Comics Group</span>
-            <span class="cv-cond cv-lot">Lot <b id="cvLot">01</b></span>
-          </footer>
+          <div class="tcg-frame">
+            <div class="tcg-card">
+              <div class="tcg-art">
+                <img id="cvImage" class="cv-image" alt="" />
+                <span id="cvInit" class="tcg-init">SM</span>
+                <span class="tcg-serial">
+                  <span id="cvPub">Marvel</span> · No. <span id="cvNo">121</span> · Lot <span id="cvLot">01</span>
+                </span>
+              </div>
+              <div class="tcg-plate">
+                <div class="tcg-ribbon"><h3 class="cv-name" id="cvName">Spider-Man</h3></div>
+                <p class="cv-alias" id="cvAlias">Peter Parker</p>
+                <div class="tcg-body">
+                  <p class="cv-note" id="cvNote">Everybody&rsquo;s first back issue.</p>
+                </div>
+                <footer class="tcg-footer">
+                  <span class="tcg-pubtag" id="cvPubFoot">Marvel Comics Group</span>
+                  <span class="tcg-badge" id="cvTier" data-t="B">B</span>
+                </footer>
+              </div>
+            </div>
+          </div>
         </article>
 
         <div class="sticker" id="sticker">
@@ -305,212 +312,42 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
 <script>
 /* ------------------------------------------------------------------ *
- *  STOCK, Marvel & DC, A-list through mid-tier, base versions.
- *  Deliberately excludes cosmic-god tier (One-Above-All, Living Tribunal,
- *  Beyonder, Galactus, Phoenix Force, Lucifer, Spectre, Darkseid, Presence).
+ *  Character data now lives in Supabase Postgres (table: characters),
+ *  not hardcoded here. Loaded once at page start into CHARACTERS below.
+ *  Images live in Supabase Storage (bucket: character-art).
+ *
+ *  This uses a SEPARATE Supabase client/project from the realtime one
+ *  below (SB_URL/SB_KEY), which is deliberately kept table-free for the
+ *  live auction broadcast. Character data + realtime sync are two
+ *  different concerns, two different projects.
  * ------------------------------------------------------------------ */
-const STOCK = [
-["Spider-Man","MAR","Peter Parker","Everybody's first back issue.","B",0],
-["Iron Man","MAR","Tony Stark","Runs on money and guilt.","A",2],
-["Captain America","MAR","Steve Rogers","The shield does the talking.","C",1],
-["Thor","MAR","Thor Odinson","Weather included, no extra charge.","S",0],
-["Hulk","MAR","Bruce Banner","Do not shelve near the door.","S",0],
-["Black Widow","MAR","Natasha Romanoff","Wins fights she never starts.","D",1],
-["Hawkeye","MAR","Clint Barton","Never misses. Often bleeding.","D",1],
-["Doctor Strange","MAR","Stephen Strange","Reality is a suggestion.","S",1],
-["Black Panther","MAR","T'Challa","King, scientist, problem.","C",1],
-["Wolverine","MAR","Logan","Bagged twice. Still smells of cigars.","B",0],
-["Deadpool","MAR","Wade Wilson","Reads the price sticker back to you.","C",0],
-["Daredevil","MAR","Matt Murdock","Blind. Still sees you coming.","C",0],
-["The Punisher","MAR","Frank Castle","A one-man clearance sale.","D",0],
-["Storm","MAR","Ororo Munroe","Brings her own climate.","A",0],
-["Cyclops","MAR","Scott Summers","Leads. Nobody enjoys it.","B",0],
-["Jean Grey","MAR","Jean Grey","Reads the room. Literally.","A",0],
-["Beast","MAR","Hank McCoy","Six doctorates and a left hook.","B",0],
-["Nightcrawler","MAR","Kurt Wagner","Gone before you finish the sentence.","B",0],
-["Rogue","MAR","Anna Marie","Borrow now, apologise later.","B",0],
-["Gambit","MAR","Remy LeBeau","Anything is a weapon if you charge it.","B",0],
-["Magneto","MAR","Erik Lehnsherr","Do not store in a metal box.","A",0],
-["Professor X","MAR","Charles Xavier","Wins before the bell.","A",2],
-["Venom","MAR","Eddie Brock","Comes with a passenger.","A",0],
-["Carnage","MAR","Cletus Kasady","Sold as-is. No returns.","A",0],
-["Green Goblin","MAR","Norman Osborn","Laughing all the way down.","B",0],
-["Doctor Doom","MAR","Victor Von Doom","Insists on the full title.","A",2],
-["Loki","MAR","Loki Laufeyson","The copy you got may not be the copy.","A",0],
-["Ultron","MAR","No civilian name","Keeps coming back, like a bad reprint.","A",2],
-["Vision","MAR","Synthezoid","Walks straight through the argument.","A",0],
-["Scarlet Witch","MAR","Wanda Maximoff","Rewrites the ending.","S",0],
-["Quicksilver","MAR","Pietro Maximoff","Already read it.","A",0],
-["Ant-Man","MAR","Scott Lang","Small print, big problem.","B",0],
-["Wasp","MAR","Janet Van Dyne","Stings well above her weight.","B",0],
-["Falcon","MAR","Sam Wilson","Owns the airspace.","B",0],
-["Winter Soldier","MAR","Bucky Barnes","Seventy years of practice.","C",1],
-["Star-Lord","MAR","Peter Quill","Confidence exceeds inventory.","C",0],
-["Gamora","MAR","Gamora","Raised by the worst.","B",0],
-["Drax the Destroyer","MAR","Drax","Takes everything literally.","B",0],
-["Rocket Raccoon","MAR","Rocket","Do not comment on the species.","C",0],
-["Groot","MAR","Groot","Three words, infinite range.","B",0],
-["Ghost Rider","MAR","Johnny Blaze","Judges you on sight.","B",0],
-["Moon Knight","MAR","Marc Spector","Four opinions, one body.","C",1],
-["Blade","MAR","Eric Brooks","Night shift specialist.","B",0],
-["Mister Fantastic","MAR","Reed Richards","Solves it on the way over.","A",2],
-["Invisible Woman","MAR","Sue Storm","The strongest one, quietly.","A",0],
-["Human Torch","MAR","Johnny Storm","Keep well away from the longbox.","B",0],
-["The Thing","MAR","Ben Grimm","Clobbering time, every time.","B",0],
-["Namor","MAR","Namor McKenzie","Rude. Correct. Amphibious.","A",0],
-["She-Hulk","MAR","Jennifer Walters","Will sue you and also throw you.","A",0],
-["Iron Fist","MAR","Danny Rand","One punch, fully funded.","B",0],
-["Luke Cage","MAR","Luke Cage","Sweet Christmas.","B",0],
-["Elektra","MAR","Elektra Natchios","Two sai, no small talk.","C",1],
-["Kingpin","MAR","Wilson Fisk","Owns the block you are standing on.","C",2],
-["Bullseye","MAR","Lester","Anything in his hand is a bullet.","D",0],
-["Doctor Octopus","MAR","Otto Octavius","Four arms, zero patience.","B",0],
-["Sandman","MAR","Flint Marko","Punching him is a waste of a turn.","B",0],
-["Rhino","MAR","Aleksei Sytsevich","Goes one direction. Fast.","B",0],
-["Mysterio","MAR","Quentin Beck","You already lost. Probably.","D",2],
-["Kraven the Hunter","MAR","Sergei Kravinoff","Hunts for sport, never for need.","D",0],
-["Juggernaut","MAR","Cain Marko","Nothing stops him. Nothing.","A",0],
-["Sabretooth","MAR","Victor Creed","Enjoys it far too much.","B",0],
-["War Machine","MAR","James Rhodes","Same suit, considerably more guns.","B",1],
-["Shang-Chi","MAR","Shang-Chi","Best hands in the box.","C",1],
-["Ms. Marvel","MAR","Kamala Khan","Fan first, hero second.","B",0],
-["Nova","MAR","Richard Rider","Space cop with a temper.","A",0],
-["Hercules","MAR","Hercules","Will arm-wrestle absolutely anyone.","A",0],
-["Taskmaster","MAR","Tony Masters","Copies your move once, keeps it.","C",2],
-["Red Skull","MAR","Johann Schmidt","The worst man in the box.","B",0],
-["Colossus","MAR","Piotr Rasputin","Gentle until he is not.","B",0],
-["Psylocke","MAR","Betsy Braddock","Cuts the mind first.","B",0],
-["Domino","MAR","Neena Thurman","Luck counts as a superpower.","C",1],
-["Cable","MAR","Nathan Summers","Pouches. So many pouches.","B",2],
-["Bishop","MAR","Lucas Bishop","Eats your energy blast.","B",0],
-["Silver Surfer","MAR","Norrin Radd","Rides in from somewhere sad.","S",-1],
-["Thanos","MAR","Thanos","Base model. Still a problem.","S",0],
-["Apocalypse","MAR","En Sabah Nur","Survival of the loudest.","S",0],
-["Nick Fury","MAR","Nick Fury","Knows exactly what you did.","D",2],
-["Jessica Jones","MAR","Jessica Jones","Strong, tired, and correct.","C",0],
-["Squirrel Girl","MAR","Doreen Green","Undefeated. Look it up.","C",0],
-["Beta Ray Bill","MAR","Beta Ray Bill","Worthy, and nobody expected it.","A",0],
-["Wong","MAR","Wong","Sorcerer Supreme paperwork, handled.","B",1],
-["Hela","MAR","Hela","Death goddess, minus the throne.","A",0],
-["Green Lantern","DC","Hal Jordan","Imagination with a battery.","A",0],
-["Superman","DC","Clark Kent","The one everybody bids on.","S",-1],
-["Batman","DC","Bruce Wayne","Prepared for this exact auction.","C",3],
-["Wonder Woman","DC","Diana Prince","Truth is not optional.","A",0],
-["The Flash","DC","Barry Allen","His bid is already in.","A",0],
-["Aquaman","DC","Arthur Curry","Stop laughing. Look at him.","A",0],
-["Cyborg","DC","Victor Stone","Booyah, and a mainframe.","A",0],
-["Martian Manhunter","DC","J'onn J'onzz","Superman with more powers.","S",0],
-["Green Arrow","DC","Oliver Queen","Rich, loud, surprisingly right.","C",1],
-["Shazam","DC","Billy Batson","A child with a god's account.","S",0],
-["Nightwing","DC","Dick Grayson","Best acrobat in the building.","C",1],
-["Robin","DC","Damian Wayne","Ten years old. Furious.","C",0],
-["Batgirl","DC","Barbara Gordon","Smartest person in the cave.","C",1],
-["Supergirl","DC","Kara Zor-El","Angrier, newer, same sun.","S",-1],
-["Black Canary","DC","Dinah Lance","Scream first, ask later.","C",0],
-["Zatanna","DC","Zatanna Zatara","Sdrawkcab skaeps ehs.","A",1],
-["John Constantine","DC","John Constantine","You will regret this purchase.","C",1],
-["Swamp Thing","DC","Alec Holland","The whole planet backs him.","A",0],
-["Raven","DC","Rachel Roth","Father issues, cosmic scale.","A",0],
-["Starfire","DC","Koriand'r","Joy, and starbolts.","B",0],
-["Beast Boy","DC","Garfield Logan","A whole zoo in one slot.","B",0],
-["Blue Beetle","DC","Jaime Reyes","The scarab makes the decisions.","B",1],
-["Booster Gold","DC","Michael Carter","Here for the endorsements.","B",0],
-["Hawkman","DC","Carter Hall","Mace now, questions never.","B",0],
-["Firestorm","DC","Ronnie Raymond","Two minds, one atom.","A",0],
-["Plastic Man","DC","Eel O'Brian","Genuinely unkillable. Genuinely annoying.","B",0],
-["Red Hood","DC","Jason Todd","Came back angry.","C",1],
-["The Joker","DC","Name unknown","Priced high for no clear reason.","D",0],
-["Harley Quinn","DC","Harleen Quinzel","Mallet included.","C",0],
-["Lex Luthor","DC","Lex Luthor","Would buy this entire box.","A",2],
-["Deathstroke","DC","Slade Wilson","Uses ninety percent. Still wins.","B",2],
-["Bane","DC","Bane","Has read the file on you.","B",2],
-["Poison Ivy","DC","Pamela Isley","The garden is on her side.","B",1],
-["Catwoman","DC","Selina Kyle","Already took the good issue.","C",0],
-["The Riddler","DC","Edward Nygma","Loses on purpose. Sort of.","E",2],
-["The Penguin","DC","Oswald Cobblepot","Money, birds, leverage.","E",0],
-["Two-Face","DC","Harvey Dent","Fifty-fifty on everything.","C",0],
-["Scarecrow","DC","Jonathan Crane","Sells you your own fear.","C",2],
-["Mr. Freeze","DC","Victor Fries","Saddest man in the box.","B",1],
-["Killer Croc","DC","Waylon Jones","A sewer-level problem.","B",0],
-["Reverse-Flash","DC","Eobard Thawne","Ruined your childhood retroactively.","A",0],
-["Sinestro","DC","Thaal Sinestro","Better ring discipline than Hal.","A",1],
-["Black Manta","DC","David Hyde","Hates one man completely.","B",0],
-["Cheetah","DC","Barbara Minerva","Fast, cursed, personal.","B",0],
-["Brainiac","DC","Vril Dox","Collects cities. Bottled.","A",2],
-["Doomsday","DC","The Ultimate","Killed Superman once. Priced accordingly.","S",-1],
-["Bizarro","DC","Imperfect copy","Am not good bid.","A",-1],
-["Solomon Grundy","DC","Cyrus Gold","Born on a Monday.","B",0],
-["Vixen","DC","Mari McCabe","Every animal, on tap.","B",0],
-["Static","DC","Virgil Hawkins","Lightning with a bus pass.","B",0],
-["John Stewart","DC","John Stewart","Marine, architect, Green Lantern.","A",0],
-["The Atom","DC","Ray Palmer","Wins from inside your ear.","B",0],
-["Vandal Savage","DC","Vandar Adg","Fifty thousand years of practice.","A",2],
-["Ra's al Ghul","DC","Ra's al Ghul","Patient in a way that frightens.","C",2],
-["Talia al Ghul","DC","Talia al Ghul","Better tactician than her father.","C",2],
-["Etrigan","DC","Jason Blood","Answers only in rhyme.","A",0],
-["Doctor Fate","DC","Kent Nelson","The helmet is in charge.","S",1],
-["Captain Cold","DC","Leonard Snart","Has rules, and keeps them.","B",1],
-["Gorilla Grodd","DC","Grodd","Telepathic gorilla. That is the pitch.","A",1],
-["Killer Frost","DC","Caitlin Snow","Absolute zero, zero mercy.","B",1],
-["Huntress","DC","Helena Bertinelli","Crossbow and a grudge.","C",1],
-["The Question","DC","Vic Sage","No face, all answers.","D",1],
-["Metamorpho","DC","Rex Mason","The whole periodic table.","B",0],
-["Blue Devil","DC","Dan Cassidy","Stuck in the costume.","B",0],
-["Katana","DC","Tatsu Yamashiro","The sword keeps the souls.","C",1],
-["Zauriel","DC","Zauriel","An angel who resigned.","B",0],
-["Madara Uchiha","NAR","Madara","Woke up and chose the whole war.","A",0],
-["Naruto Uzumaki","NAR","Naruto","Never once shut up, never once quit.","A",0],
-["Sasuke Uchiha","NAR","Sasuke","Left the group chat permanently.","A",1],
-["Pain","NAR","Nagato","Six bodies, one very sad man.","B",2],
-["Itachi Uchiha","NAR","Itachi","Every plan inside another plan.","B",2],
-["Jiraiya","NAR","Jiraiya","Terrible role model, excellent teacher.","B",1],
-["Might Guy","NAR","Guy","Opens doors nobody should open.","B",0],
-["Kakashi Hatake","NAR","Kakashi","Late to everything except the kill.","C",2],
-["Gaara","NAR","Gaara","The sand gets there first.","C",1],
-["Rock Lee","NAR","Lee","No talent whatsoever. Wins anyway.","D",0],
-["Shikamaru Nara","NAR","Shikamaru","Cannot be bothered. Still out-thinks you.","D",2],
-["Hinata Hyuga","NAR","Hinata","Sees exactly where it hurts.","D",0],
-["Satoru Gojo","JJK","Gojo","The strongest, and unbearable about it.","S",-1],
-["Ryomen Sukuna","JJK","Sukuna","Twenty fingers of very old spite.","S",-1],
-["Toji Fushiguro","JJK","Toji","No cursed energy. Still the scariest.","B",2],
-["Kento Nanami","JJK","Nanami","Clocks off at six. Lethal until then.","C",1],
-["Yuji Itadori","JJK","Yuji","Punches far above his own weight class.","C",0],
-["Megumi Fushiguro","JJK","Megumi","Shadows do the work.","C",2],
-["Maki Zenin","JJK","Maki","Cursed tools and pure spite.","C",1],
-["Nobara Kugisaki","JJK","Nobara","Hammer, nails, no hesitation.","D",0],
-["Muzan Kibutsuji","DS","Muzan","Runs from everything, survives everything.","B",-1],
-["Akaza","DS","Akaza","Will not fight anyone weaker. Politely.","C",0],
-["Kyojuro Rengoku","DS","Rengoku","Set his heart ablaze and meant it.","C",0],
-["Giyu Tomioka","DS","Giyu","Says nothing. Cuts everything.","C",1],
-["Shinobu Kocho","DS","Shinobu","Too small to behead, so she uses poison.","D",1],
-["Tanjiro Kamado","DS","Tanjiro","Smells your intent before you move.","D",0],
-["Zenitsu Agatsuma","DS","Zenitsu","Screams, faints, wins.","D",0],
-["Inosuke Hashibira","DS","Inosuke","Boar head, no plan.","D",0],
-["Lucius Zogratis","BC","Lucius","Time, and an unbearable smile.","A",0],
-["Julius Novachrono","BC","Julius","Spends years he does not have.","A",2],
-["Licht","BC","Licht","Sword saint with a grievance.","A",0],
-["Yami Sukehiro","BC","Yami","Cuts the gap between here and there.","B",1],
-["Mereoleona Vermillion","BC","Mereoleona","Fire, and absolutely no supervision.","B",0],
-["Asta","BC","Asta","No magic at all. That is the problem.","B",0],
-["Yuno","BC","Yuno","Everything comes easily, annoyingly.","B",0],
-["Zenon Zogratis","BC","Zenon","Bone, and nothing behind the eyes.","B",0],
-["Noelle Silva","BC","Noelle","Terrified, and a tidal wave anyway.","C",0],
-["Sung Jinwoo","SL","Shadow Monarch","Levelled up past the whole system.","S",-1],
-["Beru","SL","Beru","Ant king, extremely loyal now.","A",0],
-["Thomas Andre","SL","Goliath","America's national-level problem.","A",0],
-["Cha Hae-In","SL","Cha Hae-In","Smells mana. Dislikes yours.","B",1],
-["Baek Yoonho","SL","White Tiger Guild","Turns into the obvious answer.","B",0],
-["Igris","SL","Blood-Red Commander","Bows first, then removes you.","B",0],
-["Go Gunhee","SL","Go Gunhee","Old, tired, still S-rank.","B",1],
-["Albus Dumbledore","HP","Dumbledore","Knew for years and said nothing.","B",1],
-["Lord Voldemort","HP","Tom Riddle","Split himself seven ways to dodge one death.","B",-1],
-["Severus Snape","HP","Snape","Always.","C",1],
-["Bellatrix Lestrange","HP","Bellatrix","Enjoying this far too much.","C",0],
-["Minerva McGonagall","HP","McGonagall","The desks fight for her.","C",1],
-["Sirius Black","HP","Padfoot","Twelve years angry.","D",0],
-["Hermione Granger","HP","Hermione","Read the counter-curse in third year.","D",2],
-["Harry Potter","HP","Harry","Survives things. That is the whole gimmick.","D",0]
-];
+const DATA_SB_URL = "https://trtccsljexjplnuhnlkz.supabase.co";
+const DATA_SB_KEY = "sb_publishable_3Yt4Gih8Ta_co31EDqy7Jw_-R5sBxMK";
+let dataSb, CHARACTERS = [];
+
+function getDataClient(){
+  dataSb = dataSb || window.supabase.createClient(DATA_SB_URL, DATA_SB_KEY);
+  return dataSb;
+}
+
+async function loadCharacters(){
+  const { data, error } = await getDataClient()
+    .from("characters")
+    .select("name,universe,alias,note,tier,image_url");
+  if (error) {
+    console.error("Failed to load characters:", error);
+    return;
+  }
+  CHARACTERS = data.map((c, i) => ({
+    name: c.name,
+    pub: c.universe,
+    alias: c.alias,
+    note: c.note,
+    tier: c.tier,
+    image: c.image_url,
+    no: 1 + ((i * 37 + 11) % 480)
+  }));
+}
 
 const SLOTS = 5, PURSE = 20;
 
@@ -560,8 +397,8 @@ const POOL = 20;      // characters drawn per sale: ten bought, the rest passed 
 let BOX = { u: ["MAR","DC"], tiers: true };
 
 const MIN_BOX = 20;   // one full sale
-const inBox = c => BOX.u.includes(c[1]);
-const boxCount = () => STOCK.filter(inBox).length;
+const inBox = c => BOX.u.includes(c.pub);
+const boxCount = () => CHARACTERS.filter(inBox).length;
 
 const $ = id => document.getElementById(id);
 const money = n => "$" + n;
@@ -712,7 +549,7 @@ function paintBox(chipsEl, countEl, onChange){
     b.innerHTML = `<span class="chip-name"></span><span class="chip-n"></span>`;
     b.querySelector(".chip-name").textContent = u.name;
     b.querySelector(".chip-n").textContent =
-      STOCK.filter(c => c[1] === code).length;
+      CHARACTERS.filter(c => c.pub === code).length;
     b.addEventListener("click", () => {
       BOX.u = on ? BOX.u.filter(x => x !== code) : BOX.u.concat(code);
       if (!BOX.u.length) BOX.u = [code];              // never empty the box
@@ -752,12 +589,7 @@ function shuffle(a){
 }
 
 function dealDeck(){
-  deck = shuffle(STOCK
-    .map((c, i) => ({
-      name: c[0], pub: c[1], alias: c[2], note: c[3], tier: c[4],
-      no: 1 + ((i * 37 + 11) % 480)
-    }))
-    .filter(c => BOX.u.includes(c.pub)));
+  deck = shuffle(CHARACTERS.filter(c => BOX.u.includes(c.pub)));
   deck = deck.slice(0, POOL);
   lotNum = 0; over = false;
 }
@@ -943,12 +775,12 @@ function initials(name){
 function fitName(){
   const el = $("cvName"), cover = $("cover");
   if (!el || !cover.clientWidth) return;
-  let s = Math.min(52, Math.max(20, cover.clientWidth * 0.163));
+  let s = Math.min(24, Math.max(13, cover.clientWidth * 0.078));
   el.style.fontSize = s + "px";
   const fits = () =>
     el.scrollWidth <= el.clientWidth + 1 &&
-    el.getBoundingClientRect().height <= s * 0.86 * 3 + 4;
-  while (s > 15 && !fits()){ s -= 1; el.style.fontSize = s + "px"; }
+    el.getBoundingClientRect().height <= s * 1.05 * 2 + 4;
+  while (s > 11 && !fits()){ s -= 1; el.style.fontSize = s + "px"; }
 }
 
 function renderLot(){
@@ -960,6 +792,16 @@ function renderLot(){
   $("cvNo").textContent = "No. " + c.no;
   $("cvName").textContent = c.name;
   $("cvInit").textContent = initials(c.name);
+  const img = $("cvImage");
+  if (c.image) {
+    img.src = c.image;
+    img.style.display = "block";
+    $("cvInit").style.display = "none";
+  } else {
+    img.removeAttribute("src");
+    img.style.display = "none";
+    $("cvInit").style.display = "flex";
+  }
   fitName();
   $("cvAlias").textContent = c.alias;
   $("cvNote").textContent = c.note;
@@ -1250,7 +1092,15 @@ Write the 5v5 as two comic-book scenarios.`;
 }
 
 /* ---------------------------- wiring ---------------------------- */
-$("stockCount").textContent = STOCK.length + " Characters";
+$("stockCount").textContent = "Loading…";
+$("openBox").disabled = true;
+loadCharacters().then(() => {
+  $("stockCount").textContent = CHARACTERS.length + " Characters";
+  $("openBox").disabled = false;
+}).catch(err => {
+  console.error(err);
+  $("stockCount").textContent = "Failed to load characters";
+});
 $("openBox").addEventListener("click", openTable);
 $("joinBtn").addEventListener("click", joinTable);
 $("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") joinTable(); });
@@ -1350,1031 +1200,6 @@ $("againBtn").addEventListener("click", () => {
 });
 </script>
 
-<style>
-/* ==================================================================
-   SUPER DRAFTS, the comic-shop back room.
-   Kraft box, yellowed pulp, two grease pencils, one rubber stamp.
-   ================================================================== */
-:root{
-  --pulp:      #e7ddc2;
-  --pulp-2:    #d9cca8;
-  --pulp-3:    #cbbb92;
-  --manila:    #dcc391;
-  --kraft:     #a97c4e;
-  --kraft-dk:  #6f4d2d;
-  --kraft-lt:  #c69a67;
-  --ink:       #17140f;
-  --ink-2:     #4b4234;
-  --ink-3:     #6d6252;
-  --red:       #c0361f;
-  --red-dk:    #8e2415;
-  --blue:      #27497f;
-  --blue-dk:   #1a3560;
-  --stamp:     #b02e24;
-  --room:      #150f0a;
-  --rule:      rgba(23,20,15,.34);
-
-  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
-
-  --slab: "Ultra", Georgia, serif;
-  --data: "Archivo Narrow", "Helvetica Neue", Arial, sans-serif;
-  --type: "Special Elite", "Courier New", monospace;
-  --wax:  "Permanent Marker", "Comic Sans MS", cursive;
-}
-
-*{ box-sizing:border-box; }
-html,body{ margin:0; padding:0; }
-html{ background:var(--room); }
-
-body{
-  min-height:100vh;
-  background:
-    radial-gradient(120% 85% at 50% -12%, #3a2a1c 0%, #221810 45%, var(--room) 100%);
-  background-attachment:fixed;
-  color:var(--ink);
-  font-family:var(--data);
-  font-size:16px;
-  line-height:1.5;
-  -webkit-font-smoothing:antialiased;
-}
-
-/* one overhead shop lamp */
-.lamp{
-  position:fixed; inset:0; pointer-events:none; z-index:0;
-  background:
-    radial-gradient(65% 45% at 50% 0%, rgba(255,226,168,.20), rgba(255,226,168,0) 70%),
-    radial-gradient(140% 100% at 50% 40%, rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 100%);
-}
-
-.screen{ position:relative; z-index:1; }
-[hidden]{ display:none !important; }
-
-::selection{ background:var(--stamp); color:var(--pulp); }
-
-:where(button,input):focus-visible{
-  outline:3px solid #f0c04a;
-  outline-offset:2px;
-}
-
-/* ============================ SETUP ============================ */
-.setup-screen{
-  min-height:100vh;
-  display:grid; place-items:start center;
-  padding:clamp(20px,5vw,64px) 20px 72px;
-}
-
-.guide-cover{
-  position:relative;
-  width:min(760px,100%);
-  padding:clamp(26px,4.5vw,52px) clamp(22px,4.5vw,54px) clamp(30px,4vw,48px);
-  background:
-    linear-gradient(178deg, rgba(255,255,255,.30), rgba(0,0,0,.05) 40%, rgba(120,90,50,.16)),
-    var(--pulp);
-  border:1px solid rgba(80,60,35,.5);
-  box-shadow:
-    0 2px 0 rgba(255,255,255,.30) inset,
-    0 26px 60px -18px rgba(0,0,0,.75),
-    0 70px 90px -50px rgba(0,0,0,.9);
-}
-.guide-cover::after{
-  content:""; position:absolute; inset:0; pointer-events:none;
-  background:var(--grain); opacity:.30; mix-blend-mode:multiply;
-}
-.cover-rules{
-  position:absolute; left:0; right:0; top:9px; height:6px;
-  border-top:3px solid var(--ink); border-bottom:1px solid var(--ink);
-}
-
-.cover-edition{
-  margin:6px 0 18px;
-  font-family:var(--data); font-size:11.5px; font-weight:600;
-  letter-spacing:.16em; text-transform:uppercase; color:var(--ink-2);
-  text-align:center;
-}
-
-.cover-title{
-  margin:0; text-align:center;
-  font-family:var(--slab);
-  font-size:clamp(52px,11.5vw,116px);
-  line-height:.80; letter-spacing:-.035em;
-  text-transform:uppercase; color:var(--ink);
-  text-shadow:2px 3px 0 rgba(176,46,36,.24);
-}
-.cover-title span{
-  display:block;
-  font-family:var(--data); font-weight:700; font-style:italic;
-  font-size:clamp(15px,2.6vw,24px); letter-spacing:.30em;
-  text-shadow:none; margin-bottom:.35em; color:var(--red-dk);
-}
-.cover-sub{
-  margin:18px 0 0; text-align:center;
-  font-family:var(--type); font-size:clamp(12px,2vw,15px);
-  letter-spacing:.04em; color:var(--ink-2);
-}
-
-.cover-strip{
-  display:flex; flex-wrap:wrap; justify-content:center; align-items:center;
-  gap:10px; margin:22px 0 30px; padding:9px 0;
-  border-top:1px solid var(--rule); border-bottom:3px double var(--rule);
-  font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
-  color:var(--ink-2);
-}
-.cover-strip i{ width:3px; height:3px; background:var(--ink-3); border-radius:50%; }
-
-/* manila divider tabs */
-.tabs-row{
-  display:grid; grid-template-columns:1fr auto 1fr; align-items:center;
-  gap:clamp(10px,2.5vw,22px); margin-bottom:30px;
-}
-.tab{
-  position:relative; padding:16px 18px 15px;
-  background:linear-gradient(180deg, #e6d1a4, var(--manila));
-  border:1px solid rgba(90,66,32,.55);
-  border-radius:3px 14px 3px 3px;
-  box-shadow:0 8px 18px -8px rgba(0,0,0,.6), 0 1px 0 rgba(255,255,255,.45) inset;
-}
-.tab::before{
-  content:""; position:absolute; left:0; top:0; bottom:0; width:5px;
-}
-.tab-red::before{ background:var(--red); }
-.tab-blue::before{ background:var(--blue); }
-.tab-label{
-  display:block; margin:0 0 6px 8px;
-  font-family:var(--data); font-size:10.5px; font-weight:700;
-  letter-spacing:.16em; text-transform:uppercase; color:#6a4f26;
-}
-.tab-input{
-  display:block; width:100%; margin-left:8px; padding:0 0 3px;
-  background:transparent; border:0; border-bottom:2px dashed rgba(90,66,32,.5);
-  font-family:var(--type); font-size:clamp(17px,3vw,23px); color:var(--ink);
-}
-.tab-input:focus{ outline:none; border-bottom-color:var(--ink); }
-.tab-red .tab-input{ caret-color:var(--red); }
-.tab-blue .tab-input{ caret-color:var(--blue); }
-.tab-purse{
-  margin:9px 0 0 8px; font-family:var(--data);
-  font-size:11px; font-weight:600; letter-spacing:.13em;
-  text-transform:uppercase; color:#6a4f26;
-}
-.tab-purse b{ font-family:var(--wax); font-size:19px; letter-spacing:0; }
-.tab-red .tab-purse b{ color:var(--red); }
-.tab-blue .tab-purse b{ color:var(--blue); }
-.versus{
-  font-family:var(--slab); font-size:clamp(16px,3vw,26px);
-  text-transform:uppercase; color:var(--ink-3); letter-spacing:-.02em;
-}
-
-/* front matter */
-.frontmatter{ margin-bottom:32px; }
-.fm-head{
-  margin:0 0 12px;
-  font-family:var(--data); font-size:11px; font-weight:700;
-  letter-spacing:.20em; text-transform:uppercase; color:var(--ink-2);
-  padding-bottom:6px; border-bottom:1px solid var(--rule);
-}
-.fm-list{
-  margin:0; padding:0 0 0 1.35em;
-  font-size:14.5px; line-height:1.62; color:var(--ink-2);
-  max-width:66ch;
-}
-.fm-list li{ margin-bottom:8px; padding-left:4px; }
-.fm-list li::marker{ font-weight:700; color:var(--red-dk); }
-.fm-list b{ color:var(--ink); font-weight:700; }
-.fm-foot{
-  margin:14px 0 0; font-family:var(--type);
-  font-size:12.5px; color:var(--ink-3);
-}
-
-/* rubber-stamp button */
-.stamp-btn{
-  display:block; width:100%; padding:0; border:0; background:none;
-  cursor:pointer; -webkit-tap-highlight-color:transparent;
-}
-.stamp-btn span{
-  display:block; padding:16px 22px;
-  border:3px solid var(--stamp); border-radius:4px;
-  color:var(--stamp); background:rgba(176,46,36,.05);
-  font-family:var(--slab); font-size:clamp(21px,4vw,31px);
-  letter-spacing:.02em; text-transform:uppercase; text-align:center;
-  transform:rotate(-1.1deg);
-  transition:transform .16s cubic-bezier(.2,.9,.25,1), background-color .16s, box-shadow .16s;
-  box-shadow:0 8px 18px -12px rgba(40,26,14,.75);
-}
-.stamp-btn:hover span{ transform:rotate(-1.6deg) scale(1.014); background:rgba(176,46,36,.11); }
-.stamp-btn:active span{ transform:rotate(-.4deg) scale(.985); box-shadow:none; }
-.stamp-btn-sm span{ padding:12px 20px; font-size:clamp(17px,3vw,22px); }
-
-/* ---------- what goes in the box ---------- */
-.box-pick{
-  margin-bottom:28px; padding-top:20px;
-  border-top:3px double var(--rule);
-}
-.box-note{
-  margin:0 0 14px; font-size:13.5px; line-height:1.5;
-  color:var(--ink-2); max-width:60ch;
-}
-.chips{ display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin-bottom:16px; }
-.chip-group{
-  width:100%; margin:8px 0 2px;
-  font-size:10px; font-weight:700; letter-spacing:.19em;
-  text-transform:uppercase; color:var(--ink-3);
-}
-.chip-group:first-child{ margin-top:0; }
-.chip{
-  display:inline-flex; align-items:baseline; gap:7px;
-  padding:7px 12px; cursor:pointer;
-  background:rgba(255,255,255,.26);
-  border:1px solid rgba(70,52,28,.42); border-radius:2px;
-  font-family:var(--data); font-size:13px; font-weight:600; color:var(--ink-2);
-  transition:background-color .14s, color .14s, border-color .14s;
-}
-.chip-n{ font-size:10.5px; font-weight:700; opacity:.6; font-variant-numeric:tabular-nums; }
-.chip:hover{ border-color:var(--ink); }
-.chip.on{ background:var(--ink); border-color:var(--ink); color:var(--pulp); }
-
-.band-row{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:16px; }
-.band{
-  padding:9px 11px; text-align:left; cursor:pointer;
-  background:rgba(255,255,255,.26);
-  border:1px solid rgba(70,52,28,.42); border-top:4px solid rgba(70,52,28,.42);
-  transition:border-top-color .14s, background-color .14s;
-}
-.band b{
-  display:block; font-family:var(--slab); font-size:13.5px;
-  text-transform:uppercase; letter-spacing:-.02em; color:var(--ink);
-}
-.band em{ display:block; margin-top:3px; font-size:11.5px; line-height:1.35; color:var(--ink-3); font-style:italic; }
-.band:hover{ border-top-color:var(--ink-3); }
-.band.on{ border-top-color:var(--red); background:rgba(255,255,255,.5); }
-
-.tier-toggle{ display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:12px; }
-.tier-toggle input{ flex:0 0 auto; margin:3px 0 0; width:15px; height:15px; accent-color:var(--red); }
-.tier-toggle b{ display:block; font-size:13.5px; color:var(--ink); }
-.tier-toggle em{ display:block; margin-top:3px; font-size:12.5px; line-height:1.45; color:var(--ink-3); max-width:56ch; }
-
-.box-count{
-  margin:0; font-size:11px; font-weight:700; letter-spacing:.13em;
-  text-transform:uppercase; color:var(--ink-3);
-}
-.box-count.thin{ color:var(--red-dk); }
-
-.lobby-box{
-  margin:14px 0 0; font-family:var(--type);
-  font-size:13.5px; color:var(--ink-2);
-}
-.fo-box{
-  width:min(720px,100%); margin:0 0 4px; padding:18px 20px 16px;
-  border-top:0;
-  background:linear-gradient(180deg, rgba(255,255,255,.20), rgba(120,90,50,.13)), var(--pulp-3);
-  border:1px solid rgba(70,52,28,.5);
-  text-align:left;
-}
-.fo-box .fm-head{ color:var(--ink-2); }
-
-/* tier badge on the cover */
-.cv-box{ position:relative; }
-.cv-tier{
-  position:absolute; left:-2px; right:-2px; bottom:-14px;
-  display:block; padding:1px 0 0;
-  font-family:var(--slab); font-style:normal; font-size:12px; line-height:1.2;
-  text-align:center; letter-spacing:.06em; color:var(--pulp);
-  background:var(--ink-2); border:2px solid var(--ink);
-}
-.cv-tier[hidden]{ display:none; }
-.cv-tier[data-t="S"]{ background:var(--red); }
-.cv-tier[data-t="A"]{ background:var(--red-dk); }
-.cv-tier[data-t="B"]{ background:var(--ink); }
-.cv-tier[data-t="C"]{ background:var(--ink-2); }
-.cv-tier[data-t="D"],
-.cv-tier[data-t="E"]{ background:var(--ink-3); }
-
-/* ---------- lobby: opening or joining a table ---------- */
-.tabs-solo{ grid-template-columns:minmax(0,320px); justify-content:center; }
-
-.doors{
-  display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-  gap:clamp(16px,3vw,32px); margin-bottom:26px;
-  padding-top:22px; border-top:3px double var(--rule);
-}
-.door .stamp-btn span{ font-size:clamp(18px,2.5vw,26px); padding:14px 16px; }
-.door-copy{
-  margin:0 0 14px; font-size:13.5px; line-height:1.5;
-  color:var(--ink-2); max-width:34ch; min-height:4.4em;
-}
-.join-row{ display:flex; gap:8px; }
-.code-input{
-  flex:1 1 auto; min-width:0; padding:12px 14px;
-  background:rgba(255,255,255,.34);
-  border:1px solid rgba(70,52,28,.45); border-radius:2px;
-  font-family:var(--slab); font-size:26px; line-height:1;
-  letter-spacing:.16em; text-transform:uppercase; color:var(--ink);
-}
-.code-input::placeholder{
-  font-family:var(--data); font-size:13px; font-weight:700;
-  letter-spacing:.18em; color:var(--ink-3); text-transform:uppercase;
-}
-.code-input:focus{ outline:none; border-color:var(--ink); background:rgba(255,255,255,.55); }
-.join-btn{ flex:0 0 auto; padding:10px 22px; }
-
-.netmsg{
-  margin:0 0 18px; min-height:1.4em; text-align:center;
-  font-family:var(--type); font-size:13.5px; color:var(--red-dk);
-}
-.resume-btn{
-  display:block; margin:0 auto;
-  border-color:rgba(70,52,28,.45); color:var(--ink-2);
-}
-.resume-btn:hover{ background:var(--ink); color:var(--pulp); border-color:var(--ink); }
-
-.lobby-cover{ text-align:center; }
-.lobby-title{
-  margin:8px 0 0; font-family:var(--slab);
-  font-size:clamp(30px,6vw,58px); line-height:.92;
-  letter-spacing:-.03em; text-transform:uppercase; color:var(--ink);
-}
-.lobby-title span{
-  display:block; margin-top:6px;
-  font-size:clamp(52px,13vw,124px); letter-spacing:.06em;
-  color:var(--red);
-  text-shadow:2px 3px 0 rgba(23,20,15,.16);
-}
-.lobby-copy{
-  margin:22px auto 14px; max-width:44ch;
-  font-size:14.5px; line-height:1.55; color:var(--ink-2);
-}
-.share-row{ display:flex; gap:8px; max-width:520px; margin:0 auto 22px; }
-.share-input{
-  flex:1 1 auto; min-width:0; padding:10px 12px;
-  background:rgba(255,255,255,.34);
-  border:1px solid rgba(70,52,28,.45); border-radius:2px;
-  font-family:var(--data); font-size:13px; color:var(--ink-2);
-}
-.share-input:focus{ outline:none; border-color:var(--ink); }
-.lobby-wait{
-  color:var(--ink-3);
-  animation:breathe 2.4s ease-in-out infinite;
-}
-@keyframes breathe{ 0%,100%{ opacity:.55; } 50%{ opacity:1; } }
-.lobby-cover .ghost-btn{ border-color:rgba(70,52,28,.4); color:var(--ink-3); }
-.lobby-cover .ghost-btn:hover{ background:var(--ink); color:var(--pulp); border-color:var(--ink); }
-
-.cover-hint{
-  margin:16px 0 0; text-align:center;
-  font-family:var(--data); font-size:12.5px; color:var(--ink-3);
-}
-
-/* ============================ AUCTION ============================ */
-.auction-screen{
-  min-height:100vh;
-  display:flex; flex-direction:column;
-  padding:clamp(12px,2.2vw,24px) clamp(12px,2.4vw,32px) clamp(14px,2vw,24px);
-  gap:clamp(10px,1.6vw,18px);
-}
-
-.guide-head{ flex:0 0 auto; }
-.gh-title{
-  margin:0; text-align:center;
-  font-family:var(--slab); font-size:clamp(19px,2.7vw,30px);
-  text-transform:uppercase; letter-spacing:-.02em; color:var(--pulp-2);
-}
-.gh-rule{
-  height:5px; margin:7px 0;
-  border-top:2px solid rgba(215,198,160,.5);
-  border-bottom:1px solid rgba(215,198,160,.28);
-}
-.gh-meta{
-  margin:0; display:flex; justify-content:center; align-items:center; gap:10px;
-  font-size:11px; font-weight:700; letter-spacing:.18em;
-  text-transform:uppercase; color:rgba(226,211,175,.62);
-}
-.gh-meta i{ width:3px; height:3px; border-radius:50%; background:currentColor; }
-.wire{ display:inline-flex; align-items:center; gap:6px; }
-.wire-dot{
-  width:7px; height:7px; border-radius:50%;
-  background:#7fa864; box-shadow:0 0 0 2px rgba(127,168,100,.22);
-}
-.wire.off{ color:#c98a5e; }
-.wire.off .wire-dot{ background:#c26a3a; box-shadow:0 0 0 2px rgba(194,106,58,.22); }
-
-.floor{
-  flex:1 1 auto;
-  display:grid;
-  grid-template-columns:minmax(190px,1fr) minmax(300px,1.45fr) minmax(190px,1fr);
-  gap:clamp(12px,2vw,28px);
-  align-items:start;
-}
-
-/* ---------- ledgers ---------- */
-.ledger{
-  position:relative;
-  padding:14px 15px 13px;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.22), rgba(120,90,50,.14)),
-    var(--pulp-2);
-  border:1px solid rgba(70,52,28,.5);
-  box-shadow:0 16px 34px -20px rgba(0,0,0,.85), 0 1px 0 rgba(255,255,255,.28) inset;
-}
-.ledger::after{
-  content:""; position:absolute; inset:0; pointer-events:none;
-  background:var(--grain); opacity:.24; mix-blend-mode:multiply;
-}
-.ledger-tab{
-  margin:-14px -15px 12px; padding:9px 15px 8px;
-  background:linear-gradient(180deg,#e6d1a4,var(--manila));
-  border-bottom:1px solid rgba(90,66,32,.5);
-}
-.ledger-red   .ledger-tab{ box-shadow:inset 0 -4px 0 var(--red); }
-.ledger-blue  .ledger-tab{ box-shadow:inset 0 -4px 0 var(--blue); }
-.lt-name{
-  font-family:var(--type); font-size:16px; color:var(--ink);
-  overflow-wrap:anywhere;
-}
-.purse-line{
-  margin:0; font-size:10px; font-weight:700;
-  letter-spacing:.17em; text-transform:uppercase; color:var(--ink-3);
-}
-.purse-figure{
-  margin:0 0 10px; font-family:var(--wax);
-  font-size:clamp(34px,4.6vw,50px); line-height:1;
-  transform:rotate(-1.6deg); transform-origin:left center;
-}
-.ledger-red  .purse-figure{ color:var(--red); }
-.ledger-blue .purse-figure{ color:var(--blue); }
-
-.slots{ list-style:none; margin:0 0 10px; padding:0; }
-.slot{
-  display:flex; justify-content:space-between; align-items:baseline; gap:8px;
-  padding:5px 0; border-bottom:1px solid var(--rule);
-  font-size:13.5px; font-variant-numeric:tabular-nums;
-}
-.slot:first-child{ border-top:1px solid var(--rule); }
-.slot.empty .sl-name{ color:rgba(23,20,15,.32); }
-.slot.filled .sl-name{ font-weight:600; color:var(--ink); overflow-wrap:anywhere; }
-.sl-price{
-  font-family:var(--wax); font-size:16px; flex:0 0 auto;
-  transform:rotate(-2deg);
-}
-.ledger-red  .sl-price{ color:var(--red); }
-.ledger-blue .sl-price{ color:var(--blue); }
-.ledger-foot{
-  margin:0; font-size:10.5px; font-weight:600;
-  letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3);
-}
-
-/* ---------- centre stage ---------- */
-.stage{
-  position:relative;
-  align-self:stretch;
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:4px; padding-top:6px;
-}
-
-/* the issue and the box it came out of, sized off each other */
-.crate{
-  position:relative;
-  width:min(330px,84%);
-  display:flex; justify-content:center;
-}
-
-/* the kraft box rim behind the issue */
-.box-rim{
-  position:absolute; left:50%; transform:translateX(-50%);
-  bottom:-16px; width:206%; height:48%;
-  background:
-    linear-gradient(180deg,
-      #3a2614 0 3px,          /* the dark slot you are reaching into */
-      #4e341b 3px 13px,
-      var(--kraft-lt) 13px 20px,
-      var(--kraft) 52%,
-      var(--kraft-dk) 100%);
-  border:1px solid #432d15;
-  border-radius:2px 2px 5px 5px;
-  box-shadow:
-    0 14px 22px -18px rgba(0,0,0,.95) inset,
-    0 34px 56px -24px rgba(0,0,0,.95),
-    0 1px 0 rgba(255,222,175,.22) inset;
-}
-.box-rim::after{
-  content:""; position:absolute; inset:0;
-  background:var(--grain); opacity:.34; mix-blend-mode:multiply;
-}
-/* manila dividers standing up inside the box, behind the issue */
-.rim-dividers{
-  position:absolute; left:14px; right:14px; top:-13px; height:30px;
-  background:
-    repeating-linear-gradient(90deg,
-      rgba(226,203,155,.92) 0 30px,
-      rgba(0,0,0,0) 30px 78px);
-  -webkit-mask-image:linear-gradient(180deg, #000 0 62%, transparent 100%);
-          mask-image:linear-gradient(180deg, #000 0 62%, transparent 100%);
-  border-radius:2px 2px 0 0;
-  filter:drop-shadow(0 2px 2px rgba(0,0,0,.5));
-}
-
-/* the bagged & boarded issue */
-.issue{
-  position:relative; z-index:2;
-  width:100%;
-  aspect-ratio:5 / 6.3;
-}
-.issue.pulled{ animation:pull .62s cubic-bezier(.16,.9,.24,1) both; }
-@keyframes pull{
-  from{ transform:translateY(46px) rotate(-2.4deg) scale(.965); opacity:0; filter:blur(3px); }
-  to  { transform:translateY(0) rotate(-1deg) scale(1); opacity:1; filter:blur(0); }
-}
-
-/* mylar bag sheen */
-.mylar{
-  position:absolute; inset:-9px -8px -14px -8px; z-index:3;
-  border-radius:2px; pointer-events:none;
-  background:linear-gradient(112deg,
-    rgba(255,255,255,0) 22%,
-    rgba(255,255,255,.30) 38%,
-    rgba(255,255,255,.05) 47%,
-    rgba(255,255,255,0) 62%);
-  border:1px solid rgba(255,255,255,.24);
-  box-shadow:0 0 0 1px rgba(255,255,255,.08) inset;
-}
-.mylar::after{
-  content:""; position:absolute; left:0; right:0; top:-1px; height:12px;
-  background:rgba(255,255,255,.14);
-  border-bottom:1px solid rgba(255,255,255,.22);
-}
-
-.cover{
-  position:absolute; inset:0;
-  display:flex; flex-direction:column;
-  padding:15px 16px 13px;
-  transform:rotate(-1deg);
-  background:linear-gradient(174deg, rgba(255,255,255,.24), rgba(120,90,50,.20)), var(--pulp);
-  border:1px solid rgba(70,52,28,.6);
-  box-shadow:0 26px 50px -22px rgba(0,0,0,.9);
-}
-.cover-grain{
-  position:absolute; inset:0; pointer-events:none;
-  background:var(--grain); opacity:.30; mix-blend-mode:multiply;
-}
-.cv-top{
-  display:flex; justify-content:space-between; align-items:center;
-  padding-bottom:7px; border-bottom:3px solid var(--ink);
-}
-.cv-pub{
-  font-family:var(--slab); font-size:14px; letter-spacing:.01em;
-  text-transform:uppercase;
-}
-.cover[data-grp="Comics"] .cv-pub{ color:var(--red-dk); }
-.cover[data-grp="Anime"]  .cv-pub{ color:var(--blue-dk); }
-.cover[data-grp="Other"]  .cv-pub{ color:#5c4a1f; }
-.cv-no{
-  font-size:11px; font-weight:700; letter-spacing:.13em;
-  text-transform:uppercase; color:var(--ink-3);
-  font-variant-numeric:tabular-nums;
-}
-/* corner box, the head-shot panel every back issue carries, set as initials */
-.cv-box{
-  width:58px; height:58px; margin:16px 0 14px;
-  display:grid; place-items:center;
-  border:2px solid var(--ink);
-  font-family:var(--slab); font-size:25px; line-height:1;
-  letter-spacing:-.045em; color:var(--ink);
-}
-.cover[data-grp="Comics"] .cv-box{ background:rgba(192,54,31,.13); }
-.cover[data-grp="Anime"]  .cv-box{ background:rgba(39,73,127,.13); }
-.cover[data-grp="Other"]  .cv-box{ background:rgba(120,95,35,.15); }
-
-.cv-name{
-  margin:0;
-  font-family:var(--slab);
-  font-size:44px;                 /* measured and overridden by fitName() */
-  line-height:.86; letter-spacing:-.038em;
-  text-transform:uppercase; color:var(--ink);
-  text-wrap:balance;
-  text-shadow:1.5px 2px 0 rgba(176,46,36,.20);
-}
-.cv-alias{
-  margin:9px 0 0; font-family:var(--type);
-  font-size:13px; color:var(--ink-2);
-}
-.cv-hr{
-  margin:11px 0 9px; height:4px;
-  border-top:1px solid var(--rule); border-bottom:3px double var(--rule);
-}
-.cv-note{
-  margin:0; font-size:14.5px; font-style:italic;
-  line-height:1.44; color:var(--ink-2); max-width:34ch;
-}
-.cv-bot{
-  display:flex; justify-content:space-between; gap:10px;
-  margin-top:auto; padding-top:10px; border-top:1px solid var(--rule);
-}
-.cv-cond{
-  font-size:10px; font-weight:700; letter-spacing:.15em;
-  text-transform:uppercase; color:var(--ink-3);
-}
-.cv-cond b{ color:var(--ink-2); font-size:12px; }
-
-/* grease-pencil price sticker on the bag */
-.sticker{
-  position:absolute; z-index:4;
-  right:-16px; top:-20px;
-  width:120px; padding:9px 8px 8px;
-  display:flex; flex-direction:column; align-items:center; gap:1px;
-  background:#f3efe2;
-  border:1px solid rgba(70,52,28,.45);
-  border-radius:2px;
-  transform:rotate(5deg);
-  box-shadow:0 10px 20px -10px rgba(0,0,0,.85);
-  transition:transform .2s cubic-bezier(.2,.9,.25,1);
-}
-.st-label{
-  font-size:9px; font-weight:700; letter-spacing:.16em;
-  text-transform:uppercase; color:var(--ink-3);
-}
-.st-price{
-  font-family:var(--wax); font-size:38px; line-height:1.05;
-  color:var(--ink-2); transform:rotate(-3deg);
-}
-.sticker.tone-red  .st-price{ color:var(--red); }
-.sticker.tone-blue .st-price{ color:var(--blue); }
-.st-who{
-  font-family:var(--type); font-size:10.5px; color:var(--ink-3);
-  text-align:center; line-height:1.25; overflow-wrap:anywhere;
-}
-
-.call{
-  margin:22px 0 0; text-align:center; max-width:44ch;
-  font-family:var(--type); font-size:clamp(13px,1.6vw,16px);
-  color:rgba(232,219,188,.86);
-}
-
-/* ---------- bid panels ---------- */
-.panels{
-  flex:0 0 auto;
-  display:grid; grid-template-columns:1fr 1fr; align-items:start;
-  gap:clamp(12px,2vw,28px);
-}
-.panel{
-  padding:13px 15px 12px;
-  background:linear-gradient(180deg, rgba(255,255,255,.20), rgba(120,90,50,.13)), var(--pulp-3);
-  border:1px solid rgba(70,52,28,.55);
-  border-top-width:5px;
-  box-shadow:0 -10px 30px -20px rgba(0,0,0,.9);
-  transition:opacity .2s, filter .2s;
-}
-.panel-red { border-top-color:var(--red); }
-.panel-blue{ border-top-color:var(--blue); }
-.panel.out{ opacity:.42; filter:saturate(.5); }
-/* Whoever is not being waited on fades back, so the turn is obvious. */
-.panel.idle,
-.ledger.idle{ opacity:.5; filter:saturate(.45); }
-.panel, .ledger{ transition:opacity .22s ease, filter .22s ease; }
-.ledger.idle .purse-figure{ color:var(--ink-3); }
-/* the opponent's side: something you watch, not something you press */
-.panel.remote{ background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(120,90,50,.16)), var(--pulp-3); }
-.panel.remote .pn-bids,
-.panel.remote .pn-row{ display:none; }
-.panel.remote .pn-state{
-  margin:2px 0 0; min-height:0;
-  font-family:var(--type); font-size:15px; color:var(--ink-2);
-}
-.panel.standing{ box-shadow:0 0 0 2px rgba(23,20,15,.28) inset, 0 -10px 30px -20px rgba(0,0,0,.9); }
-
-.pn-name{
-  margin:0 0 9px; font-family:var(--type); font-size:15px;
-  color:var(--ink); overflow-wrap:anywhere;
-}
-.pn-bids{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:9px; min-height:44px; }
-.pn-bids:empty{ min-height:0; margin-bottom:0; }
-
-.bid-btn{
-  flex:1 1 0; min-width:64px; padding:10px 8px;
-  font-family:var(--wax); font-size:23px; line-height:1;
-  color:var(--pulp); background:var(--ink);
-  border:1px solid var(--ink); border-radius:2px; cursor:pointer;
-  transition:transform .13s cubic-bezier(.2,.9,.25,1), background-color .13s;
-}
-.bid-btn.wide{ flex:1 1 100%; font-size:20px; }
-.panel-red  .bid-btn{ background:var(--red);  border-color:var(--red-dk); }
-.panel-blue .bid-btn{ background:var(--blue); border-color:var(--blue-dk); }
-.bid-btn:hover{ transform:translateY(-2px) rotate(-1deg); }
-.panel-red  .bid-btn:hover{ background:var(--red-dk); }
-.panel-blue .bid-btn:hover{ background:var(--blue-dk); }
-.bid-btn:active{ transform:translateY(0) scale(.97); }
-
-.pn-row{ display:flex; gap:8px; align-items:stretch; }
-.pn-other{
-  flex:1 1 auto; display:flex; align-items:center; gap:7px;
-  padding:6px 9px; background:rgba(255,255,255,.32);
-  border:1px solid rgba(70,52,28,.4);
-}
-.pn-other span{
-  font-size:10px; font-weight:700; letter-spacing:.14em;
-  text-transform:uppercase; color:var(--ink-3);
-}
-.pn-other input{
-  flex:1 1 auto; width:100%; min-width:0;
-  background:transparent; border:0;
-  font-family:var(--wax); font-size:19px; color:var(--ink);
-}
-.pn-other input:focus{ outline:none; }
-.pn-other input::placeholder{ font-family:var(--data); font-size:12px; color:var(--ink-3); }
-.pn-other input:disabled{ color:var(--ink-3); }
-
-.pn-pass{
-  flex:0 0 auto; padding:8px 18px;
-  font-family:var(--data); font-size:12px; font-weight:700;
-  letter-spacing:.16em; text-transform:uppercase;
-  color:var(--ink-2); background:transparent;
-  border:2px solid rgba(70,52,28,.55); border-radius:2px; cursor:pointer;
-  transition:background-color .14s, color .14s;
-}
-.pn-pass:hover:not(:disabled){ background:var(--ink); color:var(--pulp); border-color:var(--ink); }
-.pn-pass:disabled, .pn-other input:disabled{ opacity:.4; cursor:not-allowed; }
-
-.pn-state{
-  margin:8px 0 0; min-height:2.6em;
-  font-size:11.5px; line-height:1.35; color:var(--ink-3);
-}
-
-/* ---------- the stamp ---------- */
-.stamp-layer{
-  position:fixed; inset:0; z-index:60;
-  display:grid; place-items:center; pointer-events:none;
-}
-.stamp-mark{
-  padding:16px 30px 14px;
-  border:5px solid var(--stamp); border-radius:5px;
-  background:rgba(176,46,36,.07);
-  text-align:center;
-  opacity:0;
-}
-.stamp-mark.tone-blue{ border-color:var(--blue); background:rgba(39,73,127,.07); }
-.stamp-mark.tone-grey{ border-color:#59503f; background:rgba(89,80,63,.07); }
-.sm-word{
-  display:block; font-family:var(--slab);
-  font-size:clamp(46px,10vw,96px); line-height:.9;
-  letter-spacing:-.03em; text-transform:uppercase; color:var(--stamp);
-}
-.tone-blue .sm-word{ color:var(--blue); }
-.tone-grey .sm-word{ color:#6c6250; }
-.sm-line{
-  display:block; margin-top:7px;
-  font-family:var(--data); font-size:clamp(11px,1.6vw,14px);
-  font-weight:700; letter-spacing:.15em; text-transform:uppercase;
-  color:var(--stamp);
-}
-.tone-blue .sm-line{ color:var(--blue); }
-.tone-grey .sm-line{ color:#6c6250; }
-
-.stamp-mark.hit{ animation:thud .58s cubic-bezier(.2,1.1,.3,1) both; }
-@keyframes thud{
-  0%  { opacity:0; transform:scale(2.6) rotate(-15deg); filter:blur(9px); }
-  55% { opacity:1; transform:scale(.94) rotate(-6.5deg); filter:blur(0); }
-  70% { transform:scale(1.02) rotate(-7.6deg); }
-  100%{ opacity:1; transform:scale(1) rotate(-7deg); }
-}
-
-/* ============================ FACE-OFF ============================ */
-.faceoff-screen{
-  min-height:100vh;
-  display:flex; flex-direction:column;
-  padding:clamp(20px,4vw,52px) clamp(16px,3.5vw,44px) 56px;
-  gap:clamp(16px,2.6vw,30px);
-}
-.fo-head{ text-align:center; }
-.fo-title{
-  margin:0; font-family:var(--slab);
-  font-size:clamp(34px,7vw,72px); line-height:.9;
-  letter-spacing:-.035em; text-transform:uppercase; color:var(--pulp);
-  text-shadow:2px 3px 0 rgba(176,46,36,.32);
-}
-
-.fo-body{
-  flex:0 0 auto;
-  display:grid; grid-template-columns:1fr auto 1fr;
-  gap:clamp(12px,2.4vw,30px); align-items:start;
-}
-.fo-side{
-  padding:14px 16px 15px;
-  background:linear-gradient(180deg, rgba(255,255,255,.22), rgba(120,90,50,.14)), var(--pulp-2);
-  border:1px solid rgba(70,52,28,.5);
-  box-shadow:0 22px 46px -24px rgba(0,0,0,.9);
-}
-.fo-red  .ledger-tab{ box-shadow:inset 0 -4px 0 var(--red); }
-.fo-blue .ledger-tab{ box-shadow:inset 0 -4px 0 var(--blue); }
-.fo-side .ledger-tab{
-  margin:-14px -16px 14px; padding:9px 16px 8px;
-  background:linear-gradient(180deg,#e6d1a4,var(--manila));
-  border-bottom:1px solid rgba(90,66,32,.5);
-}
-.fo-list{ list-style:none; margin:0; padding:0; counter-reset:pick; }
-.fo-item{
-  display:grid; grid-template-columns:1fr auto auto;
-  gap:10px; align-items:baseline;
-  padding:9px 0; border-bottom:1px solid var(--rule);
-}
-.fo-item:first-child{ border-top:1px solid var(--rule); }
-.fi-name{
-  font-family:var(--slab); font-size:clamp(15px,2vw,21px);
-  text-transform:uppercase; letter-spacing:-.02em;
-  color:var(--ink); overflow-wrap:anywhere;
-}
-.fi-pub{
-  font-size:9.5px; font-weight:700; letter-spacing:.15em;
-  text-transform:uppercase; color:var(--ink-3);
-}
-.fi-price{
-  font-family:var(--wax); font-size:20px; transform:rotate(-2deg);
-}
-.fo-red  .fi-price{ color:var(--red); }
-.fo-blue .fi-price{ color:var(--blue); }
-.fo-total{
-  margin:12px 0 0; font-size:10.5px; font-weight:700;
-  letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3);
-}
-
-.fo-mid{
-  align-self:stretch;
-  display:flex; flex-direction:column; align-items:center; gap:14px;
-  padding-top:30px;
-}
-.fo-divider{ flex:1 1 auto; min-height:36px; width:2px; background:rgba(215,198,160,.28); }
-.fo-vs{
-  font-family:var(--slab); font-size:clamp(20px,3vw,34px);
-  text-transform:uppercase; color:rgba(226,211,175,.7);
-}
-
-.fo-actions{
-  display:flex; flex-direction:column; align-items:center; gap:12px;
-}
-.fo-actions .stamp-btn{ width:min(340px,100%); }
-.ghost-btn{
-  padding:8px 20px; background:transparent;
-  border:2px solid rgba(215,198,160,.4); border-radius:2px;
-  color:rgba(226,211,175,.8); cursor:pointer;
-  font-family:var(--data); font-size:11.5px; font-weight:700;
-  letter-spacing:.16em; text-transform:uppercase;
-  transition:background-color .15s, color .15s;
-}
-.ghost-btn:hover{ background:rgba(226,211,175,.9); color:var(--room); }
-.fo-hint{
-  margin:0; text-align:center; max-width:52ch;
-  font-family:var(--type); font-size:13px; color:rgba(226,211,175,.62);
-}
-.fo-hint:empty{ display:none; }
-.fo-tail{ display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
-
-/* ---------- encounter picker ---------- */
-.encounter{
-  width:min(720px,100%); margin:0; padding:0; border:0;
-  display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px;
-}
-.encounter .fm-head{
-  grid-column:1 / -1; margin:0; text-align:center;
-  color:rgba(226,211,175,.62); border-bottom-color:rgba(215,198,160,.26);
-}
-.enc-opt{
-  display:flex; gap:10px; align-items:flex-start;
-  padding:13px 15px; cursor:pointer;
-  background:linear-gradient(180deg, rgba(255,255,255,.20), rgba(120,90,50,.13)), var(--pulp-3);
-  border:1px solid rgba(70,52,28,.5);
-  border-top:4px solid rgba(70,52,28,.45);
-  transition:border-top-color .15s, box-shadow .15s;
-}
-.enc-opt input{
-  flex:0 0 auto; margin:3px 0 0; width:15px; height:15px;
-  accent-color:var(--red);
-}
-.enc-body{ display:block; }
-.enc-body b{
-  display:block; font-family:var(--slab); font-size:16px;
-  text-transform:uppercase; letter-spacing:-.02em; color:var(--ink);
-}
-.enc-body em{
-  display:block; margin-top:5px; font-style:italic;
-  font-size:13px; line-height:1.45; color:var(--ink-2);
-}
-.enc-opt:hover{ border-top-color:var(--ink-3); }
-.enc-opt:has(input:checked){
-  border-top-color:var(--red);
-  box-shadow:0 0 0 2px rgba(23,20,15,.22) inset;
-}
-.enc-opt:has(input:focus-visible){ outline:3px solid #f0c04a; outline-offset:2px; }
-
-/* ---------- the printed issue ---------- */
-.story{
-  position:relative; width:min(720px,100%);
-  padding:clamp(22px,4vw,42px) clamp(20px,4vw,46px);
-  text-align:left;
-  background:linear-gradient(178deg, rgba(255,255,255,.28), rgba(120,90,50,.16)), var(--pulp);
-  border:1px solid rgba(70,52,28,.5);
-  box-shadow:0 26px 60px -26px rgba(0,0,0,.85);
-}
-.story-grain{
-  position:absolute; inset:0; pointer-events:none;
-  background:var(--grain); opacity:.28; mix-blend-mode:multiply;
-}
-.story-body{ position:relative; }
-.story-body h3{
-  margin:26px 0 10px;
-  font-family:var(--slab); font-size:clamp(19px,2.6vw,27px);
-  line-height:1.02; letter-spacing:-.03em; text-transform:uppercase;
-  color:var(--ink); text-wrap:balance;
-}
-.story-body h3:first-child{ margin-top:0; }
-.story-body p{
-  margin:0 0 13px; font-size:15px; line-height:1.62;
-  color:var(--ink-2); max-width:68ch;
-}
-.story-body p b{ color:var(--ink); }
-.story-wait{
-  font-family:var(--type); color:var(--ink-3) !important;
-  animation:breathe 1.8s ease-in-out infinite;
-}
-.story-err{ color:var(--red-dk) !important; font-family:var(--type); }
-.story-score{
-  position:relative; margin:8px 0 0;
-  font-size:11px; font-weight:700; letter-spacing:.1em;
-  text-transform:uppercase; color:var(--red-dk);
-}
-.story-score:empty{ display:none; }
-.story-foot{
-  position:relative; margin:18px 0 0; padding-top:10px;
-  border-top:1px solid var(--rule);
-  font-size:10.5px; font-weight:700; letter-spacing:.16em;
-  text-transform:uppercase; color:var(--ink-3);
-}
-.story-foot:has(span:empty){ display:none; }
-.stamp-btn:disabled{ cursor:progress; }
-.stamp-btn:disabled span{ opacity:.55; }
-.fallback-ta{
-  width:min(620px,100%); height:220px; margin-top:10px; padding:12px;
-  font-family:var(--data); font-size:13px; line-height:1.5;
-  background:var(--pulp); color:var(--ink);
-  border:1px solid rgba(70,52,28,.5);
-}
-
-/* ============================ RESPONSIVE ============================ */
-@media (max-width: 1000px){
-  .floor{
-    grid-template-columns:1fr 1fr;
-    grid-template-areas:"stage stage" "l0 l1";
-  }
-  .stage{ grid-area:stage; }
-  #ledger0{ grid-area:l0; }
-  #ledger1{ grid-area:l1; }
-  .purse-figure{ font-size:38px; }
-}
-
-@media (max-width: 620px){
-  .tabs-row{ grid-template-columns:1fr; }
-  .versus{ text-align:center; }
-  .doors{ grid-template-columns:1fr; gap:22px; }
-  .band-row{ grid-template-columns:1fr 1fr; }
-  .door-copy{ min-height:0; }
-  .share-row{ flex-direction:column; }
-  .floor{ gap:14px; }
-  .crate{ width:min(280px,88%); }
-
-  /* Reach the bid buttons without scrolling past both ledgers. */
-  .auction-screen{
-    display:grid; align-content:start;
-    grid-template-columns:1fr 1fr;
-    grid-template-areas:"head head" "stage stage" "panels panels" "l0 l1";
-  }
-  .floor{ display:contents; }
-  .guide-head{ grid-area:head; }
-  .stage{ grid-area:stage; }
-  .panels{ grid-area:panels; grid-template-columns:1fr 1fr; gap:8px; }
-  #ledger0{ grid-area:l0; }
-  #ledger1{ grid-area:l1; }
-  .panel{ padding:10px 11px 11px; }
-  .pn-bids{ gap:6px; min-height:40px; }
-  .bid-btn{ min-width:0; padding:9px 4px; font-size:19px; }
-  .pn-pass{ padding:8px 12px; letter-spacing:.1em; }
-  .pn-other{ padding:5px 7px; }
-  .pn-other span{ display:none; }
-  .sticker{ width:96px; right:-10px; top:-14px; }
-  .st-price{ font-size:31px; }
-  .slot{ font-size:12.5px; }
-  .purse-figure{ font-size:32px; }
-  .pn-state{ min-height:0; }
-  .fo-body{ grid-template-columns:1fr; }
-  .encounter{ grid-template-columns:1fr; }
-  .fo-mid{ flex-direction:row; padding:0; }
-  .fo-divider{ height:2px; width:auto; }
-  .auction-screen{ padding-bottom:20px; }
-}
-
-@media (prefers-reduced-motion: reduce){
-  *, *::before, *::after{
-    animation-duration:.01ms !important;
-    animation-iteration-count:1 !important;
-    transition-duration:.01ms !important;
-  }
-  .issue.pulled{ animation:none; }
-  .stamp-mark.hit{ opacity:1; transform:rotate(-7deg); }
-}
-</style>
+<link rel="stylesheet" href="styles.css">
 </body>
 </html>
