@@ -49,6 +49,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       </div>
     </div>
 
+    <section class="box-pick" aria-label="How many buyers">
+      <h2 class="fm-head">How many buyers</h2>
+      <div class="np-row" id="npRow"></div>
+    </section>
+
     <section class="box-pick" aria-label="What goes in the box">
       <h2 class="fm-head">What goes in the box</h2>
       <p class="box-note">Twenty characters are drawn from whatever you tick here. Your friend sees the list before they sit down.</p>
@@ -120,7 +125,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <button id="shareBtn" class="pn-pass" type="button">Copy</button>
     </div>
 
-    <p class="netmsg lobby-wait" id="lobbyMsg" role="status">Waiting for the second buyer…</p>
+    <p class="netmsg lobby-wait" id="lobbyMsg" role="status">Waiting for the other buyers…</p>
     <button id="cancelBtn" class="ghost-btn" type="button">Close the table</button>
   </div>
 </main>
@@ -140,15 +145,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <div class="floor">
 
     <!-- LEFT LEDGER -->
-    <aside class="ledger ledger-red" id="ledger0">
-      <div class="ledger-tab"><span class="lt-name" id="name0">Player One</span></div>
-      <p class="purse-line">Purse remaining</p>
-      <p class="purse-figure" id="purse0">$20</p>
-      <ol class="slots" id="slots0"></ol>
-      <p class="ledger-foot"><span id="spent0">$0 spent</span> &middot; <span id="left0">5 slots open</span></p>
-    </aside>
+    <div id="ledgers" class="ledgers"></div>
 
-    <!-- CENTRE: THE ISSUE -->
     <section class="stage" aria-live="polite">
       <div class="crate">
       <div class="box-rim" aria-hidden="true">
@@ -186,43 +184,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     </section>
 
     <!-- RIGHT LEDGER -->
-    <aside class="ledger ledger-blue" id="ledger1">
-      <div class="ledger-tab"><span class="lt-name" id="name1">Player Two</span></div>
-      <p class="purse-line">Purse remaining</p>
-      <p class="purse-figure" id="purse1">$20</p>
-      <ol class="slots" id="slots1"></ol>
-      <p class="ledger-foot"><span id="spent1">$0 spent</span> &middot; <span id="left1">5 slots open</span></p>
-    </aside>
   </div>
 
   <!-- BID PANELS -->
-  <div class="panels">
-    <div class="panel panel-red" id="panel0">
-      <p class="pn-name" id="pn0">Player One</p>
-      <div class="pn-bids" id="bids0"></div>
-      <div class="pn-row">
-        <label class="pn-other">
-          <span>Other</span>
-          <input type="number" id="other0" min="1" step="1" inputmode="numeric" aria-label="Custom bid for player one">
-        </label>
-        <button class="pn-pass" type="button" data-pass="0">Pass</button>
-      </div>
-      <p class="pn-state" id="state0"></p>
-    </div>
-
-    <div class="panel panel-blue" id="panel1">
-      <p class="pn-name" id="pn1">Player Two</p>
-      <div class="pn-bids" id="bids1"></div>
-      <div class="pn-row">
-        <label class="pn-other">
-          <span>Other</span>
-          <input type="number" id="other1" min="1" step="1" inputmode="numeric" aria-label="Custom bid for player two">
-        </label>
-        <button class="pn-pass" type="button" data-pass="1">Pass</button>
-      </div>
-      <p class="pn-state" id="state1"></p>
-    </div>
-  </div>
+  <div class="panels" id="panels"></div>
 
   <!-- STAMP OVERLAY -->
   <div class="stamp-layer" id="stampLayer" hidden>
@@ -241,23 +206,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   </header>
 
   <div class="fo-body">
-    <section class="fo-side fo-red">
-      <div class="ledger-tab"><span class="lt-name" id="foName0">Player One</span></div>
-      <ol class="fo-list" id="foList0"></ol>
-      <p class="fo-total" id="foTotal0"></p>
-    </section>
-
-    <div class="fo-mid" aria-hidden="true">
-      <div class="fo-divider"></div>
-      <span class="fo-vs">vs</span>
-      <div class="fo-divider"></div>
-    </div>
-
-    <section class="fo-side fo-blue">
-      <div class="ledger-tab"><span class="lt-name" id="foName1">Player Two</span></div>
-      <ol class="fo-list" id="foList1"></ol>
-      <p class="fo-total" id="foTotal1"></p>
-    </section>
+    <div id="foSides" class="fo-sides"></div>
   </div>
 
   <div class="fo-actions">
@@ -458,18 +407,18 @@ const STOCK = [
 ["Blue Devil","DC","Dan Cassidy","Stuck in the costume.","B",0],
 ["Katana","DC","Tatsu Yamashiro","The sword keeps the souls.","C",1],
 ["Zauriel","DC","Zauriel","An angel who resigned.","B",0],
-["Madara Uchiha","NAR","Madara","Woke up and chose the whole war.","A",0],
-["Naruto Uzumaki","NAR","Naruto","Never once shut up, never once quit.","A",0],
-["Sasuke Uchiha","NAR","Sasuke","Left the group chat permanently.","A",1],
-["Pain","NAR","Nagato","Six bodies, one very sad man.","B",2],
-["Itachi Uchiha","NAR","Itachi","Every plan inside another plan.","B",2],
-["Jiraiya","NAR","Jiraiya","Terrible role model, excellent teacher.","B",1],
-["Might Guy","NAR","Guy","Opens doors nobody should open.","B",0],
-["Kakashi Hatake","NAR","Kakashi","Late to everything except the kill.","C",2],
-["Gaara","NAR","Gaara","The sand gets there first.","C",1],
-["Rock Lee","NAR","Lee","No talent whatsoever. Wins anyway.","D",0],
-["Shikamaru Nara","NAR","Shikamaru","Cannot be bothered. Still out-thinks you.","D",2],
-["Hinata Hyuga","NAR","Hinata","Sees exactly where it hurts.","D",0],
+["Madara Uchiha","NAR","Madara","Woke up and chose the whole war.","S",0],
+["Naruto Uzumaki","NAR","Naruto","Never once shut up, never once quit.","S",0],
+["Sasuke Uchiha","NAR","Sasuke","Left the group chat permanently.","S",1],
+["Pain","NAR","Nagato","Six bodies, one very sad man.","A",2],
+["Itachi Uchiha","NAR","Itachi","Every plan inside another plan.","A",2],
+["Jiraiya","NAR","Jiraiya","Terrible role model, excellent teacher.","A",1],
+["Might Guy","NAR","Guy","Opens doors nobody should open.","A",0],
+["Kakashi Hatake","NAR","Kakashi","Late to everything except the kill.","B",2],
+["Gaara","NAR","Gaara","The sand gets there first.","B",1],
+["Rock Lee","NAR","Lee","No talent whatsoever. Wins anyway.","C",0],
+["Shikamaru Nara","NAR","Shikamaru","Cannot be bothered. Still out-thinks you.","C",2],
+["Hinata Hyuga","NAR","Hinata","Sees exactly where it hurts.","C",0],
 ["Satoru Gojo","JJK","Gojo","The strongest, and unbearable about it.","S",-1],
 ["Ryomen Sukuna","JJK","Sukuna","Twenty fingers of very old spite.","S",-1],
 ["Toji Fushiguro","JJK","Toji","No cursed energy. Still the scariest.","B",2],
@@ -514,6 +463,18 @@ const STOCK = [
 
 const SLOTS = 5, PURSE = 20;
 
+// Two or three buyers. Everything below counts seats rather than assuming a
+// pair, so the third chair is a number, not a special case.
+const SEATS = [
+  { key: "red",   pencil: "Red pencil"   },
+  { key: "blue",  pencil: "Blue pencil"  },
+  { key: "green", pencil: "Green pencil" }
+];
+let NP = 2;
+const seats  = () => Array.from({ length: NP }, (_, i) => i);
+const rivals = p => seats().filter(q => q !== p);
+const nameList = ps => ps.map(q => P[q].name).join(" and ");
+
 const UNIVERSES = {
   MAR: { name: "Marvel",         group: "Comics" },
   DC:  { name: "DC",             group: "Comics" },
@@ -548,18 +509,20 @@ const teamScore = (roster, mode) =>
 // one leaves it to tactics so a near-even draft still gets a real story.
 const CLOSE = 0.20;
 function verdict(mode){
-  const a = teamScore(P[0].roster, mode), b = teamScore(P[1].roster, mode);
-  const hi = Math.max(a, b) || 1;
-  const gap = Math.abs(a - b) / hi;
-  return { a, b, gap, close: gap <= CLOSE, winner: gap <= CLOSE ? null : (a > b ? 0 : 1) };
+  const scores = seats().map(p => teamScore(P[p].roster, mode));
+  const top = Math.max(...scores), hi = top || 1;
+  const lead = scores.indexOf(top);
+  const rest = scores.filter((_, i) => i !== lead);
+  const gap = (top - Math.max(...rest)) / hi;      // only the nearest rival matters
+  return { scores, gap, close: gap <= CLOSE, winner: gap <= CLOSE ? null : lead };
 }
 
-const POOL = 20;      // characters drawn per sale: ten bought, the rest passed in
+const perSale = () => 10 * NP;   // twenty for two buyers, thirty for three
 
 // What is in the box. The host owns this and it travels to the joiner.
 let BOX = { u: ["MAR","DC"], tiers: true };
 
-const MIN_BOX = 20;   // one full sale
+const MIN_BOX = () => perSale();   // one full sale
 const inBox = c => BOX.u.includes(c[1]);
 const boxCount = () => STOCK.filter(inBox).length;
 
@@ -586,6 +549,17 @@ let P, deck, lot, lotNum, over, deckLeft = 0;
 const SB_URL = "https://aexgfybbydtxjzpluiwo.supabase.co";
 const SB_KEY = "sb_publishable_Cr0FVJXaMsn3rsdgV9pWPw_et4aHvcL";
 const SAVE_KEY = "longbox.table";
+// A browser keeps one id so that reconnecting returns you to your own seat
+// rather than handing you someone else's roster.
+const CID = (() => {
+  let v = null;
+  try { v = localStorage.getItem("superdrafts.cid"); } catch {}
+  if (!v){ v = Math.random().toString(36).slice(2, 10);
+           try { localStorage.setItem("superdrafts.cid", v); } catch {} }
+  return v;
+})();
+let seatOf = {};                       // host only: client id to chair number
+let seatedAck = false;                 // guest: the host has given us a chair
 
 let sb, chan, ROOM = "", ME = 0, HOST = false, started = false, peerOn = false,
     fxSeq = 0, lastFx = 0, drawnLot = -1;
@@ -598,6 +572,13 @@ const myName = () => {
   if (n) try { localStorage.setItem("longbox.name", n); } catch {}
   return n;
 };
+
+// Everyone except you, named once their names have arrived.
+function peerLabel(){
+  if (!P) return "connected";
+  const names = rivals(ME).map(q => P[q] && P[q].name).filter(n => n && n !== "…");
+  return names.length ? names.join(", ") + " connected" : "connected";
+}
 
 function setWire(on, text){
   peerOn = on;
@@ -613,7 +594,7 @@ async function connect(){
   chan.on("broadcast", { event: "msg" }, ({ payload }) => handle(payload));
   chan.on("presence", { event: "sync" }, () => {
     const others = Object.values(chan.presenceState()).flat().filter(x => x.me !== ME);
-    if (others.length) setWire(true, (P && P[1-ME] ? P[1-ME].name : "friend") + " connected");
+    if (others.length) setWire(true, peerLabel());
     else setWire(false, started ? "friend dropped, they can rejoin" : "waiting…");
   });
 
@@ -630,14 +611,34 @@ const send = payload => chan && chan.send({ type: "broadcast", event: "msg", pay
 
 function handle(m){
   if (m.t === "join" && HOST){
-    // Idempotent: first join starts the sale, a later one is a reconnect.
-    P[1].name = m.name || "Blue";
+    let seat = seatOf[m.cid];
+    if (seat === undefined){
+      seat = seats().find(q => q !== 0 && !Object.values(seatOf).includes(q));
+      if (seat === undefined){ send({ t: "full", cid: m.cid }); return; }
+      seatOf[m.cid] = seat;
+    }
+    P[seat].name = m.name || SEATS[seat].pencil;
+    send({ t: "seat", cid: m.cid, seat, np: NP });
+    // The sale opens only once every chair is taken. Until then the joiners
+     // are told to sit tight rather than being shown an auction with no lot.
+    if (!started && Object.keys(seatOf).length < NP - 1){
+      send({ t: "waiting", seated: Object.keys(seatOf).length + 1, need: NP });
+      return;
+    }
     if (!started){ started = true; dealDeck(); nextLot(); }
     pushState();
   }
   if (m.t === "act" && HOST && started){
-    if (m.p !== 1) return;                       // the guest only ever moves for themselves
-    m.kind === "bid" ? bid(1, m.amount) : pass(1);
+    if (m.p === 0 || seatOf[m.cid] !== m.p) return;   // you may only move for your own chair
+    m.kind === "bid" ? bid(m.p, m.amount) : pass(m.p);
+  }
+  if (m.t === "seat" && !HOST && m.cid === CID){ ME = m.seat; NP = m.np; seatedAck = true; }
+  if (m.t === "full" && !HOST && m.cid === CID){
+    nudge("That table is full. Three buyers is the limit.");
+  }
+  if (m.t === "waiting" && !HOST){
+    $("setupMsg").textContent =
+      `Seated. ${m.seated} of ${m.need} buyers are here, waiting for the rest.`;
   }
   if (m.t === "state" && !HOST) applyState(m.s);
   // The story is written once and shared, so both sides read the same issue.
@@ -652,7 +653,7 @@ function handle(m){
 }
 
 function snapshot(fx){
-  return { P, lot, lotNum, over, box: BOX, deckLeft: deck ? deck.length : 0, fx: fx || null };
+  return { P, lot, lotNum, over, box: BOX, np: NP, deckLeft: deck ? deck.length : 0, fx: fx || null };
 }
 
 function pushState(fx){
@@ -663,19 +664,17 @@ function pushState(fx){
 }
 
 function applyState(s, local){
+  if (!s || !s.lot) return;          // nothing to draw before the sale opens
   // Track what is actually on the cover. The host mutates lotNum before it
   // publishes, so comparing state-to-state would never see the change.
   const lotChanged = drawnLot !== s.lotNum;
   P = s.P; lot = s.lot; lotNum = s.lotNum; over = s.over; deckLeft = s.deckLeft;
   if (s.box) BOX = s.box;
+  if (s.np) NP = s.np;
   if (!local) started = true;
   if (over) return showFaceoff();
   showScreen("auction");
-  $("name0").textContent = P[0].name + (ME === 0 ? " (you)" : "");
-  $("name1").textContent = P[1].name + (ME === 1 ? " (you)" : "");
-  $("pn0").textContent = P[0].name + (ME === 0 ? " (you)" : "");
-  $("pn1").textContent = P[1].name + (ME === 1 ? " (you)" : "");
-  if (peerOn) setWire(true, P[1-ME].name + " connected");   // names arrive after presence
+  if (peerOn) setWire(true, peerLabel());          // names arrive after presence
   if (lotChanged){ drawnLot = s.lotNum; renderLot(); }
   render();
   if (s.fx && s.fx.id !== lastFx){ lastFx = s.fx.id; stamp(s.fx.word, s.fx.line, s.fx.tone); }
@@ -683,7 +682,7 @@ function applyState(s, local){
 
 /* An action either runs here (host) or travels to the referee (guest). */
 function act(kind, amount){
-  if (!HOST) return send({ t: "act", p: 1, kind, amount });
+  if (!HOST) return send({ t: "act", p: ME, cid: CID, kind, amount });
   return kind === "bid" ? bid(0, amount) : pass(0);
 }
 
@@ -722,10 +721,10 @@ function paintBox(chipsEl, countEl, onChange){
   }
 
   const n = boxCount();
-  countEl.textContent = n < MIN_BOX
-    ? `Only ${n} characters match. A sale needs ${MIN_BOX}, so widen the box.`
-    : `${n} to draw from. Twenty come out each sale.`;
-  countEl.classList.toggle("thin", n < MIN_BOX);
+  countEl.textContent = n < MIN_BOX()
+    ? `Only ${n} characters match. A ${NP}-buyer sale needs ${MIN_BOX()}, so widen the box.`
+    : `${n} to draw from. ${perSale()} come out each sale.`;
+  countEl.classList.toggle("thin", n < MIN_BOX());
   return n;
 }
 
@@ -734,10 +733,30 @@ const boxSummary = () =>
 
 function refreshFoBox(){
   paintBox($("foChips"), $("foCount"), refreshFoBox);
-  $("againBtn").disabled = boxCount() < MIN_BOX;
+  $("againBtn").disabled = boxCount() < MIN_BOX();
+}
+
+function paintNP(){
+  const row = $("npRow");
+  row.innerHTML = "";
+  for (const n of [2, 3]){
+    const on = NP === n;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "band" + (on ? " on" : "");
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.innerHTML = `<b></b><em></em>`;
+    b.querySelector("b").textContent = n === 2 ? "Two buyers" : "Three buyers";
+    b.querySelector("em").textContent = n === 2
+      ? "Head to head. Twenty lots, five each."
+      : "Free for all, five against five against five. Thirty lots.";
+    b.addEventListener("click", () => { NP = n; refreshSetupBox(); });
+    row.appendChild(b);
+  }
 }
 
 function refreshSetupBox(){
+  paintNP();
   BOX.tiers = $("showTiers").checked;
   paintBox($("uniChips"), $("boxCount"), refreshSetupBox);
 }
@@ -758,17 +777,18 @@ function dealDeck(){
       no: 1 + ((i * 37 + 11) % 480)
     }))
     .filter(c => BOX.u.includes(c.pub)));
-  deck = deck.slice(0, POOL);
+  deck = deck.slice(0, perSale());
   lotNum = 0; over = false;
 }
 
 async function openTable(){
   const n = myName();
   if (!n) return nudge("Put your name on the tab first.");
-  if (boxCount() < MIN_BOX) return nudge("The box is too thin. Add a universe or widen the tiers.");
+  if (boxCount() < MIN_BOX()) return nudge("The box is too thin for that many buyers. Add a universe.");
   HOST = true; ME = 0; started = false;
   ROOM = code4();
-  P = [{ name: n, purse: PURSE, roster: [] }, { name: "…", purse: PURSE, roster: [] }];
+  P = seats().map(q => ({ name: q === 0 ? n : "…", purse: PURSE, roster: [] }));
+  seatOf = {};
   $("setupMsg").textContent = "Opening the table…";
   try { await connect(); } catch { return nudge("Could not reach the table service. Check your connection and try again."); }
   $("setupMsg").textContent = "";
@@ -788,15 +808,18 @@ async function joinTable(){
   try { await connect(); } catch { return nudge("Could not reach the table service. Check your connection and try again."); }
   // Keep the code in the URL so a refresh or a dropped connection can rejoin.
   try { history.replaceState(null, "", location.pathname + "?r=" + c); } catch {}
-  send({ t: "join", name: n });
+  send({ t: "join", name: n, cid: CID });
+  seatedAck = false;
   let waited = 0;
   const poke = setInterval(() => {
-    if (!$("auction").hidden){ clearInterval(poke); return; }
+    // Once the host has seated us we stop chasing. With three buyers the first
+    // joiner can wait a long time for the last chair, and that is not a failure.
+    if (!$("auction").hidden || seatedAck){ clearInterval(poke); return; }
     if ((waited += 1500) > 9000){
       clearInterval(poke);
       nudge("No table " + c + " answered. Check the code, and make sure your friend still has their page open.");
       chan && sb.removeChannel(chan);
-    } else send({ t: "join", name: n });
+    } else send({ t: "join", name: n, cid: CID });
   }, 1500);
 }
 
@@ -816,18 +839,18 @@ const slotsLeft = p => SLOTS - P[p].roster.length;
 const inPlay    = p => slotsLeft(p) > 0;
 // Must always keep $1 in reserve for every slot that stays empty after this buy.
 const ceiling   = p => P[p].purse - (slotsLeft(p) - 1);
-const soloRun   = () => inPlay(0) !== inPlay(1);
+const soloRun   = () => seats().filter(inPlay).length === 1;
 const askPrice  = () => lot.high === null ? 1 : lot.price + 1;
 
 /* Host only from here down, the guest never runs the rules. */
 
-// A sale is exactly POOL characters long. Ten of them get bought, five each.
+// A sale is ten characters per buyer. Five each get bought, the rest pass in.
 // Everything else is passed in, so the number of passes left is simply the
 // lots remaining minus the buys still owed. When that reaches zero the rest
 // are compulsory, which is what stops anyone passing their way out of a roster.
-const bought      = () => P[0].roster.length + P[1].roster.length;
-const buysOwed    = () => (SLOTS * 2) - bought();
-const lotsLeft    = () => POOL - lotNum + 1;          // counting the one on the block
+const bought      = () => P.reduce((n, x) => n + x.roster.length, 0);
+const buysOwed    = () => (SLOTS * NP) - bought();
+const lotsLeft    = () => perSale() - lotNum + 1;          // counting the one on the block
 const passesLeft  = () => Math.max(0, lotsLeft() - buysOwed());
 const compulsory  = () => passesLeft() <= 0;
 
@@ -837,7 +860,7 @@ const passCost = p => (soloRun() && inPlay(p)) ? 1 : 0;
 // Who is on the hook when a lot cannot be passed in.
 function obliged(){
   if (!compulsory()) return null;
-  if (soloRun()) return inPlay(0) ? 0 : 1;
+  if (soloRun()) return seats().find(inPlay);
   return lot.opener;
 }
 
@@ -851,11 +874,11 @@ function canPass(p){
 }
 
 function nextLot(){
-  if (bought() >= SLOTS * 2) return finish();
-  if (lotNum >= POOL || !deck.length) return finish();
+  if (bought() >= SLOTS * NP) return finish();
+  if (lotNum >= perSale() || !deck.length) return finish();
   lotNum++;
-  lot = { char: deck.shift(), price: 0, high: null, opener: (lotNum - 1) % 2,
-          passed: [false, false] };
+  lot = { char: deck.shift(), price: 0, high: null, opener: (lotNum - 1) % NP,
+          passed: seats().map(() => false) };
   pushState();
 }
 
@@ -865,13 +888,14 @@ function bid(p, amount){
   const min = (lot.high === p) ? lot.price + 1 : askPrice();
   const amt = Math.floor(amount);
   if (!(amt >= min) || amt > ceiling(p)) return;
+  // Declining to open is not binding: once someone opens, everyone is back in.
+  // Dropping out after a bid exists is binding, so it is not cleared here.
+  if (lot.high === null) lot.passed = seats().map(() => false);
   lot.price = amt;
   lot.high = p;
-  lot.passed = [false, false];
-  $("other0").value = "";
-  $("other1").value = "";
+  seats().forEach(q => { const el = $("other" + q); if (el) el.value = ""; });
   // Nobody left who could answer: it is theirs.
-  if (![0,1].some(q => q !== p && inPlay(q))) return award(p, amt);
+  if (!rivals(p).some(q => inPlay(q))) return award(p, amt);
   pushState();
 }
 
@@ -886,7 +910,7 @@ function pass(p){
   if (cost) P[p].purse -= cost;
   lot.passed[p] = true;
 
-  const stillIn = [0,1].filter(q => q !== p && inPlay(q) && !lot.passed[q]);
+  const stillIn = rivals(p).filter(q => inPlay(q) && !lot.passed[q]);
   if (!stillIn.length) return passIn(cost);
   pushState();
 }
@@ -911,7 +935,7 @@ function award(p, price){
     line: `${lot.char.name} to ${P[p].name} for ${money(price)}`,
     tone: p === 0 ? "red" : "blue" });
   setTimeout(() => {
-    if (P[0].roster.length === SLOTS && P[1].roster.length === SLOTS) finish();
+    if (seats().every(q => P[q].roster.length === SLOTS)) finish();
     else nextLot();
   }, 1250);
 }
@@ -928,6 +952,76 @@ function stamp(word, line, tone){
   mark.style.animation = "";
   mark.classList.add("hit");
   setTimeout(() => { layer.hidden = true; mark.classList.remove("hit"); }, 1100);
+}
+
+
+/* ---------------------- seats on screen ---------------------- */
+// Ledgers, bid panels and face-off columns are all drawn from the seat count,
+// so two and three buyers use one code path and one set of styles.
+function buildSeats(){
+  const led = $("ledgers"), pan = $("panels");
+  if (led.dataset.n === String(NP)) return;
+  led.dataset.n = pan.dataset.n = String(NP);
+  led.innerHTML = ""; pan.innerHTML = "";
+
+  for (const p of seats()){
+    const key = SEATS[p].key;
+
+    const a = document.createElement("aside");
+    a.className = `ledger ledger-${key}`;
+    a.id = "ledger" + p;
+    a.style.gridArea = "l" + p;
+    a.innerHTML =
+      `<div class="ledger-tab"><span class="lt-name" id="name${p}"></span></div>` +
+      `<p class="purse-line">Purse remaining</p>` +
+      `<p class="purse-figure" id="purse${p}">$${PURSE}</p>` +
+      `<ol class="slots" id="slots${p}"></ol>` +
+      `<p class="ledger-foot"><span id="spent${p}"></span> &middot; <span id="left${p}"></span></p>`;
+    led.appendChild(a);
+
+    const d = document.createElement("div");
+    d.className = `panel panel-${key}`;
+    d.id = "panel" + p;
+    d.innerHTML =
+      `<p class="pn-name" id="pn${p}"></p>` +
+      `<div class="pn-bids" id="bids${p}"></div>` +
+      `<div class="pn-row">` +
+        `<label class="pn-other"><span>Other</span>` +
+          `<input type="number" id="other${p}" min="1" step="1" inputmode="numeric" ` +
+          `aria-label="Custom bid"></label>` +
+        `<button class="pn-pass" type="button" data-pass="${p}">Pass</button>` +
+      `</div>` +
+      `<p class="pn-state" id="state${p}"></p>`;
+    pan.appendChild(d);
+  }
+
+  $("auction").className = "screen auction-screen np-" + NP;
+  pan.querySelectorAll(".pn-pass[data-pass]").forEach(b =>
+    b.addEventListener("click", () => { if (Number(b.dataset.pass) === ME) act("pass"); }));
+  for (const p of seats()){
+    $("other" + p).addEventListener("keydown", e => {
+      if (e.key === "Enter"){
+        e.preventDefault();
+        const v = Number(e.currentTarget.value);
+        if (v && p === ME) act("bid", v);
+      }
+    });
+  }
+}
+
+function buildFoSides(){
+  const box = $("foSides");
+  box.innerHTML = "";
+  box.className = "fo-sides np-" + NP;
+  for (const p of seats()){
+    const sec = document.createElement("section");
+    sec.className = `fo-side fo-${SEATS[p].key}`;
+    sec.innerHTML =
+      `<div class="ledger-tab"><span class="lt-name" id="foName${p}"></span></div>` +
+      `<ol class="fo-list" id="foList${p}"></ol>` +
+      `<p class="fo-total" id="foTotal${p}"></p>`;
+    box.appendChild(sec);
+  }
 }
 
 /* ---------------------------- render ---------------------------- */
@@ -970,14 +1064,20 @@ function renderLot(){
   $("cvLot").textContent = String(lotNum).padStart(2, "0");
   $("lotNo").textContent = "Lot " + lotNum;
   $("passLeft").textContent = passesLeft() + (passesLeft() === 1 ? " pass left" : " passes left");
-  $("stockLeft").textContent = lotsLeft() + " of " + POOL + " left";
+  $("stockLeft").textContent = lotsLeft() + " of " + perSale() + " left";
   issue.classList.remove("pulled");
   void issue.offsetWidth;
   issue.classList.add("pulled");
 }
 
 function render(){
-  for (const p of [0, 1]){
+  buildSeats();
+  for (const p of seats()){
+    const label = P[p].name + (ME === p ? " (you)" : "");
+    $("name" + p).textContent = label;
+    $("pn" + p).textContent = label;
+  }
+  for (const p of seats()){
     const me = P[p];
     $("purse" + p).textContent = money(me.purse);
     $("spent" + p).textContent = money(PURSE - me.purse) + " spent";
@@ -1031,13 +1131,16 @@ function renderSticker(){
     lbl.textContent = solo ? "Unopposed" : "Standing bid";
     pr.textContent = money(lot.price);
     who.textContent = P[lot.high].name;
-    $("call").textContent = `${P[1 - lot.high].name}, raise to ${money(askPrice())} or pass and let it go.`;
+    const waiting = rivals(lot.high).filter(q => inPlay(q) && !lot.passed[q]);
+    $("call").textContent = waiting.length
+      ? `${nameList(waiting)}, raise to ${money(askPrice())} or pass and let it go.`
+      : "Going once…";
   }
 }
 
 function renderPanels(){
   const solo = soloRun();
-  for (const p of [0, 1]){
+  for (const p of seats()){
     const panel = $("panel" + p), bids = $("bids" + p), state = $("state" + p),
           other = $("other" + p), passBtn = panel.querySelector(".pn-pass"),
           passBtn2 = null;
@@ -1112,7 +1215,7 @@ function renderPanels(){
     state.textContent = mustBuy
       ? "No passes left. This one is yours, bid at least $1."
       : lot.high !== null
-        ? `Ceiling ${money(cap)} · pass and ${P[1 - p].name} takes it.`
+        ? `Ceiling ${money(cap)} · pass and ${P[lot.high].name} takes it.`
         : cost
           ? `Ceiling ${money(cap)} · passing now costs ${money(cost)}.`
           : `Ceiling ${money(cap)} · ${passesLeft()} pass${passesLeft() === 1 ? "" : "es"} left in this sale.`;
@@ -1127,10 +1230,11 @@ function finish(){
 
 function showFaceoff(){
   showScreen("faceoff");
+  buildFoSides();
   $("againBtn").hidden = !HOST;
   $("foBox").hidden = !HOST;
   if (HOST) refreshFoBox();
-  for (const p of [0, 1]){
+  for (const p of seats()){
     $("foName" + p).textContent = P[p].name;
     const ol = $("foList" + p);
     ol.innerHTML = "";
@@ -1184,9 +1288,9 @@ function showWriting(mode){
 
 function showStory(text, mode, score){
   window.__story = text;
-  if (score) $("storyScore").textContent =
+  if (score && score.scores) $("storyScore").textContent =
     `Tier score, ${mode === "prep" ? "with a week of prep" : "on raw capability"}: ` +
-    `${P[0].name} ${score.a}, ${P[1].name} ${score.b}` +
+    seats().map(q => `${P[q].name} ${score.scores[q]}`).join(", ") +
     (score.close ? ". Close enough that tactics decided it." : "");
   $("story").hidden = false;
   $("storyBody").innerHTML = renderStory(text);
@@ -1209,10 +1313,12 @@ async function writeFight(){
   const v = verdict(mode);
   const payload = {
     mode,
-    ruling: { a: v.a, b: v.b, close: v.close,
+    ruling: { scores: v.scores, close: v.close,
+              names: seats().map(q => P[q].name),
               winner: v.winner === null ? null : P[v.winner].name },
-    a: { name: P[0].name, picks: P[0].roster.map(r => ({ name: r.char.name, world: (UNIVERSES[r.char.pub]||{}).name || r.char.pub, tier: r.char.tier, price: r.price })) },
-    b: { name: P[1].name, picks: P[1].roster.map(r => ({ name: r.char.name, world: (UNIVERSES[r.char.pub]||{}).name || r.char.pub, tier: r.char.tier, price: r.price })) }
+    teams: seats().map(q => ({ name: P[q].name, picks: P[q].roster.map(r => ({
+      name: r.char.name, world: (UNIVERSES[r.char.pub]||{}).name || r.char.pub,
+      tier: r.char.tier, price: r.price })) }))
   };
   try {
     const r = await fetch("/api/scenario", {
@@ -1237,16 +1343,15 @@ function rosterText(){
   const side = p => P[p].roster
     .map((r, i) => `${i + 1}. ${r.char.name} (${(UNIVERSES[r.char.pub] || {}).name || r.char.pub}${r.char.tier ? ", tier " + r.char.tier : ""}), ${money(r.price)}`)
     .join("\n");
+  const SEP = "\n\n";
+  const block = p => `${P[p].name}: ${money(PURSE - P[p].purse)} spent, ${money(P[p].purse)} unspent
+${side(p)}`;
   return `SUPER DRAFTS / FINAL ROSTERS
-Base versions. Random encounter. $20 purse each.
+Base versions. ${NP === 3 ? "Three-way free for all." : "Head to head."} $${PURSE} purse each.
 
-${P[0].name}: ${money(PURSE - P[0].purse)} spent, ${money(P[0].purse)} unspent
-${side(0)}
+${seats().map(block).join(SEP)}
 
-${P[1].name}: ${money(PURSE - P[1].purse)} spent, ${money(P[1].purse)} unspent
-${side(1)}
-
-Write the 5v5 as two comic-book scenarios.`;
+Write the ${seats().map(() => 5).join(" v ")} as a comic-book scenario.`;
 }
 
 /* ---------------------------- wiring ---------------------------- */
@@ -1299,19 +1404,7 @@ addEventListener("resize", () => {
   fitTimer = setTimeout(() => { if (lot) fitName(); }, 120);
 });
 
-document.querySelectorAll(".pn-pass[data-pass]").forEach(b =>
-  b.addEventListener("click", () => { if (Number(b.dataset.pass) === ME) act("pass"); })
-);
-
-for (const p of [0, 1]){
-  $("other" + p).addEventListener("keydown", e => {
-    if (e.key === "Enter"){
-      e.preventDefault();
-      const v = Number(e.currentTarget.value);
-      if (v && p === ME) act("bid", v);
-    }
-  });
-}
+// Bid and pass controls are wired by buildSeats(), which creates them.
 
 $("writeBtn").addEventListener("click", writeFight);
 
@@ -1342,8 +1435,8 @@ $("againBtn").addEventListener("click", () => {
   $("story").hidden = true; $("storyBody").innerHTML = ""; window.__story = null;
   $("writeBtn").disabled = false;
   $("writeHint").textContent = "One issue, written from the ten characters above.";
-  if (boxCount() < MIN_BOX) return;
-  P = [{ name: P[0].name, purse: PURSE, roster: [] }, { name: P[1].name, purse: PURSE, roster: [] }];
+  if (boxCount() < MIN_BOX()) return;
+  P = seats().map(q => ({ name: P[q].name, purse: PURSE, roster: [] }));
   lot = null; lastFx = 0; drawnLot = -1;
   dealDeck();
   nextLot();
@@ -1366,6 +1459,8 @@ $("againBtn").addEventListener("click", () => {
   --ink:       #17140f;
   --ink-2:     #4b4234;
   --ink-3:     #6d6252;
+  --green:     #4a7a3f;
+  --green-dk:  #33582b;
   --red:       #c0361f;
   --red-dk:    #8e2415;
   --blue:      #27497f;
@@ -1648,6 +1743,48 @@ body{
 .cv-tier[data-t="D"],
 .cv-tier[data-t="E"]{ background:var(--ink-3); }
 
+
+/* ---------- seats: two flank the stage, three sit under it ---------- */
+.ledgers{ display:contents; }
+.np-2 .floor{ grid-template-areas:"l0 stage l1"; }
+.np-3 .floor{
+  grid-template-columns:repeat(3, minmax(0,1fr));
+  grid-template-areas:"stage stage stage" "l0 l1 l2";
+  row-gap:clamp(10px,1.6vw,18px);
+}
+.np-3 .stage{ grid-area:stage; }
+.np-3 .panels{ grid-template-columns:repeat(3, minmax(0,1fr)); }
+.np-3 .crate{ width:min(268px,74%); }
+.np-3 .purse-figure{ font-size:clamp(28px,3.4vw,38px); }
+
+.fo-sides{ display:grid; gap:clamp(12px,2.4vw,30px); }
+.fo-sides.np-2{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+.fo-sides.np-3{ grid-template-columns:repeat(3, minmax(0,1fr)); }
+.np-3 .fi-name{ font-size:clamp(13px,1.5vw,17px); }
+
+/* the third pencil */
+.ledger-green .ledger-tab{ box-shadow:inset 0 -4px 0 var(--green); }
+.ledger-green .purse-figure,
+.ledger-green .sl-price,
+.fo-green .fi-price{ color:var(--green); }
+.panel-green{ border-top-color:var(--green); }
+.panel-green .bid-btn{ background:var(--green); border-color:var(--green-dk); }
+.panel-green .bid-btn:hover{ background:var(--green-dk); }
+.fo-green .ledger-tab{ box-shadow:inset 0 -4px 0 var(--green); }
+.tab-green::before{ background:var(--green); }
+
+.np-row{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; margin-bottom:6px; }
+
+@media (max-width: 1000px){
+  .np-3 .floor{ grid-template-areas:"stage stage stage" "l0 l1 l2"; }
+}
+@media (max-width: 620px){
+  .np-3 .floor,
+  .np-2 .floor{ grid-template-areas:"stage stage" "l0 l1" "l2 l2"; }
+  .np-3 .panels{ grid-template-columns:1fr; }
+  .np-row{ grid-template-columns:1fr; }
+}
+
 /* ---------- lobby: opening or joining a table ---------- */
 .tabs-solo{ grid-template-columns:minmax(0,320px); justify-content:center; }
 
@@ -1760,6 +1897,7 @@ body{
   flex:1 1 auto;
   display:grid;
   grid-template-columns:minmax(190px,1fr) minmax(300px,1.45fr) minmax(190px,1fr);
+  /* seat areas are assigned per seat count below */
   gap:clamp(12px,2vw,28px);
   align-items:start;
 }
@@ -2151,8 +2289,7 @@ body{
 
 .fo-body{
   flex:0 0 auto;
-  display:grid; grid-template-columns:1fr auto 1fr;
-  gap:clamp(12px,2.4vw,30px); align-items:start;
+  display:block;            /* the seat grid inside owns the columns now */
 }
 .fo-side{
   padding:14px 16px 15px;
