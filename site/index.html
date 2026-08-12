@@ -142,6 +142,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     </p>
   </header>
 
+  <div class="ladder" id="ladder" aria-live="polite"></div>
+
   <div class="floor">
 
     <!-- LEFT LEDGER -->
@@ -519,6 +521,13 @@ function verdict(mode){
 
 const perSale = () => 10 * NP;   // twenty for two buyers, thirty for three
 
+// After any bid the table freezes for a beat so everyone sees it land before
+// the next one goes in. Without this the fastest connection wins every
+// contested lot, which is lag rather than nerve.
+const ACK_MS = 1600;
+let lockTill = 0;                 // local clock: when this screen may bid again
+const locked = () => Date.now() < lockTill;
+
 // What is in the box. The host owns this and it travels to the joiner.
 let BOX = { u: ["MAR","DC"], tiers: true };
 
@@ -653,7 +662,9 @@ function handle(m){
 }
 
 function snapshot(fx){
-  return { P, lot, lotNum, over, box: BOX, np: NP, deckLeft: deck ? deck.length : 0, fx: fx || null };
+  const lockLeft = lot && lot.lockUntil ? Math.max(0, lot.lockUntil - Date.now()) : 0;
+  return { P, lot, lotNum, over, box: BOX, np: NP, lockLeft,
+           deckLeft: deck ? deck.length : 0, fx: fx || null };
 }
 
 function pushState(fx){
@@ -671,6 +682,12 @@ function applyState(s, local){
   P = s.P; lot = s.lot; lotNum = s.lotNum; over = s.over; deckLeft = s.deckLeft;
   if (s.box) BOX = s.box;
   if (s.np) NP = s.np;
+  // Held a little longer than the host, so our buttons never unlock early and
+  // fire a bid the host is still going to refuse.
+  lockTill = s.lockLeft ? Date.now() + s.lockLeft + 200 : 0;
+  clearTimeout(window.__lockTimer);
+  if (s.lockLeft) window.__lockTimer =
+    setTimeout(() => { if (lot && !over) render(); }, s.lockLeft + 250);
   if (!local) started = true;
   if (over) return showFaceoff();
   showScreen("auction");
@@ -888,14 +905,15 @@ function bid(p, amount){
   const min = (lot.high === p) ? lot.price + 1 : askPrice();
   const amt = Math.floor(amount);
   if (!(amt >= min) || amt > ceiling(p)) return;
-  // Declining to open is not binding: once someone opens, everyone is back in.
-  // Dropping out after a bid exists is binding, so it is not cleared here.
-  if (lot.high === null) lot.passed = seats().map(() => false);
+  if (Date.now() < (lot.lockUntil || 0)) return;   // the last bid is still showing
   lot.price = amt;
   lot.high = p;
+  lot.history = (lot.history || []).concat({ p, amt });
+  lot.lockUntil = Date.now() + ACK_MS;
   seats().forEach(q => { const el = $("other" + q); if (el) el.value = ""; });
-  // Nobody left who could answer: it is theirs.
-  if (!rivals(p).some(q => inPlay(q))) return award(p, amt);
+  // Nobody left who could answer: it is theirs. Folding is final, so a rival
+  // who has already passed can never come back to contest this.
+  if (!rivals(p).some(q => inPlay(q) && !lot.passed[q])) return award(p, amt);
   pushState();
 }
 
@@ -989,6 +1007,7 @@ function buildSeats(){
         `<label class="pn-other"><span>Other</span>` +
           `<input type="number" id="other${p}" min="1" step="1" inputmode="numeric" ` +
           `aria-label="Custom bid"></label>` +
+        `<button class="pn-go" type="button" data-go="${p}">Bid</button>` +
         `<button class="pn-pass" type="button" data-pass="${p}">Pass</button>` +
       `</div>` +
       `<p class="pn-state" id="state${p}"></p>`;
@@ -998,6 +1017,14 @@ function buildSeats(){
   $("auction").className = "screen auction-screen np-" + NP;
   pan.querySelectorAll(".pn-pass[data-pass]").forEach(b =>
     b.addEventListener("click", () => { if (Number(b.dataset.pass) === ME) act("pass"); }));
+  // A phone keyboard has no Enter for a number field, so the amount needs a button.
+  pan.querySelectorAll(".pn-go[data-go]").forEach(b =>
+    b.addEventListener("click", () => {
+      const p = Number(b.dataset.go);
+      if (p !== ME) return;
+      const v = Number($("other" + p).value);
+      if (v) act("bid", v);
+    }));
   for (const p of seats()){
     $("other" + p).addEventListener("keydown", e => {
       if (e.key === "Enter"){
@@ -1103,6 +1130,29 @@ function render(){
   }
   renderPanels();
   renderSticker();
+  renderLadder();
+}
+
+function renderLadder(){
+  const el = $("ladder");
+  const h = (lot && lot.history) || [];
+  if (!h.length){ el.innerHTML = ""; el.classList.remove("held"); return; }
+  el.innerHTML = h.map((b, i) =>
+    `<span class="rung rung-${SEATS[b.p].key}${i === h.length - 1 ? " last" : ""}">` +
+    `<b></b><i></i></span>`).join("");
+  [...el.children].forEach((c, i) => {
+    c.querySelector("b").textContent = P[h[i].p].name;
+    c.querySelector("i").textContent = money(h[i].amt);
+  });
+  const held = locked();
+  el.classList.toggle("held", held);
+  if (held){
+    const last = h[h.length - 1];
+    const note = document.createElement("span");
+    note.className = "rung-note";
+    note.textContent = `${P[last.p].name} bid ${money(last.amt)}`;
+    el.appendChild(note);
+  }
 }
 
 function renderSticker(){
@@ -1138,6 +1188,8 @@ function renderSticker(){
   }
 }
 
+const setGo = (panel, off) => { const g = panel.querySelector(".pn-go"); if (g) g.disabled = off; };
+
 function renderPanels(){
   const solo = soloRun();
   for (const p of seats()){
@@ -1149,6 +1201,7 @@ function renderPanels(){
     panel.classList.toggle("standing", lot.high === p);
     // Their panel is a window, not a control surface.
     panel.classList.toggle("remote", p !== ME);
+    panel.classList.toggle("mine", p === ME);
 
     const ob = obliged(), mustBuy = lot.high === null && ob === p;
     const myTurn = p === ME && !lot.sold && inPlay(p) && lot.high !== p && !lot.passed[p];
@@ -1158,7 +1211,7 @@ function renderPanels(){
 
     if (lot.sold){
       state.textContent = lot.passedIn ? "Passed in." : (lot.high === p ? "Sold to you." : "Gone.");
-      other.disabled = true; passBtn.disabled = true;
+      other.disabled = true; passBtn.disabled = true; setGo(panel, true);
       continue;
     }
 
@@ -1169,23 +1222,23 @@ function renderPanels(){
         lot.high === p  ? `Standing bid ${money(lot.price)}. Over to you.` :
         mustBuy         ? "Has to buy this one…" :
                           "Deciding…";
-      other.disabled = true; passBtn.disabled = true;
+      other.disabled = true; passBtn.disabled = true; setGo(panel, true);
       continue;
     }
 
     if (!inPlay(p)){
       state.textContent = "Roster full. Done buying.";
-      other.disabled = true; passBtn.disabled = true;
+      other.disabled = true; passBtn.disabled = true; setGo(panel, true);
       continue;
     }
     if (lot.passed[p]){
       state.textContent = "You are out on this one.";
-      other.disabled = true; passBtn.disabled = true;
+      other.disabled = true; passBtn.disabled = true; setGo(panel, true);
       continue;
     }
     if (lot.high === p){
       state.textContent = `Standing bid ${money(lot.price)}. Waiting on the other side.`;
-      other.disabled = true; passBtn.disabled = true;
+      other.disabled = true; passBtn.disabled = true; setGo(panel, true);
       continue;
     }
 
@@ -1194,6 +1247,13 @@ function renderPanels(){
     if (ask > cap){
       state.textContent = `Tapped out. ${money(cap)} is your ceiling with ${slotsLeft(p)} slots to fill.`;
       other.disabled = true; passBtn.disabled = !canPass(p);
+      continue;
+    }
+
+    if (locked()){
+      state.textContent = "Hold. Everyone is seeing that bid.";
+      other.disabled = true; passBtn.disabled = true;
+      const go = panel.querySelector(".pn-go"); if (go) go.disabled = true;
       continue;
     }
 
@@ -1206,7 +1266,7 @@ function renderPanels(){
       b.addEventListener("click", () => act("bid", v));
       bids.appendChild(b);
     }
-    other.disabled = false;
+    other.disabled = false; setGo(panel, false);
     other.min = ask; other.max = cap;
     other.placeholder = `${ask} to ${cap}`;
     const cost = passCost(p);
@@ -1779,11 +1839,56 @@ body{
   .np-3 .floor{ grid-template-areas:"stage stage stage" "l0 l1 l2"; }
 }
 @media (max-width: 620px){
-  .np-3 .floor,
-  .np-2 .floor{ grid-template-areas:"stage stage" "l0 l1" "l2 l2"; }
-  .np-3 .panels{ grid-template-columns:1fr; }
   .np-row{ grid-template-columns:1fr; }
 }
+
+
+/* ---------- the bid ladder ---------- */
+.ladder{
+  display:flex; flex-wrap:wrap; justify-content:center; align-items:center;
+  gap:6px; min-height:26px; margin:2px 0 4px;
+}
+.ladder:empty{ display:none; }
+.rung{
+  display:inline-flex; align-items:baseline; gap:5px;
+  padding:3px 9px 2px; border-radius:2px;
+  background:rgba(232,219,188,.10);
+  border:1px solid rgba(215,198,160,.20);
+  font-family:var(--data); font-size:11px; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase;
+  color:rgba(232,219,188,.55);
+}
+.rung i{ font-style:normal; font-family:var(--wax); font-size:15px; letter-spacing:0; }
+.rung-red i{ color:var(--red); }
+.rung-blue i{ color:#6f93cf; }
+.rung-green i{ color:#7ba86c; }
+.rung.last{
+  background:rgba(232,219,188,.20);
+  border-color:rgba(215,198,160,.5);
+  color:var(--pulp);
+}
+.rung-note{
+  margin-left:4px; padding:3px 10px 2px;
+  font-family:var(--type); font-size:12px;
+  color:#f0c04a; border-bottom:1px solid rgba(240,192,74,.4);
+}
+.ladder.held .rung.last{ animation:landed .5s cubic-bezier(.2,1.1,.3,1) both; }
+@keyframes landed{ from{ transform:scale(1.22); } to{ transform:scale(1); } }
+
+/* ---------- submit button for a typed amount ---------- */
+.pn-go{
+  flex:0 0 auto; padding:8px 15px;
+  font-family:var(--data); font-size:11.5px; font-weight:700;
+  letter-spacing:.14em; text-transform:uppercase;
+  color:var(--pulp); background:var(--ink);
+  border:2px solid var(--ink); border-radius:2px; cursor:pointer;
+  transition:opacity .14s;
+}
+.panel-red .pn-go{ background:var(--red); border-color:var(--red-dk); }
+.panel-blue .pn-go{ background:var(--blue); border-color:var(--blue-dk); }
+.panel-green .pn-go{ background:var(--green); border-color:var(--green-dk); }
+.pn-go:disabled{ opacity:.35; cursor:not-allowed; }
+.panel.remote .pn-go{ display:none; }
 
 /* ---------- lobby: opening or joining a table ---------- */
 .tabs-solo{ grid-template-columns:minmax(0,320px); justify-content:center; }
@@ -2512,6 +2617,36 @@ body{
   .issue.pulled{ animation:none; }
   .stamp-mark.hit{ opacity:1; transform:rotate(-7deg); }
 }
+
+/* ---------- phones: one column, your own controls first ---------- */
+@media (max-width: 720px){
+  .auction-screen{ display:flex; flex-direction:column; gap:10px; }
+  .floor{ display:contents; }
+  .ladder{ order:0; }
+  .stage{ order:1; align-self:auto; }
+  .panels{ order:2; display:flex; flex-direction:column; gap:9px;
+           align-items:stretch; }
+  .panel.mine{ order:-1; }
+  .ledger{ order:3; }
+
+  .crate{ width:min(240px,72%); }
+  .call{ margin-top:10px; }
+
+  /* ledgers read as full width rows rather than squeezed columns */
+  .ledger{ padding:10px 12px 9px; }
+  .ledger-tab{ margin:-10px -12px 9px; padding:7px 12px 6px; }
+  .purse-figure{ font-size:30px; margin-bottom:6px; }
+  .slot{ font-size:12px; padding:4px 0; }
+  .ledger-foot{ font-size:9.5px; letter-spacing:.06em; }
+
+  .gh-meta{ font-size:9.5px; letter-spacing:.09em; gap:5px; }
+  .gh-title{ font-size:clamp(17px,5vw,22px); }
+  .pn-row{ flex-wrap:wrap; }
+  .pn-other{ flex:1 1 100%; }
+  .pn-go, .pn-pass{ flex:1 1 0; }
+  .bid-btn{ font-size:20px; padding:11px 4px; }
+}
+
 </style>
 </body>
 </html>
