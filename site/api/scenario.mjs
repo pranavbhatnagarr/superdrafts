@@ -118,12 +118,13 @@ preparation paying off, or failing.`
 // The tier maths is settled before the writer sees anything. Its job is to make
 // the result convincing, not to decide it, otherwise the tiers mean nothing.
 function ruling(r, body){
-  if (!r || typeof r.a !== "number") return "";
-  const na = String((body.a && body.a.name) || "one side").slice(0, 20);
-  const nb = String((body.b && body.b.name) || "the other").slice(0, 20);
-  const head = `TIER SCORE (already calculated, not your decision): ${na} ${r.a}, ${nb} ${r.b}.`;
+  if (!r || !Array.isArray(r.scores)) return "";
+  const line = r.scores
+    .map((v, i) => `${String((r.names && r.names[i]) || "side " + (i + 1)).slice(0, 20)} ${v}`)
+    .join(", ");
+  const head = `TIER SCORE (already calculated, not your decision): ${line}.`;
   if (r.close) return head + `
-These two are close enough that the tiers do not settle it. YOU decide the winner
+The top two are close enough that the tiers do not settle it. YOU decide the winner
 on tactics, matchups, terrain and nerve, and say plainly that it was close.`;
   return head + `
 THE WINNER IS ${String(r.winner).slice(0, 20)}. This is decided and you may not
@@ -181,10 +182,11 @@ export default async function handler(req, res){
 
   let body = req.body;
   if (typeof body === "string"){ try { body = JSON.parse(body); } catch { body = null; } }
-  const a = roster(body && body.a), b = roster(body && body.b);
+  const teams = (body && Array.isArray(body.teams) ? body.teams : [])
+    .map(roster).filter(Boolean);
   const r = body && body.ruling;
   const mode = MODES[body && body.mode] ? body.mode : "random";
-  if (!a || !b) return res.status(400).json({ error: "Two full rosters are required." });
+  if (teams.length < 2) return res.status(400).json({ error: "Two full rosters are required." });
 
   const messages = [
     { role: "system", content: SYSTEM + FINISH_RULE },
@@ -193,12 +195,12 @@ export default async function handler(req, res){
 
 ${MODES[mode]}
 
-These are the two sides. Refer to them by these owner names throughout, never as
-"Team One" or "Team Two".
+These are the ${teams.length} sides. Refer to them by these owner names throughout,
+never as "Team One" or "Team Two".${teams.length > 2 ? `
+This is a THREE WAY FREE FOR ALL: all three sides are hostile to each other. Any
+alliance is temporary and must break before the end.` : ""}
 
-${a}
-
-${b}
+${teams.join("\n\n")}
 
 Write the issue.` }
   ];
