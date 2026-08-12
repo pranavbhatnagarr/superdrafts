@@ -161,6 +161,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <div class="cover-grain" aria-hidden="true"></div>
           <header class="cv-top">
             <span class="cv-pub" id="cvPub">Marvel</span>
+            <span class="cv-tier-top" id="cvTierTop" data-t="B">B</span>
             <span class="cv-no" id="cvNo">No. 121</span>
           </header>
           <div class="cv-box" id="cvBox"><span id="cvInit">SM</span><i class="cv-tier" id="cvTier" data-t="B">B</i></div>
@@ -168,6 +169,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <p class="cv-alias" id="cvAlias">Peter Parker</p>
           <div class="cv-hr" aria-hidden="true"></div>
           <p class="cv-note" id="cvNote">Everybody&rsquo;s first back issue.</p>
+          <figure class="cv-art" id="cvArt" hidden><img id="cvImage" alt="" decoding="async"></figure>
           <footer class="cv-bot">
             <span class="cv-cond" id="cvPubFoot">Marvel Comics Group</span>
             <span class="cv-cond cv-lot">Lot <b id="cvLot">01</b></span>
@@ -555,6 +557,25 @@ let P, deck, lot, lotNum, over, deckLeft = 0;
 // if you ever do, turn on row level security. Secrets that must stay secret
 // (the LLM key) live in Vercel environment variables and are read only by
 // api/scenario.mjs on the server, never here.
+// Character art lives in Arul's Supabase project and is read only. Names,
+// tiers and prep ratings stay in STOCK above, which is the source of truth:
+// his table is deliberately not allowed to supply those, because it has no
+// prep column and its tiers predate the current balance.
+const ART_URL = "https://trtccsljexjplnuhnlkz.supabase.co";
+const ART_KEY = "sb_publishable_3Yt4Gih8Ta_co31EDqy7Jw_-R5sBxMK";
+const ART = new Map();
+
+async function loadArt(){
+  try {
+    const r = await fetch(
+      ART_URL + "/rest/v1/characters?select=name,image_url&image_url=not.is.null",
+      { headers: { apikey: ART_KEY, Authorization: "Bearer " + ART_KEY } });
+    if (!r.ok) return;
+    for (const row of await r.json()) if (row.image_url) ART.set(row.name, row.image_url);
+    if (lot) renderLot();                       // art arrived after the first card
+  } catch { /* no pictures is a fine way to play */ }
+}
+
 const SB_URL = "https://aexgfybbydtxjzpluiwo.supabase.co";
 const SB_KEY = "sb_publishable_Cr0FVJXaMsn3rsdgV9pWPw_et4aHvcL";
 const SAVE_KEY = "longbox.table";
@@ -1085,14 +1106,20 @@ function initials(name){
    guessed from character count. */
 function fitName(){
   const el = $("cvName"), cover = $("cover");
-  if (!el || !cover.clientWidth) return;
-  let s = Math.min(52, Math.max(20, cover.clientWidth * 0.163));
+  if (!el || !cover.clientWidth || !cover.clientHeight) return;
+  // A short name gets sized up, which on a small cover can eat two fat lines
+  // and push the footer off the card. So the name gets a height budget too,
+  // smaller when a picture is sharing the cover with it.
+  const hasArt = !$("cvArt").hidden;
+  const maxH = cover.clientHeight * (hasArt ? 0.21 : 0.32);
+  let s = Math.min(52, Math.max(18, cover.clientWidth * 0.163));
   el.style.fontSize = s + "px";
   const fits = () =>
     el.scrollWidth <= el.clientWidth + 1 &&
-    el.getBoundingClientRect().height <= s * 0.86 * 3 + 4;
-  while (s > 15 && !fits()){ s -= 1; el.style.fontSize = s + "px"; }
+    el.getBoundingClientRect().height <= maxH;
+  while (s > 13 && !fits()){ s -= 1; el.style.fontSize = s + "px"; }
 }
+
 
 function renderLot(){
   const c = lot.char;
@@ -1103,13 +1130,24 @@ function renderLot(){
   $("cvNo").textContent = "No. " + c.no;
   $("cvName").textContent = c.name;
   $("cvInit").textContent = initials(c.name);
-  fitName();
+  const artUrl = ART.get(c.name);
+  $("cvArt").hidden = !artUrl;
+  cover.classList.toggle("has-art", !!artUrl);
+  $("cvTierTop").textContent = c.tier;
+  $("cvTierTop").dataset.t = c.tier;
+  $("cvTierTop").hidden = !BOX.tiers;
+  fitName();                       // measured after we know if art is present
   $("cvAlias").textContent = c.alias;
   $("cvNote").textContent = c.note;
   $("cvPubFoot").textContent = (UNIVERSES[c.pub] || {}).name || c.pub;
   $("cvTier").textContent = c.tier;
   $("cvTier").dataset.t = c.tier;
   $("cvTier").hidden = !BOX.tiers;
+  const art = ART.get(c.name);
+  $("cvArt").hidden = !art;
+  if (art && $("cvImage").getAttribute("src") !== art) $("cvImage").src = art;
+  const nextUp = deck && deck[0] && ART.get(deck[0].name);
+  if (nextUp) { const pre = new Image(); pre.src = nextUp; }
   $("cvLot").textContent = String(lotNum).padStart(2, "0");
   $("lotNo").textContent = "Lot " + lotNum;
   $("passLeft").textContent = passesLeft() + (passesLeft() === 1 ? " pass left" : " passes left");
@@ -1438,6 +1476,7 @@ Write the ${seats().map(() => 5).join(" v ")} as a comic-book scenario.`;
 
 /* ---------------------------- wiring ---------------------------- */
 $("stockCount").textContent = STOCK.length + " Characters";
+loadArt();
 $("openBox").addEventListener("click", openTable);
 $("joinBtn").addEventListener("click", joinTable);
 $("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") joinTable(); });
@@ -1818,6 +1857,27 @@ body{
   background:var(--ink-2); border:2px solid var(--ink);
 }
 .cv-tier[hidden]{ display:none; }
+/* the tier moves into the masthead on a phone, where the corner box is
+   dropped to make room for the picture */
+.cv-tier-top{
+  display:none; padding:2px 6px 1px; border-radius:2px;
+  font-family:var(--slab); font-size:10px; letter-spacing:.06em;
+  color:var(--pulp); background:var(--ink-2);
+}
+.cv-tier-top[data-t="S"]{ background:var(--red); }
+.cv-tier-top[data-t="A"]{ background:var(--red-dk); }
+.cv-tier-top[data-t="B"]{ background:var(--ink); }
+.cv-tier-top[data-t="D"],
+.cv-tier-top[data-t="E"]{ background:var(--ink-3); }
+
+/* A picture IS the head shot, so the initials box stands down wherever art
+   exists and hands its space to the art. The tier moves up to the masthead. */
+.cover.has-art .cv-box{ display:none; }
+.cover.has-art .cv-tier-top:not([hidden]){ display:inline-block; }
+.cover.has-art .cv-name{ margin-top:4px; }
+.cover.has-art .cv-note{
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+}
 .cv-tier[data-t="S"]{ background:var(--red); }
 .cv-tier[data-t="A"]{ background:var(--red-dk); }
 .cv-tier[data-t="B"]{ background:var(--ink); }
@@ -1914,6 +1974,48 @@ body{
 .panel-green .pn-go{ background:var(--green); border-color:var(--green-dk); }
 .pn-go:disabled{ opacity:.35; cursor:not-allowed; }
 .panel.remote .pn-go{ display:none; }
+
+
+/* ---------- character art on the cover ---------- */
+/* a fixed share of the cover, so the panel never collapses on a small screen */
+.cv-art{
+  position:relative; flex:0 0 34%; min-height:0;
+  margin:11px 0 0; overflow:hidden;
+  border:2px solid var(--ink);
+  background:var(--pulp-2);
+}
+.cv-art[hidden]{ display:none; }
+.cv-art img{
+  display:block; width:100%; height:100%;
+  object-fit:cover; object-position:center 22%;
+  /* pulled toward the newsprint palette so it sits on the page rather than on top of it */
+  filter:saturate(.72) contrast(1.06) sepia(.16);
+  mix-blend-mode:multiply;
+}
+/* ink halftone over the art, so it reads as printed rather than pasted */
+.cv-art::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:var(--grain); opacity:.30; mix-blend-mode:multiply;
+}
+.cv-art::before{
+  content:""; position:absolute; inset:0; pointer-events:none; z-index:1;
+  background:linear-gradient(180deg, rgba(231,221,194,.22), rgba(231,221,194,0) 38%);
+}
+/* with art present the note tightens up so the picture gets the room */
+.cv-art:not([hidden]) ~ .cv-bot{ margin-top:8px; }
+@media (max-width: 720px){
+  /* the cover is much smaller on a phone, so everything on it tightens
+     to make room for the picture without pushing the footer off the card */
+  .cover{ padding:11px 12px 10px; }
+  .cv-box{ width:40px; height:40px; margin:8px 0 13px; font-size:17px; }
+  .cv-tier{ font-size:10px; bottom:-12px; border-width:1px; }
+  .cv-alias{ font-size:11px; margin-top:6px; }
+  .cv-hr{ margin:7px 0 6px; }
+  .cv-note{ font-size:11.5px; line-height:1.35; }
+  .cv-art{ flex:0 0 34%; margin-top:8px; }
+  .cv-bot{ padding-top:6px; }
+  .cv-cond{ font-size:8.5px; }
+}
 
 /* ---------- lobby: opening or joining a table ---------- */
 .tabs-solo{ grid-template-columns:minmax(0,320px); justify-content:center; }
@@ -2228,7 +2330,7 @@ body{
   border-top:1px solid var(--rule); border-bottom:3px double var(--rule);
 }
 .cv-note{
-  margin:0; font-size:14.5px; font-style:italic;
+  margin:0; min-height:0; overflow:hidden; font-size:14.5px; font-style:italic;
   line-height:1.44; color:var(--ink-2); max-width:34ch;
 }
 .cv-bot{
@@ -2665,7 +2767,11 @@ body{
   .panel.mine{ order:-1; grid-column:1 / -1; }
   .panel.remote .pn-state{ font-size:12.5px; }
 
-  .crate{ width:min(230px,68%); }
+  .crate{ width:min(300px,86%); }
+  /* a taller cover on a phone: the picture needs real estate that a 5:6.3
+     card simply does not have at this width */
+  .issue{ aspect-ratio:5 / 7.3; }
+  .cv-art{ flex:0 0 34%; }
   .call{ margin-top:9px; font-size:12.5px; }
   .gh-meta{ font-size:9.5px; letter-spacing:.09em; gap:5px; }
   .gh-title{ font-size:clamp(17px,5vw,22px); }
