@@ -565,6 +565,14 @@ const ART_URL = "https://trtccsljexjplnuhnlkz.supabase.co";
 const ART_KEY = "sb_publishable_3Yt4Gih8Ta_co31EDqy7Jw_-R5sBxMK";
 const ART = new Map();
 
+// Anything here wins over the database. Arul's importer pulls from Comic Vine,
+// which is a comics archive, so it has nothing for the anime rosters or for
+// Harry Potter. Paste a direct image URL against a name to fill a gap without
+// waiting on his pipeline.
+const ART_EXTRA = {
+  // "Sung Jinwoo": "https://…/jinwoo.jpg",
+};
+
 async function loadArt(){
   try {
     const r = await fetch(
@@ -572,8 +580,11 @@ async function loadArt(){
       { headers: { apikey: ART_KEY, Authorization: "Bearer " + ART_KEY } });
     if (!r.ok) return;
     for (const row of await r.json()) if (row.image_url) ART.set(row.name, row.image_url);
+    for (const [n, u] of Object.entries(ART_EXTRA)) if (u) ART.set(n, u);
     if (lot) renderLot();                       // art arrived after the first card
-  } catch { /* no pictures is a fine way to play */ }
+  } catch { /* his project being down is not fatal */ }
+  for (const [n, u] of Object.entries(ART_EXTRA)) if (u) ART.set(n, u);
+  if (lot) renderLot();
 }
 
 const SB_URL = "https://aexgfybbydtxjzpluiwo.supabase.co";
@@ -1878,6 +1889,7 @@ body{
 .cover.has-art .cv-note{
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
 }
+.cover.has-art .cv-bot{ margin-top:9px; }
 .cv-tier[data-t="S"]{ background:var(--red); }
 .cv-tier[data-t="A"]{ background:var(--red-dk); }
 .cv-tier[data-t="B"]{ background:var(--ink); }
@@ -1979,7 +1991,7 @@ body{
 /* ---------- character art on the cover ---------- */
 /* a fixed share of the cover, so the panel never collapses on a small screen */
 .cv-art{
-  position:relative; flex:0 0 34%; min-height:0;
+  position:relative; flex:1 1 34%; min-height:0;
   margin:11px 0 0; overflow:hidden;
   border:2px solid var(--ink);
   background:var(--pulp-2);
@@ -2012,7 +2024,7 @@ body{
   .cv-alias{ font-size:11px; margin-top:6px; }
   .cv-hr{ margin:7px 0 6px; }
   .cv-note{ font-size:11.5px; line-height:1.35; }
-  .cv-art{ flex:0 0 34%; margin-top:8px; }
+  .cv-art{ flex:1 1 34%; margin-top:8px; }
   .cv-bot{ padding-top:6px; }
   .cv-cond{ font-size:8.5px; }
 }
@@ -2771,7 +2783,7 @@ body{
   /* a taller cover on a phone: the picture needs real estate that a 5:6.3
      card simply does not have at this width */
   .issue{ aspect-ratio:5 / 7.3; }
-  .cv-art{ flex:0 0 34%; }
+  .cv-art{ flex:1 1 34%; }
   .call{ margin-top:9px; font-size:12.5px; }
   .gh-meta{ font-size:9.5px; letter-spacing:.09em; gap:5px; }
   .gh-title{ font-size:clamp(17px,5vw,22px); }
