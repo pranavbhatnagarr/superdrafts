@@ -561,10 +561,13 @@ const SAVE_KEY = "longbox.table";
 // A browser keeps one id so that reconnecting returns you to your own seat
 // rather than handing you someone else's roster.
 const CID = (() => {
-  let v = null;
-  try { v = localStorage.getItem("superdrafts.cid"); } catch {}
-  if (!v){ v = Math.random().toString(36).slice(2, 10);
-           try { localStorage.setItem("superdrafts.cid", v); } catch {} }
+  const read = s => { try { return s.getItem("superdrafts.cid"); } catch { return null; } };
+  const write = (s, v) => { try { s.setItem("superdrafts.cid", v); } catch {} };
+  // sessionStorage survives a reload even in private browsing, where
+  // localStorage is often empty or unwritable. Try both, write to both.
+  let v = read(localStorage) || read(sessionStorage);
+  if (!v) v = Math.random().toString(36).slice(2, 10);
+  write(localStorage, v); write(sessionStorage, v);
   return v;
 })();
 let seatOf = {};                       // host only: client id to chair number
@@ -598,7 +601,8 @@ function setWire(on, text){
 async function connect(){
   if (!window.supabase) throw new Error("offline");
   sb = sb || window.supabase.createClient(SB_URL, SB_KEY);
-  chan = sb.channel("longbox-" + ROOM, { config: { broadcast: { self: false } } });
+  chan = sb.channel("longbox-" + ROOM,
+    { config: { broadcast: { self: false }, presence: { key: CID } } });
 
   chan.on("broadcast", { event: "msg" }, ({ payload }) => handle(payload));
   chan.on("presence", { event: "sync" }, () => {
@@ -610,7 +614,7 @@ async function connect(){
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error("timeout")), 12000);
     chan.subscribe(status => {
-      if (status === "SUBSCRIBED"){ clearTimeout(t); chan.track({ me: ME }); resolve(); }
+      if (status === "SUBSCRIBED"){ clearTimeout(t); chan.track({ me: ME, cid: CID }); resolve(); }
       if (status === "CHANNEL_ERROR" || status === "TIMED_OUT"){ clearTimeout(t); reject(new Error(status)); }
     });
   });
@@ -622,7 +626,18 @@ function handle(m){
   if (m.t === "join" && HOST){
     let seat = seatOf[m.cid];
     if (seat === undefined){
-      seat = seats().find(q => q !== 0 && !Object.values(seatOf).includes(q));
+      // Someone who reloaded comes back with a new id and their old chair
+      // still looks occupied. Only chairs whose occupant is still connected
+      // count as taken, so a refresh cannot eat a seat.
+      let live;
+      try { live = new Set(Object.keys(chan.presenceState() || {})); } catch { live = null; }
+      if (live){
+        live.add(m.cid);
+        for (const [cid, q] of Object.entries(seatOf))
+          if (!live.has(cid)) delete seatOf[cid];
+      }
+      const used = Object.values(seatOf);
+      seat = seats().find(q => q !== 0 && !used.includes(q));
       if (seat === undefined){ send({ t: "full", cid: m.cid }); return; }
       seatOf[m.cid] = seat;
     }
@@ -922,13 +937,20 @@ function bid(p, amount){
    lot entirely so it passes in unsold. */
 function pass(p){
   if (!canPass(p)) return;
-  if (lot.high !== null) return award(lot.high, lot.price);
-
   const cost = passCost(p);
   if (cost) P[p].purse -= cost;
   lot.passed[p] = true;
 
-  const stillIn = rivals(p).filter(q => inPlay(q) && !lot.passed[q]);
+  if (lot.high !== null){
+    // A lot only sells when EVERY rival has folded. With three buyers, one
+    // person dropping out must not hand it over while the third still wants it.
+    const contenders = rivals(lot.high).filter(q => inPlay(q) && !lot.passed[q]);
+    if (!contenders.length) return award(lot.high, lot.price);
+    return pushState();
+  }
+
+  // Nobody has bid at all: once everyone has declined, it passes in unsold.
+  const stillIn = seats().filter(q => inPlay(q) && !lot.passed[q]);
   if (!stillIn.length) return passIn(cost);
   pushState();
 }
@@ -988,7 +1010,7 @@ function buildSeats(){
     const a = document.createElement("aside");
     a.className = `ledger ledger-${key}`;
     a.id = "ledger" + p;
-    a.style.gridArea = "l" + p;
+    a.classList.add("seat-" + p);
     a.innerHTML =
       `<div class="ledger-tab"><span class="lt-name" id="name${p}"></span></div>` +
       `<p class="purse-line">Purse remaining</p>` +
@@ -1806,6 +1828,9 @@ body{
 
 /* ---------- seats: two flank the stage, three sit under it ---------- */
 .ledgers{ display:contents; }
+.ledger.seat-0{ grid-area:l0; }
+.ledger.seat-1{ grid-area:l1; }
+.ledger.seat-2{ grid-area:l2; }
 .np-2 .floor{ grid-template-areas:"l0 stage l1"; }
 .np-3 .floor{
   grid-template-columns:repeat(3, minmax(0,1fr));
@@ -2030,7 +2055,7 @@ body{
 .ledger-blue  .ledger-tab{ box-shadow:inset 0 -4px 0 var(--blue); }
 .lt-name{
   font-family:var(--type); font-size:16px; color:var(--ink);
-  overflow-wrap:anywhere;
+  overflow-wrap:break-word;
 }
 .purse-line{
   margin:0; font-size:10px; font-weight:700;
@@ -2052,7 +2077,7 @@ body{
 }
 .slot:first-child{ border-top:1px solid var(--rule); }
 .slot.empty .sl-name{ color:rgba(23,20,15,.32); }
-.slot.filled .sl-name{ font-weight:600; color:var(--ink); overflow-wrap:anywhere; }
+.slot.filled .sl-name{ font-weight:600; color:var(--ink); overflow-wrap:break-word; }
 .sl-price{
   font-family:var(--wax); font-size:16px; flex:0 0 auto;
   transform:rotate(-2deg);
@@ -2241,7 +2266,7 @@ body{
 .sticker.tone-blue .st-price{ color:var(--blue); }
 .st-who{
   font-family:var(--type); font-size:10.5px; color:var(--ink-3);
-  text-align:center; line-height:1.25; overflow-wrap:anywhere;
+  text-align:center; line-height:1.25; overflow-wrap:break-word;
 }
 
 .call{
@@ -2284,7 +2309,7 @@ body{
 
 .pn-name{
   margin:0 0 9px; font-family:var(--type); font-size:15px;
-  color:var(--ink); overflow-wrap:anywhere;
+  color:var(--ink); overflow-wrap:break-word;
 }
 .pn-bids{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:9px; min-height:44px; }
 .pn-bids:empty{ min-height:0; margin-bottom:0; }
@@ -2419,7 +2444,7 @@ body{
 .fi-name{
   font-family:var(--slab); font-size:clamp(15px,2vw,21px);
   text-transform:uppercase; letter-spacing:-.02em;
-  color:var(--ink); overflow-wrap:anywhere;
+  color:var(--ink); overflow-wrap:break-word; hyphens:auto;
 }
 .fi-pub{
   font-size:9.5px; font-weight:700; letter-spacing:.15em;
@@ -2558,13 +2583,6 @@ body{
 
 /* ============================ RESPONSIVE ============================ */
 @media (max-width: 1000px){
-  .floor{
-    grid-template-columns:1fr 1fr;
-    grid-template-areas:"stage stage" "l0 l1";
-  }
-  .stage{ grid-area:stage; }
-  #ledger0{ grid-area:l0; }
-  #ledger1{ grid-area:l1; }
   .purse-figure{ font-size:38px; }
 }
 
@@ -2578,18 +2596,6 @@ body{
   .floor{ gap:14px; }
   .crate{ width:min(280px,88%); }
 
-  /* Reach the bid buttons without scrolling past both ledgers. */
-  .auction-screen{
-    display:grid; align-content:start;
-    grid-template-columns:1fr 1fr;
-    grid-template-areas:"head head" "stage stage" "panels panels" "l0 l1";
-  }
-  .floor{ display:contents; }
-  .guide-head{ grid-area:head; }
-  .stage{ grid-area:stage; }
-  .panels{ grid-area:panels; grid-template-columns:1fr 1fr; gap:8px; }
-  #ledger0{ grid-area:l0; }
-  #ledger1{ grid-area:l1; }
   .panel{ padding:10px 11px 11px; }
   .pn-bids{ gap:6px; min-height:40px; }
   .bid-btn{ min-width:0; padding:9px 4px; font-size:19px; }
@@ -2618,35 +2624,66 @@ body{
   .stamp-mark.hit{ opacity:1; transform:rotate(-7deg); }
 }
 
-/* ---------- phones: one column, your own controls first ---------- */
+/* ---------- phones: seats side by side, your own controls up top ---------- */
+.np-2{ --np:2; }
+.np-3{ --np:3; }
+
 @media (max-width: 720px){
-  .auction-screen{ display:flex; flex-direction:column; gap:10px; }
+  .auction-screen{
+    display:grid; align-content:start;
+    grid-template-columns:repeat(var(--np,2), minmax(0,1fr));
+    gap:9px;
+  }
   .floor{ display:contents; }
-  .ladder{ order:0; }
-  .stage{ order:1; align-self:auto; }
-  .panels{ order:2; display:flex; flex-direction:column; gap:9px;
-           align-items:stretch; }
-  .panel.mine{ order:-1; }
-  .ledger{ order:3; }
+  /* the desktop named areas are more specific, so they must be undone by name */
+  .guide-head, .ladder, .panels,
+  .np-2 .stage, .np-3 .stage{ grid-area:auto; grid-column:1 / -1; }
+  .np-2 .stage, .np-3 .stage{ align-self:auto; }
 
-  .crate{ width:min(240px,72%); }
-  .call{ margin-top:10px; }
+  /* the ledgers sit before the stage in the markup, so the reading order
+     has to be stated rather than inherited from the DOM */
+  .guide-head{ order:0; }
+  .ladder{ order:1; }
+  .np-2 .stage, .np-3 .stage{ order:2; }
+  .panels{ order:3; }
+  .ledger{ order:4; }
 
-  /* ledgers read as full width rows rather than squeezed columns */
-  .ledger{ padding:10px 12px 9px; }
-  .ledger-tab{ margin:-10px -12px 9px; padding:7px 12px 6px; }
-  .purse-figure{ font-size:30px; margin-bottom:6px; }
-  .slot{ font-size:12px; padding:4px 0; }
-  .ledger-foot{ font-size:9.5px; letter-spacing:.06em; }
+  /* one ledger per column, so every buyer is visible at a glance */
+  .ledger.seat-0, .ledger.seat-1, .ledger.seat-2{ grid-area:auto; grid-column:auto; }
+  .ledger{ padding:8px 9px 7px; }
+  .ledger-tab{ margin:-8px -9px 7px; padding:5px 9px 4px; }
+  .lt-name{ font-size:12px; }
+  .purse-line{ font-size:8.5px; letter-spacing:.1em; }
+  .purse-figure{ font-size:clamp(20px,7vw,30px); margin-bottom:5px; }
+  .slot{ font-size:10.5px; padding:3px 0; gap:4px; }
+  .sl-price{ font-size:12px; }
+  .ledger-foot{ font-size:8.5px; letter-spacing:.04em; }
 
+  /* your own panel gets the full width; the others share a row beneath it */
+  .panels{ display:grid; grid-template-columns:repeat(var(--np,2), minmax(0,1fr)); gap:8px; }
+  .panel{ padding:9px 10px 9px; }
+  .panel.mine{ order:-1; grid-column:1 / -1; }
+  .panel.remote .pn-state{ font-size:12.5px; }
+
+  .crate{ width:min(230px,68%); }
+  .call{ margin-top:9px; font-size:12.5px; }
   .gh-meta{ font-size:9.5px; letter-spacing:.09em; gap:5px; }
   .gh-title{ font-size:clamp(17px,5vw,22px); }
+
   .pn-row{ flex-wrap:wrap; }
   .pn-other{ flex:1 1 100%; }
   .pn-go, .pn-pass{ flex:1 1 0; }
-  .bid-btn{ font-size:20px; padding:11px 4px; }
-}
+  .bid-btn{ font-size:19px; padding:10px 4px; }
 
+  /* the face-off reads as full-width rows, so long names stay on one line */
+  .fo-sides.np-2, .fo-sides.np-3{ grid-template-columns:1fr; }
+  /* name on its own line, then world and price beneath it */
+  .fo-item{ display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 10px; padding:7px 0; }
+  .fi-name{ flex:1 1 100%; font-size:15px; }
+  .fi-pub{ flex:0 1 auto; margin-right:auto; font-size:9px; }
+  .fi-price{ flex:0 0 auto; }
+  .fo-title{ font-size:clamp(26px,9vw,40px); }
+}
 </style>
 </body>
 </html>
