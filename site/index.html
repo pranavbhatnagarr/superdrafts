@@ -1143,6 +1143,12 @@ function audio(){
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return null;
   actx = new Ctx();
+  actx.addEventListener("statechange", () => {
+    if (actx.state !== "running" && musicTimer){    // stop scheduling into a dead context
+      clearInterval(musicTimer); musicTimer = null;
+    }
+    reviveAudio();
+  });
   return actx;
 }
 // Unlocking audio on a phone is fussier than on a laptop. iOS only lets a
@@ -1166,10 +1172,24 @@ function unlockAudio(){
 for (const evt of ["pointerdown", "touchend", "click", "keydown"])
   addEventListener(evt, unlockAudio, { capture: true, passive: true });
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden || !actx) return;
-  if (actx.state === "suspended") actx.resume();
-  if (musicOn && !musicTimer && audioUnlocked) startMusic();
+  if (!document.hidden) reviveAudio();
 });
+addEventListener("focus", reviveAudio);
+addEventListener("pageshow", reviveAudio);
+
+// iOS parks the audio context for all sorts of reasons that never produce an
+// error: the screen dimming, a notification, Siri, another app taking the
+// audio session, or Safari simply throttling a long-lived tab. Safari also has
+// an "interrupted" state that nothing recovers from on its own. So rather than
+// trusting any single event, this checks every couple of seconds and restarts
+// whatever has died. It is cheap and it is the only thing that reliably keeps
+// sound alive across a twenty minute draft on a phone.
+function reviveAudio(){
+  if (!actx || document.hidden) return;
+  if (actx.state !== "running") actx.resume().catch(() => {});
+  if (musicOn && audioUnlocked && actx.state === "running" && !musicTimer) startMusic();
+}
+setInterval(reviveAudio, 2500);
 
 function noiseBuffer(ctx, seconds){
   const n = Math.floor(ctx.sampleRate * seconds);
@@ -1341,27 +1361,58 @@ function musicAir(at, dur){
 
 function scheduleMusic(){
   const ctx = actx; if (!ctx || !musicBus) return;
+
+  // If the tab was throttled or the phone slept, musicClock is now far behind
+  // real time. Without this the loop below would dump a minute of notes into
+  // the past all at once, which is heard as a burst and then silence.
+  if (musicClock < ctx.currentTime - .2) musicClock = ctx.currentTime + .05;
+
   while (musicClock < ctx.currentTime + .3){
-    const bar = Math.floor(musicStep / 8) % CHART.length;
+    const barAbs = Math.floor(musicStep / 8);
+    const bar = barAbs % CHART.length;
     const beat = musicStep % 8;
     const { bass, chord } = CHART[bar];
 
-    if (beat === 0 || beat === 4) musicKick(musicClock);
-    // a low ostinato on every eighth: the pulse that does the driving
-    musicVoice(bass, musicClock, .17, beat % 2 === 0 ? .26 : .15, "triangle", 320, 0);
-    // the chord sits underneath as a held pad, never as a stab
+    // A sixteen bar arrangement in four sections, so the loop keeps moving
+    // instead of repeating the same bar until you notice it.
+    const section = Math.floor(barAbs / 4) % 4;
+    const lastBarOfPhrase = barAbs % 4 === 3;
+
+    // 2 = the breakdown: kick thins out and the pad comes forward
+    const kickOn = section === 2 ? (beat === 0) : (beat === 0 || beat === 4);
+    if (kickOn) musicKick(musicClock);
+    if (section === 3 && beat === 6) musicKick(musicClock);       // extra push
+
+    // the low ostinato, sparser in the breakdown, doubled in the drive
+    if (section !== 2 || beat % 2 === 0)
+      musicVoice(bass, musicClock, .17, beat % 2 === 0 ? .26 : .15, "triangle", 320, 0);
+    if (section >= 1 && (beat === 3 || beat === 7))
+      musicVoice(bass * 2, musicClock, .12, .12, "triangle", 520, 0);
+
+    // pad, louder and longer when the drums pull back
     if (beat === 0){
+      const padGain = section === 2 ? .042 : .024;
       chord.forEach((f, i) =>
-        musicVoice(f, musicClock + i * .012, EIGHTH * 8.2, .024, "sawtooth", 620));
+        musicVoice(f, musicClock + i * .012, EIGHTH * 8.2, padGain, "sawtooth", 620));
       musicAir(musicClock, EIGHTH * 8);
     }
-    // Hats at double time. The one on the beat is accented and the one in
-    // between is ghosted, which is what makes it push rather than plod.
-    musicHat(musicClock, beat % 2 === 0 ? .052 : .036);
-    musicHat(musicClock + EIGHTH / 2, .024, beat === 7);   // open hat on the turnaround
+    // an upper voicing every other phrase, so the harmony is not identical each time
+    if (beat === 0 && section >= 1 && bar % 2 === 1)
+      musicVoice(chord[0] * 2, musicClock, EIGHTH * 7, .020, "sawtooth", 900);
 
-    // backbeat, still dry and quiet
-    if (beat === 2 || beat === 6) musicBrush(musicClock, .06);
+    // hats: eighths in the breakdown, sixteenths elsewhere
+    musicHat(musicClock, beat % 2 === 0 ? .052 : .036);
+    if (section !== 2)
+      musicHat(musicClock + EIGHTH / 2, section === 3 ? .032 : .024, beat === 7);
+
+    if (beat === 2 || beat === 6) musicBrush(musicClock, section === 2 ? .04 : .06);
+
+    // a fill across the last half bar of every four, which is what actually
+    // signals that something is about to change
+    if (lastBarOfPhrase && beat >= 6){
+      musicBrush(musicClock + EIGHTH / 2, .05, 2600);
+      musicVoice(bass * 4, musicClock + EIGHTH / 2, .09, .10, "triangle", 700, 0);
+    }
 
     musicClock += EIGHTH;
     musicStep++;
