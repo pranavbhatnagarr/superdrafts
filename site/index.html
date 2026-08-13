@@ -161,7 +161,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <div class="cover-grain" aria-hidden="true"></div>
           <header class="cv-top">
             <span class="cv-pub" id="cvPub">Marvel</span>
-            <span class="cv-tier-top" id="cvTierTop" data-t="B">B</span>
             <span class="cv-no" id="cvNo">No. 121</span>
           </header>
           <div class="cv-box" id="cvBox"><span id="cvInit">SM</span><i class="cv-tier" id="cvTier" data-t="B">B</i></div>
@@ -1144,13 +1143,17 @@ function renderLot(){
   const artUrl = ART.get(c.name);
   $("cvArt").hidden = !artUrl;
   cover.classList.toggle("has-art", !!artUrl);
-  $("cvTierTop").textContent = c.tier;
-  $("cvTierTop").dataset.t = c.tier;
-  $("cvTierTop").hidden = !BOX.tiers;
   fitName();                       // measured after we know if art is present
   $("cvAlias").textContent = c.alias;
   $("cvNote").textContent = c.note;
-  $("cvPubFoot").textContent = (UNIVERSES[c.pub] || {}).name || c.pub;
+  // The universe is already the masthead, so the colophon carries the tier
+  // instead. With no picture the corner box still has it, so fall back there.
+  const showTier = !!artUrl && BOX.tiers;
+  $("cvPubFoot").textContent = showTier
+    ? "Tier " + c.tier
+    : ((UNIVERSES[c.pub] || {}).name || c.pub);
+  $("cvPubFoot").classList.toggle("is-tier", showTier);
+  $("cvPubFoot").dataset.t = showTier ? c.tier : "";
   $("cvTier").textContent = c.tier;
   $("cvTier").dataset.t = c.tier;
   $("cvTier").hidden = !BOX.tiers;
@@ -1870,21 +1873,10 @@ body{
 .cv-tier[hidden]{ display:none; }
 /* the tier moves into the masthead on a phone, where the corner box is
    dropped to make room for the picture */
-.cv-tier-top{
-  display:none; padding:3px 8px 2px; border-radius:2px;
-  font-family:var(--slab); font-size:12px; letter-spacing:.06em;
-  color:var(--pulp); background:var(--ink-2);
-}
-.cv-tier-top[data-t="S"]{ background:var(--red); }
-.cv-tier-top[data-t="A"]{ background:var(--red-dk); }
-.cv-tier-top[data-t="B"]{ background:var(--ink); }
-.cv-tier-top[data-t="D"],
-.cv-tier-top[data-t="E"]{ background:var(--ink-3); }
 
 /* A picture IS the head shot, so the initials box stands down wherever art
    exists and hands its space to the art. The tier moves up to the masthead. */
 .cover.has-art .cv-box{ display:none; }
-.cover.has-art .cv-tier-top:not([hidden]){ display:inline-block; }
 .cover.has-art .cv-name{ margin-top:4px; }
 .cover.has-art .cv-note{
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
@@ -2361,6 +2353,10 @@ body{
   text-transform:uppercase; color:var(--ink-3);
 }
 .cv-cond b{ color:var(--ink-2); font-size:12px; }
+/* the grading mark, sitting where the publisher line used to repeat itself */
+.cv-cond.is-tier{ color:var(--ink); font-weight:700; }
+.cv-cond.is-tier[data-t="S"]{ color:var(--red); }
+.cv-cond.is-tier[data-t="A"]{ color:var(--red-dk); }
 
 /* grease-pencil price sticker on the bag */
 .sticker{
