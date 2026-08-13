@@ -1871,8 +1871,8 @@ body{
 /* the tier moves into the masthead on a phone, where the corner box is
    dropped to make room for the picture */
 .cv-tier-top{
-  display:none; padding:2px 6px 1px; border-radius:2px;
-  font-family:var(--slab); font-size:10px; letter-spacing:.06em;
+  display:none; padding:3px 8px 2px; border-radius:2px;
+  font-family:var(--slab); font-size:12px; letter-spacing:.06em;
   color:var(--pulp); background:var(--ink-2);
 }
 .cv-tier-top[data-t="S"]{ background:var(--red); }
@@ -1888,8 +1888,15 @@ body{
 .cover.has-art .cv-name{ margin-top:4px; }
 .cover.has-art .cv-note{
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  flex:0 0 auto;            /* only the art flexes; this line must not be clipped */
 }
-.cover.has-art .cv-bot{ margin-top:9px; }
+/* The picture already says who this is, so the civilian name comes off and
+   the colophon shrinks to a hairline. Everything between belongs to the art. */
+.cover.has-art .cv-alias{ display:none; }
+.cover.has-art .cv-hr{ margin:8px 0 7px; }
+.cover.has-art .cv-bot{ margin-top:7px; padding-top:5px; }
+.cover.has-art .cv-cond{ font-size:8.5px; letter-spacing:.13em; }
+.cover.has-art .cv-cond b{ font-size:9.5px; }
 .cv-tier[data-t="S"]{ background:var(--red); }
 .cv-tier[data-t="A"]{ background:var(--red-dk); }
 .cv-tier[data-t="B"]{ background:var(--ink); }
@@ -1991,7 +1998,7 @@ body{
 /* ---------- character art on the cover ---------- */
 /* a fixed share of the cover, so the panel never collapses on a small screen */
 .cv-art{
-  position:relative; flex:1 1 34%; min-height:0;
+  position:relative; flex:1 1 auto; min-height:88px;
   margin:11px 0 0; overflow:hidden;
   border:2px solid var(--ink);
   background:var(--pulp-2);
@@ -2024,7 +2031,7 @@ body{
   .cv-alias{ font-size:11px; margin-top:6px; }
   .cv-hr{ margin:7px 0 6px; }
   .cv-note{ font-size:11.5px; line-height:1.35; }
-  .cv-art{ flex:1 1 34%; margin-top:8px; }
+  .cv-art{ margin-top:8px; }
   .cv-bot{ padding-top:6px; }
   .cv-cond{ font-size:8.5px; }
 }
@@ -2783,7 +2790,7 @@ body{
   /* a taller cover on a phone: the picture needs real estate that a 5:6.3
      card simply does not have at this width */
   .issue{ aspect-ratio:5 / 7.3; }
-  .cv-art{ flex:1 1 34%; }
+
   .call{ margin-top:9px; font-size:12.5px; }
   .gh-meta{ font-size:9.5px; letter-spacing:.09em; gap:5px; }
   .gh-title{ font-size:clamp(17px,5vw,22px); }
