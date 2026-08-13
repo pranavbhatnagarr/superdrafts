@@ -1295,6 +1295,25 @@ function musicBrush(at, gain, hp){
   src.start(at); src.stop(at + .05);
 }
 
+// One noise buffer, reused. At sixteenth notes this fires nine times a second,
+// and rebuilding the buffer each time would churn memory for no benefit.
+let hatBuf = null;
+function musicHat(at, gain, open){
+  const ctx = actx;
+  if (!hatBuf) hatBuf = noiseBuffer(ctx, .35);
+  const dur = open ? .15 : .034;
+  const src = ctx.createBufferSource(); src.buffer = hatBuf;
+  src.playbackRate.value = 1.6;
+  const f = ctx.createBiquadFilter();
+  f.type = "highpass"; f.frequency.value = open ? 7200 : 8600;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(gain, at + .003);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  src.connect(f); f.connect(g); g.connect(musicBus);
+  src.start(at); src.stop(at + dur + .02);
+}
+
 function musicKick(at){
   const ctx = actx;
   const o = ctx.createOscillator(); o.type = "sine";
@@ -1336,9 +1355,13 @@ function scheduleMusic(){
         musicVoice(f, musicClock + i * .012, EIGHTH * 8.2, .024, "sawtooth", 620));
       musicAir(musicClock, EIGHTH * 8);
     }
-    // dry ticks off the beat, quiet enough to feel rather than hear
-    if (beat === 3 || beat === 7) musicBrush(musicClock, .05);
-    if (beat === 5) musicBrush(musicClock, .028, 5200);
+    // Hats at double time. The one on the beat is accented and the one in
+    // between is ghosted, which is what makes it push rather than plod.
+    musicHat(musicClock, beat % 2 === 0 ? .052 : .036);
+    musicHat(musicClock + EIGHTH / 2, .024, beat === 7);   // open hat on the turnaround
+
+    // backbeat, still dry and quiet
+    if (beat === 2 || beat === 6) musicBrush(musicClock, .06);
 
     musicClock += EIGHTH;
     musicStep++;
