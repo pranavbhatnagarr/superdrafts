@@ -139,7 +139,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <p class="gh-meta">
       <span id="lotNo">Lot 1</span><i></i><span id="stockLeft">20 of 20 left</span><i></i><span id="passLeft">10 passes</span><i></i>
       <span class="wire" id="wire"><b class="wire-dot"></b><span id="wireText">connected</span></span><i></i>
-      <button type="button" class="sfx-toggle" id="sfxToggle" aria-pressed="true">sound on</button>
+      <button type="button" class="sfx-toggle" id="sfxToggle" aria-pressed="true">sound on</button><i></i>
+      <button type="button" class="sfx-toggle" id="musicToggle" aria-pressed="true">music on</button>
     </p>
   </header>
 
@@ -1143,8 +1144,11 @@ function audio(){
   actx = new Ctx();
   return actx;
 }
-addEventListener("pointerdown", () => { const a = audio(); if (a && a.state === "suspended") a.resume(); },
-                 { once: true });
+addEventListener("pointerdown", () => {
+  const a = audio();
+  if (a && a.state === "suspended") a.resume();
+  if (musicOn) startMusic();          // browsers refuse to play before this
+}, { once: true });
 
 function noiseBuffer(ctx, seconds){
   const n = Math.floor(ctx.sampleRate * seconds);
@@ -1207,6 +1211,106 @@ const SFX = {
   finish(){ [392, 523, 659, 880].forEach((f, i) =>
               tone({ freq:f, dur:.34, type:"triangle", gain:.12, delay:i * .11 })); }
 };
+
+
+/* ------------------------------------------------------------------ *
+ *  MUSIC
+ *  A slow generative bed, written by the browser as it plays: walking
+ *  bass, soft chords, brushed percussion and the occasional pentatonic
+ *  note that never repeats the same way twice. Same reasoning as the
+ *  effects, nothing sampled means nothing to licence.
+ * ------------------------------------------------------------------ */
+let musicOn = true, musicBus = null, musicTimer = null, musicStep = 0, musicClock = 0;
+try { musicOn = localStorage.getItem("superdrafts.music") !== "off"; } catch {}
+
+const BPM = 68;
+const EIGHTH = 60 / BPM / 2;
+// Am7, Dm7, Em7, Am7: four slow bars of back-room jazz.
+const CHART = [
+  { bass: 55.00, chord: [220.00, 261.63, 329.63, 392.00] },   // A minor 7
+  { bass: 73.42, chord: [174.61, 220.00, 261.63, 349.23] },   // D minor 7
+  { bass: 82.41, chord: [164.81, 196.00, 246.94, 329.63] },   // E minor 7
+  { bass: 55.00, chord: [220.00, 261.63, 329.63, 392.00] }
+];
+const PENT = [440.00, 523.25, 587.33, 659.25, 783.99];        // A minor pentatonic
+
+function musicVoice(freq, at, dur, gain, type){
+  const ctx = actx;
+  const o = ctx.createOscillator(); o.type = type || "sine";
+  o.frequency.setValueAtTime(freq, at);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(gain, at + dur * .18);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  o.connect(g); g.connect(musicBus);
+  o.start(at); o.stop(at + dur + .05);
+}
+
+function musicBrush(at, gain){
+  const ctx = actx;
+  const src = ctx.createBufferSource(); src.buffer = noiseBuffer(ctx, .12);
+  const f = ctx.createBiquadFilter(); f.type = "highpass"; f.frequency.value = 5200;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(gain, at + .01);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + .12);
+  src.connect(f); f.connect(g); g.connect(musicBus);
+  src.start(at); src.stop(at + .13);
+}
+
+function scheduleMusic(){
+  const ctx = actx; if (!ctx || !musicBus) return;
+  while (musicClock < ctx.currentTime + .3){
+    const bar = Math.floor(musicStep / 8) % CHART.length;
+    const beat = musicStep % 8;
+    const { bass, chord } = CHART[bar];
+
+    if (beat === 0 || beat === 6) musicVoice(bass, musicClock, 1.1, .16, "triangle");
+    if (beat === 0){
+      chord.forEach((f, i) =>
+        musicVoice(f, musicClock + i * .04, 2.6, .028, "sine"));
+    }
+    if (beat === 2 || beat === 6) musicBrush(musicClock, .020);
+    // a sparse top line, so no two passes through sound the same
+    if (Math.random() < .17)
+      musicVoice(PENT[Math.floor(Math.random() * PENT.length)],
+                 musicClock, .7 + Math.random() * .5, .035, "triangle");
+
+    musicClock += EIGHTH;
+    musicStep++;
+  }
+}
+
+function startMusic(){
+  const ctx = audio(); if (!ctx || musicTimer) return;
+  musicBus = ctx.createGain();
+  musicBus.gain.setValueAtTime(0.0001, ctx.currentTime);
+  musicBus.gain.exponentialRampToValueAtTime(.5, ctx.currentTime + 2.5);
+  musicBus.connect(ctx.destination);
+  musicClock = ctx.currentTime + .15;
+  musicTimer = setInterval(scheduleMusic, 60);
+  scheduleMusic();
+}
+
+function stopMusic(){
+  if (musicTimer){ clearInterval(musicTimer); musicTimer = null; }
+  if (musicBus && actx){
+    const b = musicBus;
+    b.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + .6);
+    setTimeout(() => { try { b.disconnect(); } catch {} }, 900);
+    musicBus = null;
+  }
+}
+
+function setMusic(on){
+  musicOn = on;
+  try { localStorage.setItem("superdrafts.music", on ? "on" : "off"); } catch {}
+  const el = $("musicToggle");
+  if (el){ el.textContent = on ? "music on" : "music off";
+           el.setAttribute("aria-pressed", on ? "true" : "false");
+           el.classList.toggle("off", !on); }
+  on ? startMusic() : stopMusic();
+}
 
 function setSfx(on){
   sfxOn = on;
@@ -1607,7 +1711,10 @@ Write the ${seats().map(() => 5).join(" v ")} as a comic-book scenario.`;
 $("stockCount").textContent = STOCK.length + " Characters";
 loadArt();
 $("sfxToggle").addEventListener("click", () => setSfx(!sfxOn));
+$("musicToggle").addEventListener("click", () => setMusic(!musicOn));
 setSfx(sfxOn);
+// paints the label only; the sound itself waits for the first gesture above
+if (!musicOn) setMusic(false); else $("musicToggle").textContent = "music on";
 $("openBox").addEventListener("click", openTable);
 $("joinBtn").addEventListener("click", joinTable);
 $("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") joinTable(); });
