@@ -802,7 +802,8 @@ function handle(m){
   // of them read the same issue and see the same choices.
   if (m.t === "st" && !HOST){ ST = m.st; stPaint(); }
   if (m.t === "choose" && HOST && seatOf[m.cid] === m.p) applyChoice(m.p, m.i);
-  if (m.t === "startstory" && HOST && seatOf[m.cid] === caller() && !ST) startStory(m.mode);
+  if (m.t === "startstory" && HOST && seatOf[m.cid] === caller()
+      && (!ST || ST.end || ST.err)) startStory(m.mode);
   if (m.t === "closed" && !HOST){
     setWire(false, "table closed");
     $("setupMsg").textContent = "The host closed the table.";
@@ -2121,7 +2122,7 @@ function stPaint(){
   }
 
   // Only the person who called the encounter can start it, and only once.
-  const done = !!ST.end;
+  const done = !!ST.end || !!ST.err;
   $("writeBtn").disabled = ST.busy || !done;
   $("writeHint").textContent = ST.err
     ? "Something went wrong. You can run it again."
