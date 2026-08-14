@@ -175,6 +175,99 @@ Answer with JSON and nothing else, in exactly this shape:
 
 // Models drop the markers now and then and answer in prose with "A)" and "B)"
 // lines. Read both shapes, and prefer the marked one when it is there.
+// Every character the box can deal. The writer is only ever told about the
+// ten or fifteen that were drafted, so any other name from this list turning
+// up in the prose is an invention, not someone in this fight. Regenerate from
+// STOCK in index.html if the box ever changes.
+const CAST = [
+  "Akaza", "Albus Dumbledore", "Ant-Man", "Apocalypse", "Aquaman", "Asta",
+  "Baek Yoonho", "Bane", "Batgirl", "Batman", "Beast", "Beast Boy",
+  "Bellatrix Lestrange", "Beru", "Beta Ray Bill", "Bishop", "Bizarro",
+  "Black Canary", "Black Manta", "Black Panther", "Black Widow", "Blade",
+  "Blue Beetle", "Blue Devil", "Booster Gold", "Brainiac", "Bullseye",
+  "Cable", "Captain America", "Captain Cold", "Carnage", "Catwoman",
+  "Cha Hae-In", "Cheetah", "Colossus", "Cyborg", "Cyclops", "Daredevil",
+  "Deadpool", "Deathstroke", "Doctor Doom", "Doctor Fate", "Doctor Octopus",
+  "Doctor Strange", "Domino", "Doomsday", "Drax the Destroyer", "Elektra",
+  "Etrigan", "Falcon", "Firestorm", "Gaara", "Gambit", "Gamora",
+  "Ghost Rider", "Giyu Tomioka", "Go Gunhee", "Gorilla Grodd",
+  "Green Arrow", "Green Goblin", "Green Lantern", "Groot", "Harley Quinn",
+  "Harry Potter", "Hawkeye", "Hawkman", "Hela", "Hercules",
+  "Hermione Granger", "Hinata Hyuga", "Hulk", "Human Torch", "Huntress",
+  "Igris", "Inosuke Hashibira", "Invisible Woman", "Iron Fist", "Iron Man",
+  "Itachi Uchiha", "Jean Grey", "Jessica Jones", "Jiraiya",
+  "John Constantine", "John Stewart", "Juggernaut", "Julius Novachrono",
+  "Kakashi Hatake", "Katana", "Kento Nanami", "Killer Croc", "Killer Frost",
+  "Kingpin", "Kraven the Hunter", "Kyojuro Rengoku", "Lex Luthor", "Licht",
+  "Loki", "Lord Voldemort", "Lucius Zogratis", "Luke Cage", "Madara Uchiha",
+  "Magneto", "Maki Zenin", "Martian Manhunter", "Megumi Fushiguro",
+  "Mereoleona Vermillion", "Metamorpho", "Might Guy", "Minerva McGonagall",
+  "Mister Fantastic", "Moon Knight", "Mr. Freeze", "Ms. Marvel",
+  "Muzan Kibutsuji", "Mysterio", "Namor", "Naruto Uzumaki", "Nick Fury",
+  "Nightcrawler", "Nightwing", "Nobara Kugisaki", "Noelle Silva", "Nova",
+  "Pain", "Plastic Man", "Poison Ivy", "Professor X", "Psylocke",
+  "Quicksilver", "Ra's al Ghul", "Raven", "Red Hood", "Red Skull",
+  "Reverse-Flash", "Rhino", "Robin", "Rock Lee", "Rocket Raccoon", "Rogue",
+  "Ryomen Sukuna", "Sabretooth", "Sandman", "Sasuke Uchiha", "Satoru Gojo",
+  "Scarecrow", "Scarlet Witch", "Severus Snape", "Shang-Chi", "Shazam",
+  "She-Hulk", "Shikamaru Nara", "Shinobu Kocho", "Silver Surfer",
+  "Sinestro", "Sirius Black", "Solomon Grundy", "Spider-Man",
+  "Squirrel Girl", "Star-Lord", "Starfire", "Static", "Storm",
+  "Sung Jinwoo", "Supergirl", "Superman", "Swamp Thing", "Talia al Ghul",
+  "Tanjiro Kamado", "Taskmaster", "Thanos", "The Atom", "The Flash",
+  "The Joker", "The Penguin", "The Punisher", "The Question", "The Riddler",
+  "The Thing", "Thomas Andre", "Thor", "Toji Fushiguro", "Two-Face",
+  "Ultron", "Vandal Savage", "Venom", "Vision", "Vixen", "War Machine",
+  "Wasp", "Winter Soldier", "Wolverine", "Wonder Woman", "Wong",
+  "Yami Sukehiro", "Yuji Itadori", "Yuno", "Zatanna", "Zauriel",
+  "Zenitsu Agatsuma", "Zenon Zogratis"
+];
+
+// Characters from the box that this table never drafted. Naming one is the
+// writer inventing a cast member, which reads as a mistake to the people who
+// know exactly who they bought.
+function outsiders(text, drafted){
+  // Case sensitive on purpose. The box holds Pain, Beast, Blade, Rogue and
+  // Cable, so a lowercased search would flag "the pain of it" as an invented
+  // character and burn a call re-asking for nothing.
+  const hay = String(text || "");
+  const own = new Set((drafted || []).map(String));
+  const found = [];
+  for (const n of CAST){
+    if (own.has(n)) continue;
+    const re = new RegExp("(^|[^\\w'])" + n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "($|[^\\w])");
+    if (re.test(hay)) found.push(n);
+  }
+  return found;
+}
+
+// "Zenon Zenon smashed through" is a slip no reader forgives, and it costs a
+// whole call to ask again for it. Collapse the repeat and move on.
+// Last resort when the writer will not stop naming someone who was not there.
+// Asking again is the polite fix and usually works; the weakest model in the
+// chain can repeat the same invention twice, and a reader who knows exactly
+// who they bought spots it instantly. Drop the sentence it lives in, and only
+// if that would empty the passage, swap the name for someone who was present.
+function scrub(text, drafted){
+  const t = String(text || "");
+  if (!t || !outsiders(t, drafted).length) return t;
+
+  const kept = t.split(/(?<=[.!?])\s+/).filter(p => !outsiders(p, drafted).length);
+  const joined = kept.join(" ").trim();
+  if (joined.length >= 40) return joined;
+
+  let out = t;
+  const stand = drafted[0] || "";
+  if (stand) for (const n of outsiders(t, drafted)) out = out.split(n).join(stand);
+  return out;
+}
+
+function destutter(t){
+  return String(t || "")
+    .replace(/\b([A-Z][\w.'-]*)(\s+\1\b)+/g, "$1")
+    .replace(/\b(the|a|an|and|of|to|in|his|her|their|its)\s+\1\b/gi, "$1");
+}
+
 function readChoices(t){
   const marked = t.match(/<<CHOICES>>([\s\S]*?)(?=<<|$)/);
   const seg = marked ? marked[1] : t;
@@ -314,8 +407,10 @@ actions taken by characters from ${forWho}'s five.` }
 
 ${MODES[mode]}
 
-The five on each side, which are the only characters that exist in this story.
-Use these names. Do not invent units, ranks or archetypes.
+The five on each side. These are the ONLY characters that exist in this story.
+Every character you name anywhere, in the prose, the MVP or the draft read, must
+be one of the names below, spelled exactly as written. Do not invent units,
+ranks or archetypes, and do not reach for a famous character who is not listed.
 
 ${teams.join("\n\n")}
 
@@ -402,21 +497,30 @@ End it.` }
         if (mine.length && !ch.every(c => mine.some(n => String(c).includes(n))))
           return "the choices used characters from the wrong side";
       }
+      const stray = outsiders([joined, p.mvp, p.read, ...(p.choices || [])].join(" "), allNames);
+      if (stray.length) return "it named " + stray.join(" and ") + ", who nobody drafted";
       return "";
     };
 
-    const wrong = faults(raw);
-    if (wrong){
+    // The weakest writer in the chain can miss twice, and the ending is the part
+    // everyone actually reads, so give it two goes before settling.
+    const seen = [];
+    for (let attempt = 0; attempt < 2; attempt++){
+      const wrong = faults(raw);
+      if (!wrong) break;
+      seen.push(wrong);
       const again = await ask(used, [
         messages[0],
         messages[1],
         { role: "user", content:
           `Your last answer failed because ${wrong}. Write it again. Return one ` +
-          `JSON object, complete, with every paragraph written out in full.` +
+          `JSON object, complete, with every paragraph written out in full. The ` +
+          `only characters that exist are: ${allNames.join(", ")}. Name nobody else.` +
           (beat === "final" ? "" : ` Both choices must be actions taken by ` +
            `${forWho}'s own characters: ${mine.join(", ")}.`) }
       ]);
-      if (again.ok && again.text && !faults(again.text)) raw = again.text;
+      if (!again.ok || !again.text) break;
+      raw = again.text;
     }
 
     // Asking a model not to use em dashes is a suggestion; this makes it a fact.
@@ -434,14 +538,15 @@ End it.` }
       : text.split(/\n\s*\n|\n/);
 
     const story = paraList
-      .map(p => String(p || "").trim())
+      .map(p => scrub(destutter(String(p || "").trim()), allNames))
       .filter(p => p && !/^\s*(?:[AB]|[12])[).:]\s/i.test(p))
       .slice(0, paras)
       .join("\n\n");
 
     // A model that answers with ["one.", "two."] would otherwise be stringified
     // into "one.,two." by String(), which is where the stray commas came from.
-    const clean = v => (Array.isArray(v) ? v.join(" ") : String(v == null ? "" : v)).trim();
+    const clean = v => scrub(destutter(
+      (Array.isArray(v) ? v.join(" ") : String(v == null ? "" : v)).trim()), allNames);
     const choices = beat === "final" ? []
       : (j && Array.isArray(j.choices) ? j.choices.map(clean).filter(Boolean).slice(0, 2)
                                        : readChoices(text));
@@ -480,7 +585,8 @@ End it.` }
       model: used,
       // Set debug:true in the request to see exactly what the writer sent back.
       // Nothing in the page asks for it, so this costs a live game nothing.
-      raw: body && body.debug ? raw.slice(0, 1200) : undefined
+      raw: body && body.debug ? raw.slice(0, 1200) : undefined,
+      checks: body && body.debug ? { faults: seen, left: faults(raw) } : undefined
     });
   } catch (e){
     return res.status(502).json({ error: "Could not reach the writer: " + (e && e.message) });
