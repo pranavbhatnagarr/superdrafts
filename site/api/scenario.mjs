@@ -262,7 +262,14 @@ Continue. The choice at the end is for ${forWho}.` }
     { role: "user", content:
 `${ruling(r, body)}
 
-WHERE THE FIGHT STANDS: ${recap}
+${MODES[mode]}
+
+The five on each side, which are the only characters that exist in this story.
+Use these names. Do not invent units, ranks or archetypes.
+
+${teams.join("\n\n")}
+
+WHERE THE FIGHT STANDS: ${recap || "The two sides have just met and nothing is settled."}
 ${picked ? "WHAT JUST HAPPENED: " + picked : ""}
 
 End it.` }
