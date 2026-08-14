@@ -104,6 +104,10 @@ unfolding: who would fight who, who would fall first. Name characters constantly
 <two or three sentences on which characters actually earned their price and
 which were traps, referring to the dollar amounts and to each side by its owner's name>`;
 
+const SYSTEM_SHORT = `You are the same comics writer, continuing the same issue.
+Base versions only. Use owner names, never "Team One". No long dashes anywhere,
+use commas or full stops. Keep the voice and the characters consistent.`;
+
 const MODES = {
   random: `ENCOUNTER: Random. The two teams collide with no warning and no
 preparation. Nobody chose the ground, nobody has a plan, nobody knows the
@@ -135,12 +139,48 @@ turns. If a lower tier character does something decisive, it must be in service
 of the result above, never against it.`;
 }
 
+
+// Beats are deliberately small. The opening carries the full brief; later beats
+// carry a running recap and the choice just made, never the whole transcript,
+// which is where the tokens would otherwise go.
+const BEAT_RULES = `
+Write TWO short paragraphs, then offer the named player two things their team
+could do next. Both must be plausible and pull in different directions: one
+leaning on force or speed, the other on planning, trickery or restraint. Never
+hint which is better.
+
+Answer in exactly this shape, markers on their own lines:
+
+<<STORY>>
+(two paragraphs)
+<<CHOICES>>
+A) (six to twelve words)
+B) (six to twelve words)
+<<RECAP>>
+(one sentence, at most 25 words, on where the fight now stands)`;
+
+const FINAL_RULES = `
+Write the ending: three or four short paragraphs resolving the fight, then the
+verdict. Honour the tier ruling exactly. Answer in this shape:
+
+<<STORY>>
+(three or four paragraphs)
+<<WINNER>>
+(the owner name, exactly as given)
+<<MVP>>
+(character name) : (one sentence on what they did; may be from any team,
+including a losing one)
+<<READ>>
+(two or three sentences on which roles and which purchases earned their keep,
+naming owners and dollar amounts)`;
+
 function roster(team){
   if (!team || !Array.isArray(team.picks)) return null;
   const picks = team.picks.slice(0, 5).map(p => {
     const world = String(p.world || p.pub || "").slice(0, 24);
     const tier = /^[SABCDE]$/.test(String(p.tier)) ? `, tier ${p.tier}` : "";
-    return `- ${String(p.name).slice(0, 40)} (${world}${tier}), bought for $${Number(p.price) | 0}`;
+    const role = p.role ? `, ${String(p.role).slice(0, 14)}` : "";
+    return `- ${String(p.name).slice(0, 40)} (${world}${tier}${role}), $${Number(p.price) | 0}`;
   });
   return `${String(team.name).slice(0, 20)}'s team:\n${picks.join("\n")}`;
 }
@@ -188,21 +228,44 @@ export default async function handler(req, res){
   const mode = MODES[body && body.mode] ? body.mode : "random";
   if (teams.length < 2) return res.status(400).json({ error: "Two full rosters are required." });
 
-  const messages = [
-    { role: "system", content: SYSTEM + FINISH_RULE },
+  // beat: "open" and "mid" write two paragraphs and a choice; "final" ends it
+  const beat = ["open", "mid", "final"].includes(body && body.beat) ? body.beat : "final";
+  const recap = String((body && body.recap) || "").slice(0, 600);
+  const picked = String((body && body.picked) || "").slice(0, 200);
+  const forWho = String((body && body.forWho) || "").slice(0, 20);
+
+  const messages = beat === "open" ? [
+    { role: "system", content: SYSTEM + BEAT_RULES },
     { role: "user", content:
 `${ruling(r, body)}
 
 ${MODES[mode]}
 
-These are the ${teams.length} sides. Refer to them by these owner names throughout,
-never as "Team One" or "Team Two".${teams.length > 2 ? `
-This is a THREE WAY FREE FOR ALL: all three sides are hostile to each other. Any
-alliance is temporary and must break before the end.` : ""}
+These are the ${teams.length} sides. Refer to them by these owner names throughout.${teams.length > 2 ? `
+This is a THREE WAY FREE FOR ALL: all three are hostile to each other.` : ""}
+Each character carries a role. Strategist matters most with prep, Wildcard most
+in a random encounter, Powerhouse and Anchor equally either way, Executioner
+whenever someone has to be finished.
 
 ${teams.join("\n\n")}
 
-Write the issue.` }
+Open the fight. The choice at the end is for ${forWho}.` }
+  ] : beat === "mid" ? [
+    { role: "system", content: SYSTEM_SHORT + BEAT_RULES },
+    { role: "user", content:
+`WHERE THE FIGHT STANDS: ${recap}
+WHAT JUST HAPPENED: ${picked}
+
+Continue. The choice at the end is for ${forWho}.` }
+  ] : [
+    { role: "system", content: SYSTEM_SHORT + FINAL_RULES },
+    { role: "user", content:
+`${ruling(r, body)}
+
+WHERE THE FIGHT STANDS: ${recap}
+${picked ? "WHAT JUST HAPPENED: " + picked : ""}
+
+End it.` }
   ];
 
   try {
@@ -210,11 +273,15 @@ Write the issue.` }
 
     // Each model has its own daily token allowance, so a model that has run dry
     // is not the end of the night. Walk down the list until one answers.
+    // A beat is two paragraphs and two choices. Only the ending needs the
+    // full allowance, so most calls in a game now cost a quarter of what one
+    // single shot issue used to.
+    const cap = beat === "final" ? MAX_TOKENS : 700;
     const ask = async (model, msgs) => {
       const r = await fetch(ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
-        body: JSON.stringify({ model, temperature: 0.9, max_tokens: MAX_TOKENS, messages: msgs })
+        body: JSON.stringify({ model, temperature: 0.9, max_tokens: cap, messages: msgs })
       });
       const data = await r.json().catch(() => null);
       const c = data && data.choices && data.choices[0];
@@ -233,9 +300,9 @@ Write the issue.` }
       // sending the brief again rather than the failed draft, which is cheaper.
       if (out.ok && out.text && out.cut){
         const tighter = [
-          { role: "system", content: SYSTEM + FINISH_RULE +
-            "\n\nYour previous attempt was cut off. Use at most FOUR short story " +
-            "paragraphs this time and make certain you reach the end." },
+          { role: "system", content: messages[0].content +
+            "\n\nYour previous attempt was cut off. Write shorter paragraphs this " +
+            "time and make certain every marker section appears." },
           messages[1]
         ];
         const second = await ask(model, tighter);
@@ -258,7 +325,29 @@ Write the issue.` }
       .replace(/^[ \t]*[—–][ \t]*/gm, "")     // a dash opening a line is a bullet
       .replace(/[ \t]*[—–][ \t]*/g, ", ");    // anything else becomes a comma
 
-    return res.status(200).json({ text, model: used });
+    const grab = (tag, next) => {
+      const m = text.match(new RegExp("<<" + tag + ">>([\\s\\S]*?)(?=<<(?:" + next + ")>>|$)"));
+      return m ? m[1].trim() : "";
+    };
+    const story  = grab("STORY", "CHOICES|RECAP|WINNER|MVP|READ") || text.trim();
+    const choices = grab("CHOICES", "RECAP|WINNER|MVP|READ")
+      .split(/\n+/)
+      .map(l => l.replace(/^\s*[AB][).:]\s*/i, "").trim())
+      .filter(Boolean)
+      .slice(0, 2);
+
+    return res.status(200).json({
+      text: story,
+      choices,
+      // The recap is the only thing carried into the next beat, so if the writer
+      // forgets it, fall back to the tail of what it just wrote.
+      recap:  grab("RECAP", "WINNER|MVP|READ")
+              || story.trim().split(/\n+/).pop().split(/\s+/).slice(-30).join(" "),
+      winner: grab("WINNER", "MVP|READ"),
+      mvp:    grab("MVP",    "READ"),
+      read:   grab("READ",   "ZZZ"),
+      model: used
+    });
   } catch (e){
     return res.status(502).json({ error: "Could not reach the writer: " + (e && e.message) });
   }
