@@ -2018,10 +2018,12 @@ function paintRoles(){
 
   const ready = allLocked();
   if (ST){ stPaint(); return; }
-  $("writeBtn").disabled = !ready || ME !== boss;
-  $("writeHint").textContent = ready
-    ? "Every role is locked. Write it."
-    : "Waiting on " + seats().filter(p => !P[p].locked).map(p => P[p].name).join(" and ") + ".";
+  const iCall = caller() === ME;
+  $("writeBtn").disabled = !ready || !iCall;
+  $("writeHint").textContent = !ready
+    ? "Waiting on " + seats().filter(p => !P[p].locked).map(p => P[p].name).join(" and ") + "."
+    : iCall ? "Every role is locked. Write it."
+            : `Every role is locked. ${P[caller()].name} calls the encounter.`;
 }
 
 /* ------------------------- the writer ------------------------- */
@@ -2248,7 +2250,13 @@ async function runBeat(beat, picked){
   }
 
   ST.busy = false;
-  if (!data){ ST.err = msg; stPaint(); stSend(); return; }
+  if (!data){
+    ST.err = msg;
+    // An issue that never got written must not cost the encounter. Hand it
+    // back so this one can be tried again.
+    if (!ST.beats.length) ST.runs = ST.runs.filter(m => m !== ST.mode);
+    stPaint(); stSend(); return;
+  }
 
   ST.beats.push({ text: data.text, by: null, pick: "" });
   if (data.recap) ST.recap = data.recap;
