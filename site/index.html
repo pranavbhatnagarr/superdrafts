@@ -534,11 +534,15 @@ const roleName = k => (ROLES.find(r => r.k === k) || {}).name || "";
 
 function roleShift(ch, role, mode){
   if (!role) return 0;
+  const suits = !!(ch.fit && ch.fit.includes(role));
   let d = 0;
-  if (ch.fit && ch.fit.includes(role)) d += 1;
+  if (suits) d += 1;
   if (ch.bad && ch.bad.includes(role)) d -= 1;
-  if (role === "S" && mode === "prep")   d += 1;
-  if (role === "W" && mode === "random") d += 1;
+  // The encounter rewards the role only in the hands of someone it suits. A
+  // week of prep does nothing for a Strategist with no head for it, and chaos
+  // does not favour a Wildcard who has no trick to pull.
+  if (suits && role === "S" && mode === "prep")   d += 1;
+  if (suits && role === "W" && mode === "random") d += 1;
   return d;
 }
 
