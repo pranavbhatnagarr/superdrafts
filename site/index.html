@@ -286,6 +286,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <p class="story-score" id="storyScore"></p>
     </div>
 
+    <div class="story-choice" id="storyChoice" hidden>
+      <p class="sc-who" id="scWho"></p>
+      <div class="sc-opts" id="scOpts"></div>
+    </div>
+
     <section class="box-pick fo-box" id="foBox" hidden>
       <h2 class="fm-head">Change the box before the next one</h2>
       <div class="chips" id="foChips"></div>
@@ -525,6 +530,8 @@ const ROLE = Object.fromEntries(ROLES.map(r => [r.k, r]));
 
 // A fitting role is worth a tier, an absurd one costs a tier, and the encounter
 // decides whether the Strategist or the Wildcard is the one that matters.
+const roleName = k => (ROLES.find(r => r.k === k) || {}).name || "";
+
 function roleShift(ch, role, mode){
   if (!role) return 0;
   let d = 0;
@@ -791,10 +798,11 @@ function handle(m){
     pushState();
   }
   if (m.t === "state" && !HOST) applyState(m.s);
-  // The story is written once and shared, so both sides read the same issue.
-  if (m.t === "writing") showWriting(m.mode);
-  if (m.t === "story") showStory(m.text, m.mode, m.score);
-  if (m.t === "storyfail") showStoryError(m.error);
+  // The story is written once, by the host, and every beat is shared, so all
+  // of them read the same issue and see the same choices.
+  if (m.t === "st" && !HOST){ ST = m.st; stPaint(); }
+  if (m.t === "choose" && HOST && seatOf[m.cid] === m.p) applyChoice(m.p, m.i);
+  if (m.t === "startstory" && HOST && seatOf[m.cid] === caller() && !ST) startStory(m.mode);
   if (m.t === "closed" && !HOST){
     setWire(false, "table closed");
     $("setupMsg").textContent = "The host closed the table.";
@@ -2014,7 +2022,8 @@ function paintRoles(){
     : `${P[boss].name} kept the most money (${money(P[boss].purse)}), so it is their call.`;
 
   const ready = allLocked();
-  $("writeBtn").disabled = !ready;
+  if (ST){ stPaint(); return; }
+  $("writeBtn").disabled = !ready || ME !== boss;
   $("writeHint").textContent = ready
     ? "Every role is locked. Write it."
     : "Waiting on " + seats().filter(p => !P[p].locked).map(p => P[p].name).join(" and ") + ".";
@@ -2048,64 +2057,171 @@ function renderStory(md){
   return out.join("");
 }
 
-function showWriting(mode){
-  $("story").hidden = false;
-  $("storyBody").innerHTML = `<p class="story-wait">Inking ${MODE_NAME[mode] || ""}…</p>`;
-  $("storyFoot").textContent = "";
-  $("writeBtn").disabled = true;
+// The fight is written a beat at a time so the people playing get to steer it.
+// Two paragraphs, then the player whose turn it is picks what their side does,
+// then two more. Only the host ever talks to the writer, so a beat is never
+// written twice, and every call after the first carries a one sentence recap
+// instead of the whole transcript, which is what keeps this cheap.
+let ST = null;
+
+const escTxt = s => String(s == null ? "" : s)
+  .replace(/[&<>]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" }[c]));
+
+function stPaint(){
+  const box = $("story"), cw = $("storyChoice");
+  if (!ST){ box.hidden = true; cw.hidden = true; return; }
+  box.hidden = false;
+
+  let html = "", plain = [];
+  ST.beats.forEach(b => {
+    html += renderStory(b.text);
+    plain.push(b.text);
+    if (b.pick){
+      html += `<p class="story-pick"><b>${escTxt(P[b.by].name)}</b> called it: ${escTxt(b.pick)}</p>`;
+      plain.push(`> ${P[b.by].name} called it: ${b.pick}`);
+    }
+  });
+  if (ST.end){
+    html += `<h3>Winner: ${escTxt(ST.end.winner)}</h3>`;
+    plain.push(`Winner: ${ST.end.winner}`);
+    if (ST.end.mvp){ html += `<h3>MVP</h3><p>${escTxt(ST.end.mvp)}</p>`; plain.push(`MVP: ${ST.end.mvp}`); }
+    if (ST.end.read){ html += `<h3>The draft read</h3><p>${escTxt(ST.end.read)}</p>`; plain.push(ST.end.read); }
+  }
+  if (ST.busy) html += `<p class="story-wait">${ST.beats.length ? "Inking what happens next" : "Inking the opening"}…</p>`;
+  if (ST.err) html += `<p class="story-err">${escTxt(ST.err)}</p>`;
+  $("storyBody").innerHTML = html;
+  window.__story = plain.join("\n\n");
+
+  const v = ST.v;
+  $("storyScore").textContent = v && v.scores
+    ? `Tier score, ${ST.mode === "prep" ? "with a week of prep" : "on raw capability"}, roles counted: `
+      + seats().map(q => `${P[q].name} ${v.scores[q]}`).join(", ")
+      + (v.close ? ". Close enough that the choices decide it." : "")
+    : "";
+  $("storyFoot").textContent = MODE_NAME[ST.mode] || "";
+
+  const live = ST.awaiting != null && ST.options && ST.options.length === 2 && !ST.busy;
+  cw.hidden = !live;
+  if (live){
+    const mine = ST.awaiting === ME;
+    $("scWho").textContent = mine
+      ? "Your call. Your five do one of these."
+      : `${P[ST.awaiting].name} is deciding for their five.`;
+    const opts = $("scOpts");
+    opts.innerHTML = "";
+    ST.options.forEach((o, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "sc-opt";
+      b.textContent = o;
+      b.disabled = !mine;
+      if (mine) b.addEventListener("click", () => choose(i));
+      opts.appendChild(b);
+    });
+  }
+
+  // Only the person who called the encounter can start it, and only once.
+  const done = !!ST.end;
+  $("writeBtn").disabled = ST.busy || !done;
+  $("writeHint").textContent = ST.err
+    ? "Something went wrong. You can run it again."
+    : done ? "Change the encounter and write it again, the choices land differently."
+           : "The issue is being written. Choices appear as it goes.";
 }
 
-function showStory(text, mode, score){
-  window.__story = text;
-  if (score && score.scores) $("storyScore").textContent =
-    `Tier score, ${mode === "prep" ? "with a week of prep" : "on raw capability"}: ` +
-    seats().map(q => `${P[q].name} ${score.scores[q]}`).join(", ") +
-    (score.close ? ". Close enough that tactics decided it." : "");
-  $("story").hidden = false;
-  $("storyBody").innerHTML = renderStory(text);
-  $("storyFoot").textContent = MODE_NAME[mode] || "";
-  $("writeBtn").disabled = false;
-  $("writeHint").textContent = "Change the encounter and write it again, it plays out differently.";
+// Guests send the intent, the host owns the state. Same shape as bidding.
+function stSend(){ if (HOST) send({ t: "st", st: ST }); }
+
+function choose(i){
+  if (!ST || ST.awaiting !== ME || ST.busy) return;
+  if (HOST) applyChoice(ME, i);
+  else send({ t: "choose", p: ME, cid: CID, i });
 }
 
-function showStoryError(msg){
-  $("story").hidden = false;
-  $("storyBody").innerHTML = `<p class="story-err"></p>`;
-  $("storyBody").querySelector(".story-err").textContent = msg;
-  $("writeBtn").disabled = false;
+function applyChoice(p, i){
+  if (!HOST || !ST || ST.awaiting !== p || ST.busy) return;
+  const pick = ST.options && ST.options[i];
+  if (!pick) return;
+  const last = ST.beats[ST.beats.length - 1];
+  if (last){ last.by = p; last.pick = pick; }
+  ST.awaiting = null;
+  ST.options = null;
+  ST.turn++;
+  runBeat(ST.turn < NP ? "mid" : "final", `${P[p].name}'s side chose to ${pick}`);
 }
 
-async function writeFight(){
+function writeFight(){
+  if (ME !== caller()) return;
   const mode = chosenMode();
-  showWriting(mode);
-  send({ t: "writing", mode });
-  const v = verdict(mode);
-  const payload = {
-    mode,
+  if (!HOST){ send({ t: "startstory", cid: CID, mode }); return; }
+  startStory(mode);
+}
+
+function startStory(mode){
+  if (!HOST) return;
+  ST = { mode, v: verdict(mode), beats: [], turn: 0,
+         awaiting: null, options: null, busy: true, err: "", end: null };
+  stPaint(); stSend();
+  runBeat("open", "");
+}
+
+async function runBeat(beat, picked){
+  ST.busy = true;
+  ST.err = "";
+  stPaint(); stSend();
+
+  const v = ST.v;
+  const body = {
+    mode: ST.mode,
+    beat,
+    recap: ST.recap || "",
+    picked,
+    forWho: beat === "final" ? "" : P[seats()[ST.turn]].name,
     ruling: { scores: v.scores, close: v.close,
               names: seats().map(q => P[q].name),
               winner: v.winner === null ? null : P[v.winner].name },
     teams: seats().map(q => ({ name: P[q].name, picks: P[q].roster.map(r => ({
-      name: r.char.name, world: (UNIVERSES[r.char.pub]||{}).name || r.char.pub,
-      tier: r.char.tier, price: r.price })) }))
+      name: r.char.name, world: (UNIVERSES[r.char.pub] || {}).name || r.char.pub,
+      tier: r.char.tier, role: roleName(r.role), price: r.price })) }))
   };
+
+  let data = null, msg = "";
   try {
-    const r = await fetch("/api/scenario", {
+    const res = await fetch("/api/scenario", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(body)
     });
-    const data = await r.json().catch(() => null);
-    if (!r.ok || !data || !data.text){
-      const msg = (data && data.error) || `The writer failed (${r.status}).`;
-      showStoryError(msg); send({ t: "storyfail", error: msg }); return;
+    data = await res.json().catch(() => null);
+    if (!res.ok || !data || !data.text){
+      msg = (data && data.error) || `The writer failed (${res.status}).`;
+      data = null;
     }
-    showStory(data.text, mode, v);
-    send({ t: "story", text: data.text, mode, score: v });
   } catch (e){
-    const msg = "Could not reach the writer. Check your connection.";
-    showStoryError(msg); send({ t: "storyfail", error: msg });
+    msg = "Could not reach the writer. Check your connection.";
   }
+
+  ST.busy = false;
+  if (!data){ ST.err = msg; stPaint(); stSend(); return; }
+
+  ST.beats.push({ text: data.text, by: null, pick: "" });
+  if (data.recap) ST.recap = data.recap;
+
+  if (beat === "final"){
+    ST.end = {
+      winner: data.winner || (v.winner === null ? "" : P[v.winner].name),
+      mvp: data.mvp || "",
+      read: data.read || ""
+    };
+  } else if (data.choices && data.choices.length === 2){
+    ST.awaiting = seats()[ST.turn];
+    ST.options = data.choices;
+  } else {
+    // The writer skipped the choice. Better to run to the ending than to stall.
+    ST.turn = NP;
+    return runBeat("final", "");
+  }
+  stPaint(); stSend();
 }
 
 function rosterText(){
@@ -2225,7 +2341,7 @@ $("againBtn").addEventListener("click", () => {
   if (!HOST) return;
   document.querySelectorAll(".fallback-ta").forEach(n => n.remove());
   $("copyHint").textContent = "";
-  $("story").hidden = true; $("storyBody").innerHTML = ""; window.__story = null;
+  ST = null; stPaint(); window.__story = null;
   $("writeBtn").disabled = false;
   $("writeHint").textContent = "One issue, written from the ten characters above.";
   if (boxCount() < MIN_BOX()) return;
@@ -3559,6 +3675,23 @@ body{
   .fi-price{ flex:0 0 auto; }
   .fo-title{ font-size:clamp(26px,9vw,40px); }
 }
+
+/* The in-story choice. Sits under the issue and reads as part of it, but it
+   has to look pressable, so it borrows the ledger's card treatment. */
+.story-choice{ margin:14px 0 0; }
+.sc-who{ margin:0 0 8px; font:700 12px/1.3 var(--data); letter-spacing:.09em;
+  text-transform:uppercase; color:var(--kraft-dk); }
+.sc-opts{ display:grid; gap:8px; }
+@media (min-width:720px){ .sc-opts{ grid-template-columns:1fr 1fr; } }
+.sc-opt{ appearance:none; text-align:left; cursor:pointer; padding:12px 14px;
+  border:2px solid var(--ink); border-radius:3px; background:var(--pulp);
+  color:var(--ink); font:600 15px/1.35 var(--data); box-shadow:3px 3px 0 var(--ink);
+  transition:transform .08s ease, box-shadow .08s ease; }
+.sc-opt:hover:not(:disabled){ transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink); }
+.sc-opt:active:not(:disabled){ transform:translate(3px,3px); box-shadow:0 0 0 var(--ink); }
+.sc-opt:disabled{ cursor:default; opacity:.5; box-shadow:2px 2px 0 var(--ink); }
+.story-pick{ margin:10px 0 16px; padding:8px 12px; border-left:4px solid var(--stamp);
+  background:rgba(0,0,0,.04); font:italic 500 15px/1.4 var(--data); }
 </style>
 </body>
 </html>
