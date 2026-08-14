@@ -86,23 +86,8 @@ Rules you must respect:
 Write it as an actual comic story, not an analysis. Concrete beats, real
 dialogue, specific locations. Give characters their own voices.
 
-Structure your answer in markdown exactly like this:
-
-## <a title for the issue>
-**<one line naming the setting and the moment>**
-
-<4 to 7 paragraphs of story. Comic Style. This is the bulk. Show the fight
-unfolding: who would fight who, who would fall first. Name characters constantly.>
-
-## The turn
-<one short paragraph on the single moment the fight was decided>
-
-## Winner: <the owner's name, exactly as given to you>
-<two or three sentences on why that side took it. Name the character who made the difference.>
-
-## The draft read
-<two or three sentences on which characters actually earned their price and
-which were traps, referring to the dollar amounts and to each side by its owner's name>`;
+Never write a title, a heading, or a section label. You are writing the
+middle of an issue, not a whole one.`;
 
 const SYSTEM_SHORT = `You are the same comics writer, continuing the same issue.
 Base versions only. Use owner names, never "Team One". No long dashes anywhere,
@@ -143,36 +128,41 @@ of the result above, never against it.`;
 // Beats are deliberately small. The opening carries the full brief; later beats
 // carry a running recap and the choice just made, never the whole transcript,
 // which is where the tokens would otherwise go.
-const BEAT_RULES = `
-Write TWO short paragraphs, then offer the named player two things their team
-could do next. Both must be plausible and pull in different directions: one
-leaning on force or speed, the other on planning, trickery or restraint. Never
-hint which is better.
+const BEAT_RULES = n => `
+Write EXACTLY ${n} short paragraph${n > 1 ? "s" : ""} of story, then offer the
+named player two things their team could do next. Both must be plausible and
+pull in different directions: one leaning on force or speed, the other on
+planning, trickery or restraint. Never hint which is better.
 
-Answer in exactly this shape, markers on their own lines:
+Do not write a title. Do not resolve the fight. Do not name a winner.
 
-<<STORY>>
-(two paragraphs)
-<<CHOICES>>
-A) (six to twelve words)
-B) (six to twelve words)
-<<RECAP>>
-(one sentence, at most 25 words, on where the fight now stands)`;
+Answer with JSON and nothing else, in exactly this shape:
+{"story": [${n} string${n > 1 ? "s, one paragraph each" : ", one paragraph"}],
+ "choices": ["six to twelve words", "six to twelve words"],
+ "recap": "one sentence, at most 25 words, on where the fight now stands"}`;
 
-const FINAL_RULES = `
-Write the ending: three or four short paragraphs resolving the fight, then the
-verdict. Honour the tier ruling exactly. Answer in this shape:
+const FINAL_RULES = n => `
+Write EXACTLY ${n} short paragraph${n > 1 ? "s" : ""} resolving the fight, then
+the verdict. Honour the tier ruling exactly. No title, no headings.
 
-<<STORY>>
-(three or four paragraphs)
-<<WINNER>>
-(the owner name, exactly as given)
-<<MVP>>
-(character name) : (one sentence on what they did; may be from any team,
-including a losing one)
-<<READ>>
-(two or three sentences on which roles and which purchases earned their keep,
-naming owners and dollar amounts)`;
+Answer with JSON and nothing else, in exactly this shape:
+{"story": [${n} string${n > 1 ? "s, one paragraph each" : ", one paragraph"}],
+ "winner": "the owner name, exactly as given",
+ "mvp": "character name, then a colon, then one sentence on what they did. May be from any team, including a losing one",
+ "read": "two or three sentences on which roles and which purchases earned their keep, naming owners and dollar amounts"}`;
+
+// Models drop the markers now and then and answer in prose with "A)" and "B)"
+// lines. Read both shapes, and prefer the marked one when it is there.
+function readChoices(t){
+  const marked = t.match(/<<CHOICES>>([\s\S]*?)(?=<<|$)/);
+  const seg = marked ? marked[1] : t;
+  const out = [];
+  for (const line of seg.split(/\n+/)){
+    const m = line.match(/^\s*(?:[AB]|[12])[).:]\s*(.+)$/i);
+    if (m) out.push(m[1].trim().replace(/\*\*/g, ""));
+  }
+  return out.slice(0, 2);
+}
 
 function roster(team){
   if (!team || !Array.isArray(team.picks)) return null;
@@ -233,9 +223,10 @@ export default async function handler(req, res){
   const recap = String((body && body.recap) || "").slice(0, 600);
   const picked = String((body && body.picked) || "").slice(0, 200);
   const forWho = String((body && body.forWho) || "").slice(0, 20);
+  const paras = [1, 2].includes(body && body.paras) ? body.paras : 2;
 
   const messages = beat === "open" ? [
-    { role: "system", content: SYSTEM + BEAT_RULES },
+    { role: "system", content: SYSTEM + BEAT_RULES(paras) },
     { role: "user", content:
 `${ruling(r, body)}
 
@@ -251,14 +242,14 @@ ${teams.join("\n\n")}
 
 Open the fight. The choice at the end is for ${forWho}.` }
   ] : beat === "mid" ? [
-    { role: "system", content: SYSTEM_SHORT + BEAT_RULES },
+    { role: "system", content: SYSTEM_SHORT + BEAT_RULES(paras) },
     { role: "user", content:
 `WHERE THE FIGHT STANDS: ${recap}
 WHAT JUST HAPPENED: ${picked}
 
 Continue. The choice at the end is for ${forWho}.` }
   ] : [
-    { role: "system", content: SYSTEM_SHORT + FINAL_RULES },
+    { role: "system", content: SYSTEM_SHORT + FINAL_RULES(paras) },
     { role: "user", content:
 `${ruling(r, body)}
 
@@ -283,12 +274,13 @@ End it.` }
     // A beat is two paragraphs and two choices. Only the ending needs the
     // full allowance, so most calls in a game now cost a quarter of what one
     // single shot issue used to.
-    const cap = beat === "final" ? MAX_TOKENS : 700;
+    const cap = beat === "final" ? 1100 : 600;
     const ask = async (model, msgs) => {
       const r = await fetch(ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
-        body: JSON.stringify({ model, temperature: 0.9, max_tokens: cap, messages: msgs })
+        body: JSON.stringify({ model, temperature: 0.9, max_tokens: cap,
+          response_format: { type: "json_object" }, messages: msgs })
       });
       const data = await r.json().catch(() => null);
       const c = data && data.choices && data.choices[0];
@@ -332,27 +324,35 @@ End it.` }
       .replace(/^[ \t]*[—–][ \t]*/gm, "")     // a dash opening a line is a bullet
       .replace(/[ \t]*[—–][ \t]*/g, ", ");    // anything else becomes a comma
 
-    const grab = (tag, next) => {
-      const m = text.match(new RegExp("<<" + tag + ">>([\\s\\S]*?)(?=<<(?:" + next + ")>>|$)"));
-      return m ? m[1].trim() : "";
-    };
-    const story  = grab("STORY", "CHOICES|RECAP|WINNER|MVP|READ") || text.trim();
-    const choices = grab("CHOICES", "RECAP|WINNER|MVP|READ")
-      .split(/\n+/)
-      .map(l => l.replace(/^\s*[AB][).:]\s*/i, "").trim())
-      .filter(Boolean)
-      .slice(0, 2);
+    let j = null;
+    try { j = JSON.parse(text); } catch (e){ j = null; }
+
+    // JSON mode is enforced by the API, but a model that ignores it should not
+    // take the game down with it. Fall back to reading the prose.
+    const paraList = j && Array.isArray(j.story) ? j.story
+      : j && typeof j.story === "string" ? j.story.split(/\n\s*\n|\n/)
+      : text.split(/\n\s*\n|\n/);
+
+    const story = paraList
+      .map(p => String(p || "").trim())
+      .filter(p => p && !/^\s*(?:[AB]|[12])[).:]\s/i.test(p))
+      .slice(0, paras)
+      .join("\n\n");
+
+    const clean = v => String(v == null ? "" : v).trim();
+    const choices = beat === "final" ? []
+      : (j && Array.isArray(j.choices) ? j.choices.map(clean).filter(Boolean).slice(0, 2)
+                                       : readChoices(text));
 
     return res.status(200).json({
-      text: story,
+      text: story || text.trim(),
       choices,
       // The recap is the only thing carried into the next beat, so if the writer
       // forgets it, fall back to the tail of what it just wrote.
-      recap:  grab("RECAP", "WINNER|MVP|READ")
-              || story.trim().split(/\n+/).pop().split(/\s+/).slice(-30).join(" "),
-      winner: grab("WINNER", "MVP|READ"),
-      mvp:    grab("MVP",    "READ"),
-      read:   grab("READ",   "ZZZ"),
+      recap:  clean(j && j.recap) || story.split(/\s+/).slice(-30).join(" "),
+      winner: clean(j && j.winner),
+      mvp:    clean(j && j.mvp),
+      read:   clean(j && j.read),
       model: used
     });
   } catch (e){
