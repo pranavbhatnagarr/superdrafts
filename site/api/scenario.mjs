@@ -245,6 +245,15 @@ export default async function handler(req, res){
   const forWho = String((body && body.forWho) || "").slice(0, 20);
   const paras = [1, 2].includes(body && body.paras) ? body.paras : 2;
 
+  // The rosters again, as plain names, so the answer can be checked against
+  // them. A weak model will happily hand a player their opponent's characters.
+  const sides = (body && Array.isArray(body.teams) ? body.teams : []).map(t => ({
+    owner: String((t && t.name) || ""),
+    names: (((t && t.picks) || [])).map(p => String((p && p.name) || "")).filter(Boolean)
+  }));
+  const mine = (sides.find(x => x.owner === forWho) || { names: [] }).names;
+  const allNames = sides.flatMap(x => x.names);
+
   const messages = beat === "open" ? [
     { role: "system", content: SYSTEM + BEAT_RULES(paras) },
     { role: "user", content:
@@ -345,6 +354,40 @@ End it.` }
 
     if (!raw) return res.status(502).json({ error: explain(lastErr, lastStatus) });
 
+    // When the strong models are out of tokens for the day the last resort in
+    // the chain answers, and it breaks in specific ways: JSON that will not
+    // parse, a paragraph cut off mid word, or choices built from the opposing
+    // team's characters. Check for those and give it one more go.
+    const faults = t => {
+      let p = null;
+      try { p = JSON.parse(t); } catch (e){ return "the answer was not valid JSON"; }
+      const st = Array.isArray(p.story) ? p.story : [String(p.story || "")];
+      const joined = st.join(" ").trim();
+      if (joined.length < 120) return "the story was too short to be finished";
+      if (st.some(x => String(x).trim().length < 40)) return "a paragraph was cut off";
+      if (beat !== "final"){
+        const ch = Array.isArray(p.choices) ? p.choices : [];
+        if (ch.length < 2) return "there were not two choices";
+        if (mine.length && !ch.every(c => mine.some(n => String(c).includes(n))))
+          return "the choices used characters from the wrong side";
+      }
+      return "";
+    };
+
+    const wrong = faults(raw);
+    if (wrong){
+      const again = await ask(used, [
+        messages[0],
+        messages[1],
+        { role: "user", content:
+          `Your last answer failed because ${wrong}. Write it again. Return one ` +
+          `JSON object, complete, with every paragraph written out in full.` +
+          (beat === "final" ? "" : ` Both choices must be actions taken by ` +
+           `${forWho}'s own characters: ${mine.join(", ")}.`) }
+      ]);
+      if (again.ok && again.text && !faults(again.text)) raw = again.text;
+    }
+
     // Asking a model not to use em dashes is a suggestion; this makes it a fact.
     const text = raw
       .replace(/^[ \t]*[—–][ \t]*/gm, "")     // a dash opening a line is a bullet
@@ -385,9 +428,21 @@ End it.` }
                  || names.find(n => raw.toLowerCase().startsWith(n.toLowerCase()));
         return hit || (r && r.winner) || raw.replace(/['\u2019]s$/, "");
       })(),
-      mvp:    clean(j && j.mvp),
+      // "Hong Kong Phooey's Nightwing" is a real answer a tired model gave. If a
+      // drafted character is named anywhere in there, lead with them instead.
+      mvp: (() => {
+        const raw2 = clean(j && j.mvp);
+        const hit = allNames.find(n => raw2.toLowerCase().includes(n.toLowerCase()));
+        if (!hit) return raw2;
+        if (raw2.toLowerCase().startsWith(hit.toLowerCase())) return raw2;
+        const tail = raw2.includes(":") ? raw2.slice(raw2.indexOf(":") + 1).trim() : raw2;
+        return hit + ": " + tail;
+      })(),
       read:   clean(j && j.read),
-      model: used
+      model: used,
+      // Set debug:true in the request to see exactly what the writer sent back.
+      // Nothing in the page asks for it, so this costs a live game nothing.
+      raw: body && body.debug ? raw.slice(0, 1200) : undefined
     });
   } catch (e){
     return res.status(502).json({ error: "Could not reach the writer: " + (e && e.message) });
