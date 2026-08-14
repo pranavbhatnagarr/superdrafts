@@ -250,8 +250,16 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   </div>
 
   <div class="fo-actions">
-    <fieldset class="encounter">
+    <section class="roles-wrap">
+      <h3 class="fm-head">Give everyone a job</h3>
+      <p class="roles-note">One role each, all five used. A tick means the role suits them and
+        buys a tier. A cross means it does not, and costs one. Locked once you confirm.</p>
+      <div class="role-board" id="roleBox"></div>
+    </section>
+
+    <fieldset class="encounter" id="encounter">
       <legend class="fm-head">How do they meet?</legend>
+      <p class="enc-who" id="encWho"></p>
       <label class="enc-opt">
         <input type="radio" name="encounter" value="random" checked>
         <span class="enc-body">
@@ -777,6 +785,11 @@ function handle(m){
     $("setupMsg").textContent =
       `Seated. ${m.seated} of ${m.need} buyers are here, waiting for the rest.`;
   }
+  if (m.t === "roles" && HOST && Array.isArray(m.roles) && seatOf[m.cid] === m.p){
+    m.roles.forEach((k, i) => { if (P[m.p].roster[i]) P[m.p].roster[i].role = k; });
+    if (rolesDone(m.p)) P[m.p].locked = true;
+    pushState();
+  }
   if (m.t === "state" && !HOST) applyState(m.s);
   // The story is written once and shared, so both sides read the same issue.
   if (m.t === "writing") showWriting(m.mode);
@@ -833,6 +846,7 @@ function applyState(s, local){
   heardBids = lotChanged ? 0 : bidsNow;
   heardFolds = lotChanged ? 0 : foldsNow;
 
+  if (over) paintRoles();
   if (lotChanged){ drawnLot = s.lotNum; renderLot(); }
   render();
   if (s.fx && s.fx.id !== lastFx){
@@ -1036,7 +1050,7 @@ async function openTable(){
   if (boxCount() < MIN_BOX()) return nudge("The box is too thin for that many buyers. Add a universe.");
   HOST = true; ME = 0; started = false;
   ROOM = code4();
-  P = seats().map(q => ({ name: q === 0 ? n : "…", purse: PURSE, roster: [] }));
+  P = seats().map(q => ({ name: q === 0 ? n : "…", purse: PURSE, roster: [], locked: false }));
   seatOf = {};
   $("setupMsg").textContent = "Opening the table…";
   try { await connect(); } catch { return nudge("Could not reach the table service. Check your connection and try again."); }
@@ -1897,6 +1911,7 @@ function finish(){
 function showFaceoff(){
   SFX.finish();
   $("foTitle").textContent = NP === 3 ? "Five Against Five Against Five" : "Five Against Five";
+  paintRoles();
   showScreen("faceoff");
   buildFoSides();
   $("againBtn").hidden = !HOST;
@@ -1917,6 +1932,92 @@ function showFaceoff(){
     });
     $("foTotal" + p).textContent = `${money(PURSE - P[p].purse)} spent · ${money(P[p].purse)} unspent`;
   }
+}
+
+
+/* ---------------------- assigning the five roles ---------------------- */
+// Everyone assigns their own five, one role each. Locked once confirmed, and
+// the fight cannot be written until every buyer has locked.
+const rolesDone = p => P[p].roster.length === SLOTS &&
+  P[p].roster.every(r => r.role) &&
+  new Set(P[p].roster.map(r => r.role)).size === SLOTS;
+const allLocked = () => seats().every(p => P[p].locked);
+// Whoever kept the most money calls the encounter. A tie goes to the earlier seat.
+const caller = () => seats().reduce((best, p) => P[p].purse > P[best].purse ? p : best, 0);
+
+function setRole(p, i, key){
+  const r = P[p].roster[i]; if (!r || P[p].locked) return;
+  // one each: whoever held this role gives it up
+  P[p].roster.forEach((x, j) => { if (j !== i && x.role === key) x.role = null; });
+  r.role = key || null;
+}
+
+function lockRoles(p){
+  if (!rolesDone(p) || P[p].locked) return;
+  P[p].locked = true;
+  SFX.sold();
+  if (HOST) pushState(); else send({ t: "roles", p, cid: CID, roles: P[p].roster.map(r => r.role) });
+  paintRoles();
+}
+
+function paintRoles(){
+  const box = $("roleBox"); if (!box) return;
+  box.innerHTML = "";
+  for (const p of seats()){
+    const mine = p === ME, locked = P[p].locked;
+    const sec = document.createElement("section");
+    sec.className = `role-side role-${SEATS[p].key}` + (mine ? " mine" : "");
+    sec.innerHTML = `<div class="ledger-tab"><span class="lt-name"></span></div>
+                     <ul class="role-list"></ul>`;
+    sec.querySelector(".lt-name").textContent =
+      P[p].name + (mine ? " (you)" : "") + (locked ? " · locked" : "");
+    const ul = sec.querySelector(".role-list");
+
+    P[p].roster.forEach((r, i) => {
+      const li = document.createElement("li");
+      li.className = "role-row";
+      const taken = new Set(P[p].roster.filter((x, j) => j !== i && x.role).map(x => x.role));
+      if (mine && !locked){
+        li.innerHTML = `<span class="role-char"></span><select class="role-pick"></select>`;
+        const sel = li.querySelector("select");
+        sel.innerHTML = `<option value="">choose…</option>` + ROLES.map(ro =>
+          `<option value="${ro.k}"${taken.has(ro.k) ? " disabled" : ""}${r.role === ro.k ? " selected" : ""}>`
+          + `${ro.name}${r.char.fit && r.char.fit.includes(ro.k) ? " ✓" : ""}`
+          + `${r.char.bad && r.char.bad.includes(ro.k) ? " ✗" : ""}</option>`).join("");
+        sel.addEventListener("change", e => { setRole(p, i, e.target.value); paintRoles(); });
+      } else {
+        li.innerHTML = `<span class="role-char"></span><span class="role-shown"></span>`;
+        li.querySelector(".role-shown").textContent =
+          locked && r.role ? ROLE[r.role].name : (r.role ? "…" : "unassigned");
+      }
+      li.querySelector(".role-char").textContent = r.char.name;
+      ul.appendChild(li);
+    });
+
+    if (mine && !locked){
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "stamp-btn stamp-btn-sm role-lock";
+      b.innerHTML = `<span>Lock the Roles</span>`;
+      b.disabled = !rolesDone(p);
+      b.addEventListener("click", () => lockRoles(p));
+      sec.appendChild(b);
+    }
+    box.appendChild(sec);
+  }
+
+  // the encounter belongs to whoever kept the most money
+  const boss = caller(), iCall = boss === ME;
+  document.querySelectorAll('input[name="encounter"]').forEach(el => { el.disabled = !iCall; });
+  $("encounter").classList.toggle("not-yours", !iCall);
+  $("encWho").textContent = iCall
+    ? `You kept the most money (${money(P[ME].purse)}), so the encounter is your call.`
+    : `${P[boss].name} kept the most money (${money(P[boss].purse)}), so it is their call.`;
+
+  const ready = allLocked();
+  $("writeBtn").disabled = !ready;
+  $("writeHint").textContent = ready
+    ? "Every role is locked. Write it."
+    : "Waiting on " + seats().filter(p => !P[p].locked).map(p => P[p].name).join(" and ") + ".";
 }
 
 /* ------------------------- the writer ------------------------- */
@@ -2128,7 +2229,7 @@ $("againBtn").addEventListener("click", () => {
   $("writeBtn").disabled = false;
   $("writeHint").textContent = "One issue, written from the ten characters above.";
   if (boxCount() < MIN_BOX()) return;
-  P = seats().map(q => ({ name: P[q].name, purse: PURSE, roster: [] }));
+  P = seats().map(q => ({ name: P[q].name, purse: PURSE, roster: [], locked: false }));
   lot = null; lastFx = 0; drawnLot = -1;
   dealDeck();
   nextLot();
@@ -3246,6 +3347,57 @@ body{
   box-shadow:0 0 0 2px rgba(23,20,15,.22) inset;
 }
 .enc-opt:has(input:focus-visible){ outline:3px solid #f0c04a; outline-offset:2px; }
+
+
+/* ---------- role assignment ---------- */
+.roles-wrap{ width:min(920px,100%); }
+.roles-note{
+  margin:0 auto 14px; max-width:60ch; text-align:center;
+  font-size:13px; line-height:1.5; color:rgba(226,211,175,.62);
+}
+.role-board{ display:grid; gap:clamp(10px,2vw,20px); grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); }
+.role-side{
+  padding:12px 14px 13px; text-align:left;
+  background:linear-gradient(180deg, rgba(255,255,255,.20), rgba(120,90,50,.13)), var(--pulp-3);
+  border:1px solid rgba(70,52,28,.5);
+}
+.role-side .ledger-tab{
+  margin:-12px -14px 11px; padding:7px 14px 6px;
+  background:linear-gradient(180deg,#e6d1a4,var(--manila));
+  border-bottom:1px solid rgba(90,66,32,.5);
+}
+.role-red .ledger-tab{ box-shadow:inset 0 -4px 0 var(--red); }
+.role-blue .ledger-tab{ box-shadow:inset 0 -4px 0 var(--blue); }
+.role-green .ledger-tab{ box-shadow:inset 0 -4px 0 var(--green); }
+.role-side.mine{ box-shadow:0 0 0 2px rgba(240,192,74,.35); }
+.role-list{ list-style:none; margin:0; padding:0; }
+.role-row{
+  display:flex; align-items:center; gap:8px;
+  padding:6px 0; border-bottom:1px solid var(--rule);
+}
+.role-row:last-child{ border-bottom:0; }
+.role-char{
+  flex:1 1 auto; font-size:13px; font-weight:600;
+  color:var(--ink); overflow-wrap:break-word;
+}
+.role-pick{
+  flex:0 0 auto; max-width:52%; padding:4px 6px;
+  font-family:var(--data); font-size:12px;
+  background:rgba(255,255,255,.5); color:var(--ink);
+  border:1px solid rgba(70,52,28,.45); border-radius:2px;
+}
+.role-shown{
+  flex:0 0 auto; font-size:11px; font-weight:700;
+  letter-spacing:.11em; text-transform:uppercase; color:var(--ink-2);
+}
+.role-lock{ margin-top:12px; }
+.role-lock:disabled{ cursor:not-allowed; }
+.role-lock:disabled span{ opacity:.4; }
+.enc-who{
+  grid-column:1 / -1; margin:0 0 4px; text-align:center;
+  font-family:var(--type); font-size:13px; color:#f0c04a;
+}
+.encounter.not-yours .enc-opt{ opacity:.45; cursor:not-allowed; }
 
 /* ---------- the printed issue ---------- */
 .story{
