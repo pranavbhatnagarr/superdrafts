@@ -2175,6 +2175,7 @@ async function runBeat(beat, picked){
   const body = {
     mode: ST.mode,
     beat,
+    paras: NP >= 3 ? 1 : 2,
     recap: ST.recap || "",
     picked,
     forWho: beat === "final" ? "" : P[seats()[ST.turn]].name,
@@ -2218,9 +2219,11 @@ async function runBeat(beat, picked){
     ST.awaiting = seats()[ST.turn];
     ST.options = data.choices;
   } else {
-    // The writer skipped the choice. Better to run to the ending than to stall.
-    ST.turn = NP;
-    return runBeat("final", "");
+    // The writer skipped the choice even after being asked again. Keep the turn
+    // with the player it belongs to rather than stealing it.
+    ST.awaiting = seats()[ST.turn];
+    ST.options = ["Press the attack now, while they are off balance",
+                  "Pull back, regroup and set a trap"];
   }
   stPaint(); stSend();
 }
