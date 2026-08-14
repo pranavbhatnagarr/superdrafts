@@ -214,6 +214,18 @@ function tooMany(ip){
 }
 
 export default async function handler(req, res){
+  // Production is same origin so this never mattered there, but a page served
+  // from localhost sends a preflight first, and without an answer to it the
+  // browser blocks the real request. That is what made local testing
+  // impossible.
+  const origin = req.headers.origin;
+  if (ownOrigin(origin)){
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Vary", "Origin");
+  }
+  if (req.method === "OPTIONS") return res.status(204).end();
   if (req.method !== "POST") return res.status(405).json({ error: "POST only." });
 
   // Browsers always send Origin on a cross-document POST, so this is reliable
@@ -451,7 +463,12 @@ End it.` }
       // drafted character is named anywhere in there, lead with them instead.
       mvp: (() => {
         const raw2 = clean(j && j.mvp);
-        const hit = allNames.find(n => raw2.toLowerCase().includes(n.toLowerCase()));
+        // Look in the name half first. Searching the whole line would happily
+        // pick the character being hit rather than the one doing the hitting,
+        // which is how an MVP ended up disrupting their own defences.
+        const head = raw2.includes(":") ? raw2.slice(0, raw2.indexOf(":")) : raw2;
+        const hit = allNames.find(n => head.toLowerCase().includes(n.toLowerCase()))
+                 || allNames.find(n => raw2.toLowerCase().includes(n.toLowerCase()));
         if (!hit) return raw2;
         if (raw2.toLowerCase().startsWith(hit.toLowerCase())) return raw2;
         const tail = raw2.includes(":") ? raw2.slice(raw2.indexOf(":") + 1).trim() : raw2;
