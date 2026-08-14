@@ -67,9 +67,10 @@ Rules you must respect:
   person who drafted it. Those people are readers. They are not characters,
   they have no powers, they are not present, they never appear in a scene, they
   never speak, they are never hit and they never act. Use an owner name ONLY as
-  a possessive label for the side: "Pranav's team", "Pranav's five", "Pranav's
-  Anchor". NEVER write "Pranav charges", "Pranav orders", "send Pranav in", or
-  give an owner a pronoun. Every action in the story is taken by one of the ten
+  a possessive label for the side: "<owner>'s team", "<owner>'s five",
+  "<owner>'s Anchor". NEVER write "<owner> charges", "<owner> orders", "send
+  <owner> in", or give an owner a pronoun. Use ONLY the owner names given to
+  you below, never a name from these instructions and never an invented one. Every action in the story is taken by one of the ten
   drafted characters, by name. NEVER write "Team One", "Team Two", "the first
   team" or "the second team" either.
 - THE TEN DRAFTED CHARACTERS ARE THE ONLY CHARACTERS THAT EXIST. Do not add
@@ -101,8 +102,9 @@ Base versions only, no upgrades, no invented powers, no new characters. The ten
 drafted characters are the only characters that exist.
 
 THE OWNERS ARE NOT IN THE FIGHT. An owner name labels a side and nothing else.
-Write "Pranav's five" or "Pranav's Anchor", never "Pranav charges", never "send
-Pranav in", and never give an owner a pronoun. Every action belongs to a named
+Write "<owner>'s five" or "<owner>'s Anchor", never "<owner> charges", never
+"send <owner> in", and never give an owner a pronoun. Use only the owner names
+you are given, never an invented one. Every action belongs to a named
 character.
 
 No long dashes anywhere, use commas or full stops. Keep the voice, the
@@ -450,8 +452,8 @@ End it.` }
       // The recap is the only thing carried into the next beat, so if the writer
       // forgets it, fall back to the tail of what it just wrote.
       recap:  clean(j && j.recap) || story.split(/\s+/).slice(-30).join(" "),
-      // "Pranav's five" is the house style everywhere else, so the writer tends
-      // to hand back "Pranav's" here too. Snap it to the name we were given.
+      // The possessive is the house style everywhere else, so the writer tends
+      // to hand back "Owner's" here too. Snap it to the name we were given.
       winner: (() => {
         const raw = clean(j && j.winner);
         const names = (r && Array.isArray(r.names)) ? r.names.map(String) : [];
