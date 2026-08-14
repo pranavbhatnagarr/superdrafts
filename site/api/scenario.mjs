@@ -63,11 +63,17 @@ Rules you must respect:
 - The prices are real information: a character bought for $1 was thought
   worthless, one bought for $9 was fought over. Use that as texture.
 - Pick a decisive winner. No draws, no "both sides learned something".
-- CALL EACH SIDE BY ITS OWNER'S NAME, exactly as it is given to you. If the
-  sides are owned by Pranav and Marcus, write "Pranav's team", "Pranav's five"
-  or simply "Pranav". NEVER write "Team One", "Team Two", "the first team" or
-  "the second team". The two people reading this are the two owners, and they
-  want to read their own names.
+- THE OWNERS ARE NOT IN THE FIGHT. Each side is labelled with the name of the
+  person who drafted it. Those people are readers. They are not characters,
+  they have no powers, they are not present, they never appear in a scene, they
+  never speak, they are never hit and they never act. Use an owner name ONLY as
+  a possessive label for the side: "Pranav's team", "Pranav's five", "Pranav's
+  Anchor". NEVER write "Pranav charges", "Pranav orders", "send Pranav in", or
+  give an owner a pronoun. Every action in the story is taken by one of the ten
+  drafted characters, by name. NEVER write "Team One", "Team Two", "the first
+  team" or "the second team" either.
+- THE TEN DRAFTED CHARACTERS ARE THE ONLY CHARACTERS THAT EXIST. Do not add
+  allies, soldiers, bystanders or reinforcements with names.
 - THESE CHARACTERS COME FROM DIFFERENT FICTIONAL WORLDS. Adjudicate honestly:
   use each character's typical showings, not their single best feat, and never a
   composite or peak "end of series" version. A tier letter is given for each
@@ -90,8 +96,17 @@ Never write a title, a heading, or a section label. You are writing the
 middle of an issue, not a whole one.`;
 
 const SYSTEM_SHORT = `You are the same comics writer, continuing the same issue.
-Base versions only. Use owner names, never "Team One". No long dashes anywhere,
-use commas or full stops. Keep the voice and the characters consistent.`;
+
+Base versions only, no upgrades, no invented powers, no new characters. The ten
+drafted characters are the only characters that exist.
+
+THE OWNERS ARE NOT IN THE FIGHT. An owner name labels a side and nothing else.
+Write "Pranav's five" or "Pranav's Anchor", never "Pranav charges", never "send
+Pranav in", and never give an owner a pronoun. Every action belongs to a named
+character.
+
+No long dashes anywhere, use commas or full stops. Keep the voice, the
+characters and the setting consistent with what came before.`;
 
 const MODES = {
   random: `ENCOUNTER: Random. The two teams collide with no warning and no
@@ -134,6 +149,11 @@ named player two things their team could do next. Both must be plausible and
 pull in different directions: one leaning on force or speed, the other on
 planning, trickery or restraint. Never hint which is better.
 
+Each choice MUST name at least one of that player's five characters and say what
+that character does. "Have Batman flood the tunnel with gas" is a choice.
+"Unleash a fierce counterattack" is not, and neither is anything that puts the
+owner in the fight.
+
 Do not write a title. Do not resolve the fight. Do not name a winner.
 
 Answer with JSON and nothing else, in exactly this shape:
@@ -149,7 +169,7 @@ Answer with JSON and nothing else, in exactly this shape:
 {"story": [${n} string${n > 1 ? "s, one paragraph each" : ", one paragraph"}],
  "winner": "the owner name, exactly as given",
  "mvp": "character name, then a colon, then one sentence on what they did. May be from any team, including a losing one",
- "read": "two or three sentences on which roles and which purchases earned their keep, naming owners and dollar amounts"}`;
+ "read": "two or three sentences on which roles and which purchases earned their keep. Name every character in the form Biggest's Strategist Mister Fantastic ($6). Never write an owner name on its own as if they played."}`;
 
 // Models drop the markers now and then and answer in prose with "A)" and "B)"
 // lines. Read both shapes, and prefer the marked one when it is there.
@@ -240,14 +260,20 @@ whenever someone has to be finished.
 
 ${teams.join("\n\n")}
 
-Open the fight. The choice at the end is for ${forWho}.` }
+Open the fight. The choice at the end belongs to ${forWho}, so both options must
+be actions taken by characters from ${forWho}'s five.` }
   ] : beat === "mid" ? [
     { role: "system", content: SYSTEM_SHORT + BEAT_RULES(paras) },
     { role: "user", content:
-`WHERE THE FIGHT STANDS: ${recap}
+`The five on each side, which are the only characters in this story:
+
+${teams.join("\n\n")}
+
+WHERE THE FIGHT STANDS: ${recap}
 WHAT JUST HAPPENED: ${picked}
 
-Continue. The choice at the end is for ${forWho}.` }
+Continue. The choice at the end belongs to ${forWho}, so both options must be
+actions taken by characters from ${forWho}'s five.` }
   ] : [
     { role: "system", content: SYSTEM_SHORT + FINAL_RULES(paras) },
     { role: "user", content:
@@ -350,7 +376,15 @@ End it.` }
       // The recap is the only thing carried into the next beat, so if the writer
       // forgets it, fall back to the tail of what it just wrote.
       recap:  clean(j && j.recap) || story.split(/\s+/).slice(-30).join(" "),
-      winner: clean(j && j.winner),
+      // "Pranav's five" is the house style everywhere else, so the writer tends
+      // to hand back "Pranav's" here too. Snap it to the name we were given.
+      winner: (() => {
+        const raw = clean(j && j.winner);
+        const names = (r && Array.isArray(r.names)) ? r.names.map(String) : [];
+        const hit = names.find(n => raw.toLowerCase().replace(/['\u2019]s$/, "") === n.toLowerCase())
+                 || names.find(n => raw.toLowerCase().startsWith(n.toLowerCase()));
+        return hit || (r && r.winner) || raw.replace(/['\u2019]s$/, "");
+      })(),
       mvp:    clean(j && j.mvp),
       read:   clean(j && j.read),
       model: used

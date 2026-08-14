@@ -2094,12 +2094,12 @@ function stPaint(){
   window.__story = plain.join("\n\n");
 
   const v = ST.v;
-  $("storyScore").textContent = v && v.scores
+  $("storyScore").textContent = ST.end && v && v.scores
     ? `Tier score, ${ST.mode === "prep" ? "with a week of prep" : "on raw capability"}, roles counted: `
       + seats().map(q => `${P[q].name} ${v.scores[q]}`).join(", ")
       + (v.close ? ". Close enough that the choices decide it." : "")
     : "";
-  $("storyFoot").textContent = MODE_NAME[ST.mode] || "";
+  $("storyFoot").textContent = ST.end ? (MODE_NAME[ST.mode] || "") : "";
 
   const live = ST.awaiting != null && ST.options && ST.options.length === 2 && !ST.busy;
   cw.hidden = !live;
