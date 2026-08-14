@@ -1147,8 +1147,16 @@ const passCost = p => (soloRun() && inPlay(p)) ? 1 : 0;
 // Who is on the hook when a lot cannot be passed in.
 function obliged(){
   if (!compulsory()) return null;
-  if (soloRun()) return seats().find(inPlay);
-  return lot.opener;
+  // The opener carries it, but a buyer holding five cannot buy a sixth. Walk
+  // on to the next seat that still has a slot. With two buyers a full seat
+  // always left exactly one other in play, so this never showed; with three,
+  // one can be full while two are still buying, and naming the full one put
+  // nobody on the hook and passed a compulsory lot in unsold.
+  for (let i = 0; i < NP; i++){
+    const p = (lot.opener + i) % NP;
+    if (inPlay(p)) return p;
+  }
+  return null;
 }
 
 function canPass(p){
