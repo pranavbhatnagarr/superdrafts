@@ -169,7 +169,7 @@ Answer with JSON and nothing else, in exactly this shape:
 {"story": [${n} string${n > 1 ? "s, one paragraph each" : ", one paragraph"}],
  "winner": "the owner name, exactly as given",
  "mvp": "character name, then a colon, then one sentence on what they did. May be from any team, including a losing one",
- "read": "two or three sentences on which roles and which purchases earned their keep. Name every character in the form Biggest's Strategist Mister Fantastic ($6). Never write an owner name on its own as if they played."}`;
+ "read": "three or four sentences, and NEVER mention money, prices or dollar amounts. First: which characters and which roles decided this, using their final tiers, in the form Biggest's Strategist Nightwing, final tier C. Then: for each decision listed under DECISIONS, say plainly what would have happened instead if that player had taken the option they turned down, and whether it would have changed the result. Never write an owner name on its own as if they played."}`;
 
 // Models drop the markers now and then and answer in prose with "A)" and "B)"
 // lines. Read both shapes, and prefer the marked one when it is there.
@@ -188,7 +188,7 @@ function roster(team){
   if (!team || !Array.isArray(team.picks)) return null;
   const picks = team.picks.slice(0, 5).map(p => {
     const world = String(p.world || p.pub || "").slice(0, 24);
-    const tier = /^[SABCDE]$/.test(String(p.tier)) ? `, tier ${p.tier}` : "";
+    const tier = /^[SABCDE]$/.test(String(p.tier)) ? `, final tier ${p.tier}` : "";
     const role = p.role ? `, ${String(p.role).slice(0, 14)}` : "";
     return `- ${String(p.name).slice(0, 40)} (${world}${tier}${role}), $${Number(p.price) | 0}`;
   });
@@ -245,6 +245,16 @@ export default async function handler(req, res){
   const forWho = String((body && body.forWho) || "").slice(0, 20);
   const paras = [1, 2].includes(body && body.paras) ? body.paras : 2;
 
+  // What each player chose, and what they turned down. The ending is asked to
+  // say where the other road would have led.
+  const paths = (body && Array.isArray(body.paths) ? body.paths : []).slice(0, 3)
+    .map(p => ({
+      who:  String((p && p.who)  || "").slice(0, 20),
+      took: String((p && p.took) || "").slice(0, 160),
+      left: String((p && p.left) || "").slice(0, 160)
+    }))
+    .filter(p => p.who && p.took);
+
   // The rosters again, as plain names, so the answer can be checked against
   // them. A weak model will happily hand a player their opponent's characters.
   const sides = (body && Array.isArray(body.teams) ? body.teams : []).map(t => ({
@@ -295,8 +305,15 @@ Use these names. Do not invent units, ranks or archetypes.
 
 ${teams.join("\n\n")}
 
+The tiers above are FINAL tiers, already adjusted for each character's role and
+for the encounter. A role that suited its character has already moved them up,
+a role that did not has already moved them down. Treat them as the truth.
+
 WHERE THE FIGHT STANDS: ${recap || "The two sides have just met and nothing is settled."}
 ${picked ? "WHAT JUST HAPPENED: " + picked : ""}
+${paths.length ? `
+DECISIONS, and the option each player turned down:
+${paths.map(p => `- ${p.who} took: ${p.took}\n  ${p.who} turned down: ${p.left || "nothing else was offered"}`).join("\n")}` : ""}
 
 End it.` }
   ];
@@ -408,7 +425,9 @@ End it.` }
       .slice(0, paras)
       .join("\n\n");
 
-    const clean = v => String(v == null ? "" : v).trim();
+    // A model that answers with ["one.", "two."] would otherwise be stringified
+    // into "one.,two." by String(), which is where the stray commas came from.
+    const clean = v => (Array.isArray(v) ? v.join(" ") : String(v == null ? "" : v)).trim();
     const choices = beat === "final" ? []
       : (j && Array.isArray(j.choices) ? j.choices.map(clean).filter(Boolean).slice(0, 2)
                                        : readChoices(text));

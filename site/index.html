@@ -803,7 +803,7 @@ function handle(m){
   if (m.t === "st" && !HOST){ ST = m.st; stPaint(); }
   if (m.t === "choose" && HOST && seatOf[m.cid] === m.p) applyChoice(m.p, m.i);
   if (m.t === "startstory" && HOST && seatOf[m.cid] === caller()
-      && (!ST || ST.end || ST.err)) startStory(m.mode);
+      && (!ST || ST.end || ST.err) && modeLeft(m.mode)) startStory(m.mode);
   if (m.t === "closed" && !HOST){
     setWire(false, "table closed");
     $("setupMsg").textContent = "The host closed the table.";
@@ -2014,13 +2014,7 @@ function paintRoles(){
     box.appendChild(sec);
   }
 
-  // the encounter belongs to whoever kept the most money
-  const boss = caller(), iCall = boss === ME;
-  document.querySelectorAll('input[name="encounter"]').forEach(el => { el.disabled = !iCall; });
-  $("encounter").classList.toggle("not-yours", !iCall);
-  $("encWho").textContent = iCall
-    ? `You kept the most money (${money(P[ME].purse)}), so the encounter is your call.`
-    : `${P[boss].name} kept the most money (${money(P[boss].purse)}), so it is their call.`;
+  paintEncounter();
 
   const ready = allLocked();
   if (ST){ stPaint(); return; }
@@ -2032,6 +2026,41 @@ function paintRoles(){
 
 /* ------------------------- the writer ------------------------- */
 const MODE_NAME = { random: "Random encounter", prep: "A week of prep" };
+
+// Each draft is worth two issues, one of each encounter. Writing the same one
+// twice would cost tokens to tell the same story, so a used encounter closes.
+const runsDone = () => (ST && ST.runs) || [];
+const modeLeft = m => !runsDone().includes(m);
+
+function paintEncounter(){
+  const boss = caller(), iCall = boss === ME;
+  const busy = !!(ST && ST.busy) || (ST && !ST.end && !ST.err);
+
+  document.querySelectorAll('input[name="encounter"]').forEach(el => {
+    const used = !modeLeft(el.value);
+    el.disabled = !iCall || used || busy;
+    const opt = el.closest(".enc-opt");
+    if (opt) opt.classList.toggle("enc-used", used);
+  });
+
+  // Never leave the used one selected, or Write the Fight has nothing to do.
+  const cur = document.querySelector('input[name="encounter"]:checked');
+  if (cur && !modeLeft(cur.value)){
+    const free = [...document.querySelectorAll('input[name="encounter"]')]
+      .find(el => modeLeft(el.value));
+    if (free) free.checked = true;
+  }
+
+  $("encounter").classList.toggle("not-yours", !iCall);
+  const left = 2 - runsDone().length;
+  $("encWho").textContent =
+    left === 0 ? "Both encounters have been written. This draft is finished."
+    : runsDone().length === 1
+      ? (iCall ? "One encounter left. Run the other to see how it would have gone."
+               : `${P[boss].name} has one encounter left to call.`)
+    : iCall ? `You kept the most money (${money(P[ME].purse)}), so the encounter is your call.`
+            : `${P[boss].name} kept the most money (${money(P[boss].purse)}), so it is their call.`;
+}
 
 function chosenMode(){
   const el = document.querySelector('input[name="encounter"]:checked');
@@ -2123,10 +2152,13 @@ function stPaint(){
 
   // Only the person who called the encounter can start it, and only once.
   const done = !!ST.end || !!ST.err;
-  $("writeBtn").disabled = ST.busy || !done;
+  const spent = ST.runs && ST.runs.length >= 2 && !ST.err;
+  paintEncounter();
+  $("writeBtn").disabled = ST.busy || !done || spent;
   $("writeHint").textContent = ST.err
     ? "Something went wrong. You can run it again."
-    : done ? "Change the encounter and write it again, the choices land differently."
+    : spent ? "Both encounters are written. Run it again for a fresh draft."
+    : done ? "Run the other encounter to see how the same five would have done."
            : "The issue is being written. Choices appear as it goes.";
 }
 
@@ -2144,7 +2176,11 @@ function applyChoice(p, i){
   const pick = ST.options && ST.options[i];
   if (!pick) return;
   const last = ST.beats[ST.beats.length - 1];
-  if (last){ last.by = p; last.pick = pick; }
+  if (last){
+    last.by = p;
+    last.pick = pick;
+    last.dropped = ST.options[1 - i] || "";
+  }
   ST.awaiting = null;
   ST.options = null;
   ST.turn++;
@@ -2154,13 +2190,16 @@ function applyChoice(p, i){
 function writeFight(){
   if (ME !== caller()) return;
   const mode = chosenMode();
+  if (!modeLeft(mode) || runsDone().length >= 2) return;
   if (!HOST){ send({ t: "startstory", cid: CID, mode }); return; }
   startStory(mode);
 }
 
 function startStory(mode){
   if (!HOST) return;
-  ST = { mode, v: verdict(mode), beats: [], turn: 0,
+  const runs = runsDone();
+  if (runs.includes(mode) || runs.length >= 2) return;
+  ST = { mode, v: verdict(mode), beats: [], turn: 0, runs: runs.concat(mode),
          awaiting: null, options: null, busy: true, err: "", end: null };
   stPaint(); stSend();
   runBeat("open", "");
@@ -2184,7 +2223,12 @@ async function runBeat(beat, picked){
               winner: v.winner === null ? null : P[v.winner].name },
     teams: seats().map(q => ({ name: P[q].name, picks: P[q].roster.map(r => ({
       name: r.char.name, world: (UNIVERSES[r.char.pub] || {}).name || r.char.pub,
-      tier: r.char.tier, role: roleName(r.role), price: r.price })) }))
+      tier: effTier(r.char, ST.mode, r.role), role: roleName(r.role),
+      price: r.price })) })),
+    // The ending is asked what the other road would have led to, so it has to
+    // know there was one.
+    paths: beat !== "final" ? [] : ST.beats.filter(b => b.pick).map(b => ({
+      who: P[b.by].name, took: b.pick, left: b.dropped || "" }))
   };
 
   let data = null, msg = "";
@@ -3696,6 +3740,10 @@ body{
 .sc-opt:disabled{ cursor:default; opacity:.5; box-shadow:2px 2px 0 var(--ink); }
 .story-pick{ margin:10px 0 16px; padding:8px 12px; border-left:4px solid var(--stamp);
   background:rgba(0,0,0,.04); font:italic 500 15px/1.4 var(--data); }
+
+.enc-opt.enc-used{ opacity:.4; }
+.enc-opt.enc-used .enc-body b::after{ content:" (written)"; font:600 11px var(--data);
+  letter-spacing:.08em; text-transform:uppercase; vertical-align:middle; }
 </style>
 </body>
 </html>
