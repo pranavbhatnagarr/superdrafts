@@ -33,7 +33,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <main id="setup" class="screen setup-screen">
   <div class="guide-cover">
     <div class="cover-rules" aria-hidden="true"></div>
-    <p class="cover-edition">Twenty Lots &middot; Ten Sold &middot; Two Buyers</p>
+    <p class="cover-edition" id="coverEdition">Twenty Lots &middot; Ten Sold &middot; Two Buyers</p>
     <h1 class="cover-title">Super Drafts</h1>
     <p class="cover-sub">Ten Characters. Twenty Dollars. One Fight.</p>
 
@@ -56,7 +56,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     <section class="box-pick" aria-label="What goes in the box">
       <h2 class="fm-head">What goes in the box</h2>
-      <p class="box-note">Twenty characters are drawn from whatever you tick here. Your friend sees the list before they sit down.</p>
+      <p class="box-note">The sale is drawn from whatever you tick here. Everyone sees the list before they sit down.</p>
 
       <div class="chips" id="uniChips"></div>
 
@@ -74,12 +74,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <div class="doors">
       <section class="door">
         <h2 class="fm-head">Open a table</h2>
-        <p class="door-copy">You take the red pencil, choose what goes in the box, and get a code to send over.</p>
+        <p class="door-copy">You take the first pencil, choose what goes in the box, and get a code to send round.</p>
         <button id="openBox" class="stamp-btn" type="button"><span>Open the Box</span></button>
       </section>
       <section class="door">
         <h2 class="fm-head">Sit down at one</h2>
-        <p class="door-copy">Somebody sent you four letters. Take the blue pencil and sit down.</p>
+        <p class="door-copy">Somebody sent you four letters. Type them in and ask for a chair.</p>
         <div class="join-row">
           <input id="joinCode" class="code-input" type="text" maxlength="4" autocomplete="off" spellcheck="false" placeholder="CODE" aria-label="Four-letter table code">
           <button id="joinBtn" class="pn-pass join-btn" type="button">Join</button>
@@ -101,12 +101,40 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <li><b>Then it becomes compulsory.</b> When the lots remaining equal the buys still owed, passing stops. Whatever comes up, somebody is buying it.</li>
         <li><b>Keep a dollar per slot.</b> You can never bid so deep that you cannot afford $1 for each empty slot, so both rosters always reach five.</li>
         <li><b>Buying alone costs to walk away.</b> Once the other side is full, each pass you make costs $1, so a fat purse buys patience and nothing else.</li>
-        <li><b>Five against five.</b> Base versions. Pick a random encounter or a week of prep, and the fight gets written up on the spot.</li>
+        <li><b>Then they fight.</b> Base versions. Pick a random encounter or a week of prep, and the issue gets written on the spot.</li>
       </ol>
       <p class="fm-foot">Tiers are the only number on the table, and they decide the fight. Everything else is what you already know.</p>
     </section>
 
-    <p class="cover-hint">Two devices, anywhere in the world. Every bid is public, so keep a call open and talk your way into a bargain.</p>
+    <p class="cover-hint">Two or three buyers, any devices, anywhere in the world. Every bid is public, so talk your way into a bargain.</p>
+  </div>
+</main>
+
+
+<!-- ============================ INVITED ============================ -->
+<main id="knock" class="screen setup-screen" hidden>
+  <div class="guide-cover lobby-cover">
+    <div class="cover-rules" aria-hidden="true"></div>
+    <p class="cover-edition">You Have Been Invited &middot; One Chair &middot; Bring Money</p>
+    <h2 class="lobby-title">Table <span id="knockCode">----</span></h2>
+
+    <div class="tabs-row tabs-solo knock-tab">
+      <div class="tab tab-blue">
+        <label class="tab-label" for="knockName">Your name</label>
+        <input id="knockName" class="tab-input" type="text" maxlength="14"
+               autocomplete="off" spellcheck="false" placeholder="write it here">
+        <p class="tab-purse">Purse <b>$20</b></p>
+      </div>
+    </div>
+
+    <div id="knockAsk">
+      <p class="lobby-copy">The host sets what goes in the box and how many are playing.
+        Put your name down and they will let you in.</p>
+      <button id="knockBtn" class="stamp-btn stamp-btn-sm" type="button"><span>Ask for a Chair</span></button>
+    </div>
+
+    <p class="netmsg lobby-wait" id="knockMsg" role="status" hidden></p>
+    <p class="knock-box" id="knockBox"></p>
   </div>
 </main>
 
@@ -114,15 +142,21 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <main id="lobby" class="screen setup-screen" hidden>
   <div class="guide-cover lobby-cover">
     <div class="cover-rules" aria-hidden="true"></div>
-    <p class="cover-edition">Table Reserved &middot; Two Buyers &middot; Awaiting the Second Chair</p>
+    <p class="cover-edition" id="lobbyEdition">Table Reserved &middot; Awaiting the Other Chairs</p>
     <h2 class="lobby-title">Table <span id="lobbyCode">----</span></h2>
 
     <p class="lobby-box"><span id="lobbyBox"></span></p>
 
-    <p class="lobby-copy">Send your friend this link. It carries the code, so all they do is type a name and sit down.</p>
+    <p class="lobby-copy">Send this link to the other buyers. It carries the code, so all they do is type a name and knock.</p>
     <div class="share-row">
-      <input id="shareLink" class="share-input" type="text" readonly aria-label="Link to send your friend">
+      <input id="shareLink" class="share-input" type="text" readonly aria-label="Link to send the other buyers">
       <button id="shareBtn" class="pn-pass" type="button">Copy</button>
+    </div>
+
+
+    <div class="pending" id="pending" hidden>
+      <h3 class="fm-head">Asking to join</h3>
+      <ul class="pending-list" id="pendingList"></ul>
     </div>
 
     <p class="netmsg lobby-wait" id="lobbyMsg" role="status">Waiting for the other buyers…</p>
@@ -207,7 +241,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <!-- ============================ FACE-OFF ============================ -->
 <main id="faceoff" class="screen faceoff-screen" hidden>
   <header class="fo-head">
-    <h2 class="fo-title">Five Against Five</h2>
+    <h2 class="fo-title" id="foTitle">Five Against Five</h2>
     <div class="gh-rule" aria-hidden="true"></div>
   </header>
 
@@ -606,6 +640,7 @@ const CID = (() => {
 })();
 let seatOf = {};                       // host only: client id to chair number
 let seatedAck = false;                 // guest: the host has given us a chair
+const knocks = new Map();              // host: who is at the door
 
 let heardBids = 0, heardFolds = 0;
 let sb, chan, ROOM = "", ME = 0, HOST = false, started = false, peerOn = false,
@@ -643,7 +678,7 @@ async function connect(){
   chan.on("presence", { event: "sync" }, () => {
     const others = Object.values(chan.presenceState()).flat().filter(x => x.me !== ME);
     if (others.length) setWire(true, peerLabel());
-    else setWire(false, started ? "friend dropped, they can rejoin" : "waiting…");
+    else setWire(false, started ? "a buyer dropped, they can rejoin" : "waiting…");
   });
 
   await new Promise((resolve, reject) => {
@@ -658,6 +693,17 @@ async function connect(){
 const send = payload => chan && chan.send({ type: "broadcast", event: "msg", payload });
 
 function handle(m){
+  // Somebody following the link asks first. A cid we already seated is a
+  // reconnect and walks straight back in, so a dropped phone is never stuck
+  // waiting on the host to notice.
+  if (m.t === "knock" && HOST){
+    if (seatOf[m.cid] !== undefined){ admit(m.cid, m.name); return; }
+    knocks.set(m.cid, { name: (m.name || "Someone").slice(0, 14), at: Date.now() });
+    paintPending();
+    send({ t: "knocked", cid: m.cid });
+    return;
+  }
+
   if (m.t === "join" && HOST){
     let seat = seatOf[m.cid];
     if (seat === undefined){
@@ -691,6 +737,15 @@ function handle(m){
     if (m.p === 0 || seatOf[m.cid] !== m.p) return;   // you may only move for your own chair
     m.kind === "bid" ? bid(m.p, m.amount) : pass(m.p);
   }
+  if (m.t === "knocked" && !HOST && m.cid === CID){
+    $("knockMsg").hidden = false;
+    $("knockMsg").textContent = "Asked. Waiting for the host to let you in.";
+  }
+  if (m.t === "refused" && !HOST && m.cid === CID){
+    $("knockMsg").hidden = false;
+    $("knockMsg").textContent = "The host did not let you in.";
+    $("knockAsk").hidden = false;
+  }
   if (m.t === "seat" && !HOST && m.cid === CID){ ME = m.seat; NP = m.np; seatedAck = true; }
   if (m.t === "full" && !HOST && m.cid === CID){
     nudge("That table is full. Three buyers is the limit.");
@@ -706,7 +761,7 @@ function handle(m){
   if (m.t === "storyfail") showStoryError(m.error);
   if (m.t === "closed" && !HOST){
     setWire(false, "table closed");
-    $("setupMsg").textContent = "Your friend closed the table.";
+    $("setupMsg").textContent = "The host closed the table.";
     showScreen("setup");
   }
 }
@@ -771,7 +826,7 @@ function act(kind, amount){
 }
 
 function showScreen(which){
-  for (const id of ["setup","lobby","auction","faceoff"]) $(id).hidden = (id !== which);
+  for (const id of ["setup","knock","lobby","auction","faceoff"]) $(id).hidden = (id !== which);
 }
 
 /* ------------------------- the box picker ------------------------- */
@@ -841,8 +896,94 @@ function paintNP(){
 
 function refreshSetupBox(){
   paintNP();
+  $("coverEdition").textContent =
+    `Twenty Lots \u00b7 Ten Sold \u00b7 ${NP === 3 ? "Three" : "Two"} Buyers`
+      .replace("Twenty", NP === 3 ? "Thirty" : "Twenty")
+      .replace("Ten Sold", NP === 3 ? "Fifteen Sold" : "Ten Sold");
   BOX.tiers = $("showTiers").checked;
   paintBox($("uniChips"), $("boxCount"), refreshSetupBox);
+}
+
+
+/* --------------------- letting people in --------------------- */
+// Host: draw whoever is at the door, with a decision next to each name.
+function paintPending(){
+  const box = $("pending"), list = $("pendingList");
+  if (!HOST) return;
+  const seated = Object.keys(seatOf).length + 1;         // the host holds one chair
+  const room = NP - seated;
+  list.innerHTML = "";
+  for (const [cid, who] of knocks){
+    const li = document.createElement("li");
+    li.className = "pending-row";
+    li.innerHTML = `<span class="pending-name"></span>
+      <button type="button" class="pn-pass allow">Let in</button>
+      <button type="button" class="ghost-btn deny">No</button>`;
+    li.querySelector(".pending-name").textContent = who.name;
+    const allow = li.querySelector(".allow");
+    allow.disabled = room < 1;
+    allow.title = room < 1 ? "Every chair is taken" : "";
+    allow.addEventListener("click", () => admit(cid, who.name));
+    li.querySelector(".deny").addEventListener("click", () => {
+      knocks.delete(cid); send({ t: "refused", cid }); paintPending();
+    });
+    list.appendChild(li);
+  }
+  box.hidden = knocks.size === 0;
+  $("lobbyMsg").textContent = room > 0
+    ? `${room} ${room === 1 ? "chair" : "chairs"} still open.`
+    : "Every chair is taken.";
+}
+
+// Host: give someone a chair. Reuses their old one if they are coming back.
+function admit(cid, name){
+  if (!HOST) return;
+  let seat = seatOf[cid];
+  if (seat === undefined){
+    let live;
+    try { live = new Set(Object.keys(chan.presenceState() || {})); } catch { live = null; }
+    if (live){ live.add(cid);
+      for (const [c, q] of Object.entries(seatOf)) if (!live.has(c)) delete seatOf[c]; }
+    const used = Object.values(seatOf);
+    seat = seats().find(q => q !== 0 && !used.includes(q));
+    if (seat === undefined){ send({ t: "full", cid }); return; }
+    seatOf[cid] = seat;
+  }
+  knocks.delete(cid);
+  P[seat].name = (name || SEATS[seat].pencil).slice(0, 14);
+  send({ t: "seat", cid, seat, np: NP });
+  paintPending();
+  if (!started && Object.keys(seatOf).length < NP - 1){
+    send({ t: "waiting", seated: Object.keys(seatOf).length + 1, need: NP });
+    return;
+  }
+  if (!started){ started = true; SFX.join(); dealDeck(); nextLot(); }
+  pushState();
+}
+
+// Guest: an invite link lands here rather than on the host's control panel.
+async function askForChair(){
+  const n = ($("knockName").value || "").trim().slice(0, 14);
+  if (!n){ $("knockMsg").hidden = false;
+           $("knockMsg").textContent = "Put your name down first."; return; }
+  try { localStorage.setItem("longbox.name", n); } catch {}
+  HOST = false; ME = 1;
+  $("knockAsk").hidden = true;
+  $("knockMsg").hidden = false;
+  $("knockMsg").textContent = "Knocking…";
+  if (!chan){
+    try { await connect(); }
+    catch { $("knockMsg").textContent = "Could not reach the table. Check your connection.";
+            $("knockAsk").hidden = false; return; }
+  }
+  seatedAck = false;
+  const knock = () => send({ t: "knock", name: n, cid: CID });
+  knock();
+  clearInterval(window.__knockT);
+  window.__knockT = setInterval(() => {
+    if (seatedAck || !$("auction").hidden){ clearInterval(window.__knockT); return; }
+    knock();                                  // the host may have only just opened the page
+  }, 3000);
 }
 
 /* ---------------------------- tables ---------------------------- */
@@ -877,16 +1018,27 @@ async function openTable(){
   try { await connect(); } catch { return nudge("Could not reach the table service. Check your connection and try again."); }
   $("setupMsg").textContent = "";
   $("lobbyCode").textContent = ROOM;
+  knocks.clear(); paintPending();
   $("lobbyBox").textContent = boxSummary();
   $("shareLink").value = location.origin + location.pathname + "?r=" + ROOM;
   showScreen("lobby");
 }
 
 async function joinTable(){
-  const n = myName();
-  if (!n) return nudge("Put your name on the tab first.");
   const c = ($("joinCode").value || "").trim().toUpperCase();
   if (c.length !== 4) return nudge("A table code is four letters.");
+  // Typing a code by hand lands in the same place as following a link, so a
+  // guest never sees the host's controls and never thinks they own them.
+  ROOM = c;
+  $("knockCode").textContent = c;
+  try { $("knockName").value = localStorage.getItem("longbox.name") || myName() || ""; } catch {}
+  showScreen("knock");
+  chan = null;
+  connect().catch(() => {
+    $("knockMsg").hidden = false;
+    $("knockMsg").textContent = "Could not reach that table.";
+  });
+  return;
   HOST = false; ME = 1; ROOM = c;
   $("setupMsg").textContent = "Looking for table " + c + "…";
   try { await connect(); } catch { return nudge("Could not reach the table service. Check your connection and try again."); }
@@ -901,7 +1053,7 @@ async function joinTable(){
     if (!$("auction").hidden || seatedAck){ clearInterval(poke); return; }
     if ((waited += 1500) > 9000){
       clearInterval(poke);
-      nudge("No table " + c + " answered. Check the code, and make sure your friend still has their page open.");
+      nudge("No table " + c + " answered. Check the code, and make sure the host still has their page open.");
       chan && sb.removeChannel(chan);
     } else send({ t: "join", name: n, cid: CID });
   }, 1500);
@@ -1720,6 +1872,7 @@ function finish(){
 
 function showFaceoff(){
   SFX.finish();
+  $("foTitle").textContent = NP === 3 ? "Five Against Five Against Five" : "Five Against Five";
   showScreen("faceoff");
   buildFoSides();
   $("againBtn").hidden = !HOST;
@@ -1864,6 +2017,8 @@ setSfx(sfxOn);
 if (!musicOn) setMusic(false); else $("musicToggle").textContent = "music on";
 $("openBox").addEventListener("click", openTable);
 $("joinBtn").addEventListener("click", joinTable);
+$("knockBtn").addEventListener("click", askForChair);
+$("knockName").addEventListener("keydown", e => { if (e.key === "Enter") askForChair(); });
 $("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") joinTable(); });
 $("myName").addEventListener("keydown", e => { if (e.key === "Enter") openTable(); });
 
@@ -1888,8 +2043,15 @@ refreshSetupBox();
 // A code in the link means they were invited, prefill it and say so.
 const invited = new URLSearchParams(location.search).get("r");
 if (invited){
-  $("joinCode").value = invited.toUpperCase().slice(0, 4);
-  $("setupMsg").textContent = "You have been invited to table " + $("joinCode").value + ". Put your name on the tab and join.";
+  ROOM = invited.toUpperCase().slice(0, 4);
+  $("knockCode").textContent = ROOM;
+  try { $("knockName").value = localStorage.getItem("longbox.name") || ""; } catch {}
+  showScreen("knock");
+  // open the line straight away so the knock lands the moment they ask
+  connect().catch(() => {
+    $("knockMsg").hidden = false;
+    $("knockMsg").textContent = "Could not reach the table service. Check your connection.";
+  });
 }
 
 // Offer to reopen a table this browser was hosting (a refresh loses nothing).
@@ -2398,6 +2560,37 @@ body{
   .cv-bot{ padding-top:6px; }
   .cv-cond{ font-size:8.5px; }
 }
+
+
+/* ---------- the door ---------- */
+.knock-tab{ margin-top:22px; }
+.knock-box{
+  margin:14px 0 0; font-family:var(--type);
+  font-size:13px; color:var(--ink-3);
+}
+.pending{
+  width:min(520px,100%); margin:0 auto 18px; padding:14px 16px 12px;
+  background:linear-gradient(180deg, rgba(255,255,255,.20), rgba(120,90,50,.13)), var(--pulp-3);
+  border:1px solid rgba(70,52,28,.5); text-align:left;
+}
+.pending[hidden]{ display:none; }
+.pending .fm-head{ margin-bottom:10px; }
+.pending-list{ list-style:none; margin:0; padding:0; }
+.pending-row{
+  display:flex; align-items:center; gap:8px;
+  padding:7px 0; border-bottom:1px solid var(--rule);
+}
+.pending-row:last-child{ border-bottom:0; }
+.pending-name{
+  flex:1 1 auto; font-family:var(--type); font-size:15px;
+  color:var(--ink); overflow-wrap:break-word;
+}
+.pending-row .allow{ flex:0 0 auto; padding:6px 14px; }
+.pending-row .deny{
+  flex:0 0 auto; padding:6px 12px;
+  border-color:rgba(70,52,28,.4); color:var(--ink-3);
+}
+.pending-row .deny:hover{ background:var(--ink); color:var(--pulp); border-color:var(--ink); }
 
 /* ---------- lobby: opening or joining a table ---------- */
 .tabs-solo{ grid-template-columns:minmax(0,320px); justify-content:center; }
