@@ -10,9 +10,13 @@
     "setkey": "cd site && vercel env add GROQ_API_KEY production --global-config ../.vercel-cli",
     "envls": "cd site && vercel env ls --global-config ../.vercel-cli",
     "deploy": "vercel deploy site --prod --global-config .vercel-cli",
-    "serve": "python3 -m http.server 8791 --directory site"
+    "serve": "python3 -m http.server 8791 --directory site",
+    "dev": "node dev-server.mjs"
   },
   "devDependencies": {
     "vercel": "^58.9.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.3"
   }
 }

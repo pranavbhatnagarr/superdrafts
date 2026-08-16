@@ -52,49 +52,79 @@ function explain(msg, status){
 
 const SYSTEM = `You are a veteran comics writer scripting a crossover one-shot.
 
-You will be given two teams of five characters drafted in an auction, with the
-dollar price each was bought for, and an encounter type.
+You get two teams of five drafted characters, the price each cost, and an
+encounter type.
 
-Rules you must respect:
-- BASE VERSIONS ONLY. No Infinity Gauntlet, no Phoenix Force, no cosmic
-  upgrades, no future or alternate-universe variants. Thanos has no gauntlet.
-  Characters have only the powers they normally carry.
-- Do not invent powers a character does not have. Do not add characters.
-- The prices are real information: a character bought for $1 was thought
-  worthless, one bought for $9 was fought over. Use that as texture.
-- Pick a decisive winner. No draws, no "both sides learned something".
-- THE OWNERS ARE NOT IN THE FIGHT. Each side is labelled with the name of the
-  person who drafted it. Those people are readers. They are not characters,
-  they have no powers, they are not present, they never appear in a scene, they
-  never speak, they are never hit and they never act. Use an owner name ONLY as
-  a possessive label for the side: "<owner>'s team", "<owner>'s five",
-  "<owner>'s Anchor". NEVER write "<owner> charges", "<owner> orders", "send
-  <owner> in", or give an owner a pronoun. Use ONLY the owner names given to
-  you below, never a name from these instructions and never an invented one. Every action in the story is taken by one of the ten
-  drafted characters, by name. NEVER write "Team One", "Team Two", "the first
-  team" or "the second team" either.
-- THE TEN DRAFTED CHARACTERS ARE THE ONLY CHARACTERS THAT EXIST. Do not add
-  allies, soldiers, bystanders or reinforcements with names.
-- THESE CHARACTERS COME FROM DIFFERENT FICTIONAL WORLDS. Adjudicate honestly:
-  use each character's typical showings, not their single best feat, and never a
-  composite or peak "end of series" version. A tier letter is given for each
-  (S is world-threatening, E is a capable human); treat two characters within a
-  tier of each other as a real contest that tactics can swing, and a gap of three
-  or more tiers as decided unless the weaker side has a specific, named reason.
-  Never rebalance a world upward because it is someone's favourite.
-- Abilities that simply erase an opponent (instant kills, mind control, absolute
-  barriers) only land on a target who is unaware or unprepared. In an open fight
-  the opposition knows they are in a fight, so these must be worked around, not
-  used as an off switch.
-- PUNCTUATION: never use long dashes of any kind (em dash or en dash) anywhere
-  in your answer. Use commas, full stops, colons or semicolons in their place.
-  Ordinary short hyphens inside words such as "back-issue" are fine.
+CANON
+- Base versions only. No gauntlets, no Phoenix Force, no cosmic upgrades, no
+  future or alternate-universe variants. Only the powers they normally carry.
+- Invent nothing: no extra powers, no extra characters. The drafted characters
+  are the only people who exist. No named allies, soldiers or bystanders.
+- Judge across worlds by typical showings, never a single best feat or a peak
+  end-of-series version. Tiers are given, S world-threatening down to E capable
+  human. Within one tier, tactics can swing it. Three or more tiers apart is
+  decided, unless the weaker side has a specific named reason. Never rebalance a
+  world because it is a favourite.
+- Instant-win abilities (one-shot kills, mind control, absolute barriers) only
+  land on someone unaware or unprepared. In an open fight nobody is.
+- Prices are texture: $1 meant written off, $9 meant fought over.
+- Pick a decisive winner. Never a draw.
 
-Write it as an actual comic story, not an analysis. Concrete beats, real
-dialogue, specific locations. Give characters their own voices.
+THE OWNERS ARE NOT IN THE FIGHT. Owner names label the sides for you only.
+Owners have no powers, never appear, speak, act or get hit, and no character has
+ever heard of them. Use them only as possessives, "<owner>'s Anchor". Never
+"<owner> charges", never a pronoun for them, never in dialogue, never "Team One"
+or "the second team". Use only the owner names given below.
 
-Never write a title, a heading, or a section label. You are writing the
-middle of an issue, not a whole one.`;
+NO PUBLISHER NAMES. Nobody has heard the words Marvel, DC, crossover or issue,
+and nobody knows they are in a comic. Insult the team, the city or the person.
+
+DIALOGUE, THE MOST IMPORTANT RULE
+- EVERY paragraph contains spoken dialogue, two or three lines, attributed to
+  named characters. A paragraph of pure narration is a failed paragraph.
+- Curly quotes, “like this”. Nothing wrapped around them: no braces, no
+  brackets, no parentheses. They pass through JSON unescaped, so a silent
+  battle has no excuse.
+- EXCHANGES, NOT ANNOUNCEMENTS. Characters speak TO each other by name and get
+  an answer, at least one real back and forth per paragraph. Nobody narrates
+  their own theme: “I am the fury of the earth!” is exactly wrong. They
+  threaten, needle, warn, plead, refuse, apologise, order and argue.
+- COMIC ACCURATE VOICES. Spider-Man quips through his nerves, Batman says four
+  words, the Hulk speaks in fragments, Doom speaks of Doom in the third person.
+  With the name covered, a reader should still know who is talking.
+- Speech tags go after the line: “Take cover,” Black Canary said. Never drop a
+  quote inside a clause, and never open a paragraph with speech belonging to
+  nobody.
+- Proper sentences. Do not chain a paragraph together with commas. Each spoken
+  line gets its own closed sentence.
+
+USE THEIR REAL HISTORY. Characters who have met bring the grudge, the old team,
+the mentor, the family, the ex. Being drafted together does not erase it: two
+heroes who despise each other still argue while saving each other. Where there
+is genuinely no shared history, play the personalities instead, a killer against
+a no-kill hero, a planner against a brawler. Never invent a past.
+
+IDEOLOGIES AND EGOS matter as much as powers. Heroes refuse plans that hurt
+bystanders, villains spend allies, the proud resent orders. An argument
+mid-battle beats a clean execution.
+
+THE ISSUE ESCALATES. Open light and genuinely funny, egos bruised before bodies.
+The middle turns serious as real damage lands and the jokes thin. The end is
+heavy: last stands, everything spent. Never undercut a sacrifice with a quip.
+
+ELIMINATIONS ARE REAL. Name who goes out and how. Out means out: downed,
+restrained, teleported, cold, burned out. They never come back and never go out
+twice. Nobody takes out their own teammate, so check the rosters before writing
+a blow.
+
+Show, do not report. "They made a final stand" tells the reader nothing; write
+the stand, the words, the cost.
+
+PUNCTUATION: no long dashes anywhere, em or en. Commas, full stops, colons or
+semicolons instead. Short hyphens inside words are fine.
+
+No headings or section labels in the prose, ever. The only title is the cover
+title asked for on the opening beat, and it lives in its own field.`;
 
 const SYSTEM_SHORT = `You are the same comics writer, continuing the same issue.
 
@@ -106,6 +136,21 @@ Write "<owner>'s five" or "<owner>'s Anchor", never "<owner> charges", never
 "send <owner> in", and never give an owner a pronoun. Use only the owner names
 you are given, never an invented one. Every action belongs to a named
 character.
+
+EVERY PARAGRAPH MUST CONTAIN SPOKEN DIALOGUE, two or three lines, inside curly
+quotes “like this”. A paragraph of pure narration is a failed paragraph.
+
+Dialogue stays comic accurate: every line should sound like the character who
+says it. The issue is past its light opening now, so the banter thins as the
+damage lands and the closing beats carry real weight. A sacrifice or a last
+stand is never undercut with a quip.
+
+Eliminations are tracked. Name anyone taken out and say how. A character
+already out of the fight stays out and never reappears.
+
+Ideologies and egos still bite: heroes refuse plans that get people hurt,
+villains spend allies without blinking, proud characters resent orders. Let
+that friction show in the dialogue.
 
 No long dashes anywhere, use commas or full stops. Keep the voice, the
 characters and the setting consistent with what came before.`;
@@ -145,34 +190,129 @@ of the result above, never against it.`;
 // Beats are deliberately small. The opening carries the full brief; later beats
 // carry a running recap and the choice just made, never the whole transcript,
 // which is where the tokens would otherwise go.
-const BEAT_RULES = n => `
-Write EXACTLY ${n} short paragraph${n > 1 ? "s" : ""} of story, then offer the
-named player two things their team could do next. Both must be plausible and
-pull in different directions: one leaning on force or speed, the other on
-planning, trickery or restraint. Never hint which is better.
+// The two decisions the issue is built around. The opening beat ends at the
+// tactical crossroads, the middle beat at the end-game sacrifice. Both offer a
+// disciplined plan that costs the team something internally, against a reckless
+// one that costs them structurally, so neither option is the safe answer.
+const CROSSROADS = `
+Now stop and offer the named player a TACTICAL CROSSROADS:
 
-Each choice MUST name at least one of that player's five characters and say what
-that character does. "Have Batman flood the tunnel with gas" is a choice.
-"Unleash a fierce counterattack" is not, and neither is anything that puts the
-owner in the fight.
+A, CALCULATED FORMATION. Their planner dictates rigid positioning, prepared gear
+or a structural defence. Cost is internal: where a character's ideology clashes
+with the plan, carrying it out fractures the team and leaves that character
+shaken, resentful and easy to pick off.
 
-Do not write a title. Do not resolve the fight. Do not name a winner.
+B, ROGUE GAMBIT. The team pivots to back an unscripted, ego-driven push by their
+most volatile fighter, who is going anyway. Cost is structural: it catches the
+enemy off guard, but the formation breaks and their planner is left exposed.
+
+Write both as concrete actions by that player's own named characters. Name the
+planner in one and the volatile fighter in the other. Never hint which is better.`;
+
+const ENDGAME = `
+Now stop and offer the named player an END-GAME SACRIFICE:
+
+A, ULTIMATE CONTINGENCY. Their planner triggers a prepared fail-safe, dampeners,
+a containment field, an overloaded core, certain to land and sure to cripple the
+enemy's biggest threat. Cost: one of that player's own survivors holds the line
+inside the blast and does not walk out.
+
+B, ALL-IN OVERDRIVE. Every survivor pours what is left into one combined strike
+and nobody is given up. Cost: pure execution with nothing held back, so a
+prepared counter turns it around and loses them the fight outright.
+
+Write both as concrete actions by that player's own named survivors. Name who
+would be given up in A. Never hint which is better.`;
+
+const BEAT_RULES = (n, phase) => `
+Write EXACTLY ${n} short paragraph${n > 1 ? "s" : ""} of story.
+${phase === "open" ? `
+Paragraph 1, THE INITIAL CLASH: the sides meet. Banter, sizing each other up,
+first collisions. Light and funny; stakes low, egos loud.
+NAME THE GROUND IN THE FIRST TWO SENTENCES, TAKEN FROM THE ROSTERS. Use turf a
+drafted character actually owns: Gotham, Metropolis, Hell's Kitchen, the Baxter
+Building, Wakanda, Atlantis, Konoha, Karakura Town, the Soul Society, Tokyo
+Jujutsu High, Hogwarts, a Seoul gate. "An abandoned factory" is scenery; "the
+rain on the Baxter Building roof" is a place. Whoever owns it fights like they
+know it and the enemy like they do not, and if that is unfair, say so.
+Paragraph 2, ESCALATION AND FIRST BLOOD: it turns serious. This paragraph only
+carries the FIRST ROUND OF ELIMINATIONS. At least two named characters go out.
+The fight decides who, not fairness: both losses may fall on the weaker side.
+SHOW each one going out in the action with dialogue around it, what they say as
+they fall or what stands over them. Never summarise afterwards; a list of the
+fallen is a scoreboard and is forbidden.` : `
+Paragraph 1, THE SHIFTING BATTLEFIELD: survivors re-align around the choice just
+made. Show its consequence, the friction or exposure it created, in dialogue
+between the characters it hit.
+Paragraph 2, THE CLIMAX AND DESPERATION: powers straining, nobody joking. This
+paragraph only carries the SECOND ROUND OF ELIMINATIONS, at least two more
+named characters, again decided by the fight and not by fairness.
+SHOW each going out in the action with dialogue around it. Never summarise; a
+list of the fallen is forbidden.`}
+
+Anyone eliminated earlier stays eliminated. Never take someone out twice.
+${phase === "open" ? CROSSROADS : ENDGAME}
+
+Each choice MUST name at least one of that player's own characters and say what
+they do. "Have Batman flood the tunnel with gas" is a choice. "Unleash a fierce
+counterattack" is not, nor is anything that puts the owner in the fight.
+
+Do not resolve the fight. Do not name a winner.
 
 Answer with JSON and nothing else, in exactly this shape:
-{"story": [${n} string${n > 1 ? "s, one paragraph each" : ", one paragraph"}],
- "choices": ["six to twelve words", "six to twelve words"],
- "recap": "one sentence, at most 25 words, on where the fight now stands"}`;
+{${phase === "open" ? `"title": "the cover title, see below",
+ ` : ""}"story": [${n} string${n > 1 ? "s, one paragraph each" : ", one paragraph"}],
+ "choices": ["eight to eighteen words", "eight to eighteen words"],
+ "out": ["exact names of everyone taken out in THIS beat, nobody else"],
+ "recap": "one sentence, at most 25 words, on where the fight stands and who is out"}${
+phase === "open" ? `
+
+THE COVER TITLE: two to seven words, anchored to something concrete from what
+you just wrote, the place, the event, or one striking image. Patterns that work:
+the place plainly (Nightfall Over Gotham Harbour), the event as history (The Day
+the Tower Fell), the turn stated flat (No One Walks Out of Here), the threat
+promised (Here Comes the Flood).
+Where a drafted character carries a famous storyline, epithet or geography, bend
+it to what happened here rather than quoting it whole: The Long Night in Gotham
+Harbour, Last Exam at Konoha. If nobody brings that, name the place or image.
+Never a pair of abstract nouns stuck together for the alliteration. Chaos
+Collision, Fury Unleashed, Savage Showdown, Clash of Titans all fit any fight
+ever written, so they fit none. No subtitle, no issue number, no quotation
+marks, no character names simply strung together.` : ""}`;
 
 const FINAL_RULES = n => `
 Write EXACTLY ${n} short paragraph${n > 1 ? "s" : ""} resolving the fight, then
 the verdict. Honour the tier ruling exactly. No title, no headings.
 
+THE CONCLUSION carries the most weight in the issue, so no quipping through it.
+If the end-game choice gave someone up, that defeat lands here properly: their
+last words, and who saw it. If everything went into one combined strike, show
+whether it broke through or was turned around.
+
+IT ENDS IN A WIPEOUT. By the last line EVERY character on the losing side is
+out, all five, nobody left conscious, holding a doorway or crawling away. Count
+them. FINISH each on the page: "left open to a finishing blow" or "about to
+fall" leaves them standing and fails the paragraph, so land it and say what
+happened. The winning side keeps at least one on their feet. Anyone out earlier
+stays out; you are only finishing the ones still up when this opens.
+
+GIVE THE LOSING SIDE A LAST STAND, dramatised and not reported. The final one or
+two know they cannot win and plant their feet anyway: defiance, a refusal, a bad
+joke landing wrong, an apology to someone already down. Comic accurate to the
+last word, a proud villain does not beg. The winners answer them, or it is a
+monologue. Then they go down one at a time and the reader feels the last one.
+
+Close on ONE short sentence: who is still standing on the winning side, by name,
+and that the other side is finished. Do not tally the fallen, do not correct
+yourself mid sentence, never call someone out and still fighting. Unsure if
+someone is up? They are out, the side lost. A caption, not a scoreboard.
+
 Answer with JSON and nothing else, in exactly this shape:
 {"story": [${n} string${n > 1 ? "s, one paragraph each" : ", one paragraph"}],
+ "out": ["exact names of everyone taken out in THIS beat, nobody already out"],
  "winner": "the owner name, exactly as given",
- "mvp": "character name, then a colon, then one sentence on what they did. May be from any team, including a losing one",
- "read": "three or four sentences, and NEVER mention money, prices or dollar amounts. First: which characters and which roles decided this, using their final tiers, in the form Biggest's Strategist Nightwing, final tier C. Then: for each decision listed under DECISIONS, say plainly what would have happened instead if that player had taken the option they turned down, and whether it would have changed the result. Never write an owner name on its own as if they played."}`;
-
+ "mvp": "character name, colon, one sentence on what they did. May be from the losing side",
+ "read": "three or four sentences, and NEVER mention money, prices or dollar amounts. First: which characters and roles decided this, using their final tiers, as OWNER then role then character then final tier, for example \"Ana's Strategist Nightwing, final tier C\", using the real owner names given above and never the one in this example. Then: for each decision under DECISIONS, say what would have happened instead had that player taken the option they turned down, and whether it would have changed the result. Never write an owner name on its own as if they played."}`;
 // Models drop the markers now and then and answer in prose with "A)" and "B)"
 // lines. Read both shapes, and prefer the marked one when it is there.
 // Every character the box can deal. The writer is only ever told about the
@@ -352,6 +492,14 @@ export default async function handler(req, res){
   const forWho = String((body && body.forWho) || "").slice(0, 20);
   const paras = [1, 2].includes(body && body.paras) ? body.paras : 2;
 
+  // Who is already out, accumulated by the page across earlier beats. The one
+  // sentence recap was never enough to carry this: by the ending the writer had
+  // lost the thread and was finishing off characters it had already finished
+  // off, and crediting the MVP with things a fallen character could not have
+  // done. An explicit list is the only thing that fixed it.
+  const alreadyOut = (body && Array.isArray(body.out) ? body.out : [])
+    .map(n => String(n || "").slice(0, 40)).filter(Boolean);
+
   // What each player chose, and what they turned down. The ending is asked to
   // say where the other road would have led.
   const paths = (body && Array.isArray(body.paths) ? body.paths : []).slice(0, 3)
@@ -371,8 +519,16 @@ export default async function handler(req, res){
   const mine = (sides.find(x => x.owner === forWho) || { names: [] }).names;
   const allNames = sides.flatMap(x => x.names);
 
+  // Stated as a hard fact rather than a suggestion, because this is the rule the
+  // writer broke most often.
+  const outBlock = alreadyOut.length
+    ? `ALREADY OUT OF THE FIGHT, and they stay out: ${alreadyOut.join(", ")}.
+These characters do not act, speak, strike or fall again. Do not take any of
+them out a second time, and never credit them with anything from here on.`
+    : "";
+
   const messages = beat === "open" ? [
-    { role: "system", content: SYSTEM + BEAT_RULES(paras) },
+    { role: "system", content: SYSTEM + BEAT_RULES(paras, "open") },
     { role: "user", content:
 `${ruling(r, body)}
 
@@ -389,7 +545,7 @@ ${teams.join("\n\n")}
 Open the fight. The choice at the end belongs to ${forWho}, so both options must
 be actions taken by characters from ${forWho}'s five.` }
   ] : beat === "mid" ? [
-    { role: "system", content: SYSTEM_SHORT + BEAT_RULES(paras) },
+    { role: "system", content: SYSTEM_SHORT + BEAT_RULES(paras, "mid") },
     { role: "user", content:
 `The five on each side, which are the only characters in this story:
 
@@ -397,6 +553,7 @@ ${teams.join("\n\n")}
 
 WHERE THE FIGHT STANDS: ${recap}
 WHAT JUST HAPPENED: ${picked}
+${outBlock}
 
 Continue. The choice at the end belongs to ${forWho}, so both options must be
 actions taken by characters from ${forWho}'s five.` }
@@ -420,6 +577,10 @@ a role that did not has already moved them down. Treat them as the truth.
 
 WHERE THE FIGHT STANDS: ${recap || "The two sides have just met and nothing is settled."}
 ${picked ? "WHAT JUST HAPPENED: " + picked : ""}
+${outBlock}
+${alreadyOut.length ? `The MVP must be a character who was actually decisive, judged on what happened
+in the story you have been given. Anyone on the list above was out for part of
+it, so do not credit them with a moment that came after they fell.` : ""}
 ${paths.length ? `
 DECISIONS, and the option each player turned down:
 ${paths.map(p => `- ${p.who} took: ${p.took}\n  ${p.who} turned down: ${p.left || "nothing else was offered"}`).join("\n")}` : ""}
@@ -435,7 +596,11 @@ End it.` }
     // A beat is two paragraphs and two choices. Only the ending needs the
     // full allowance, so most calls in a game now cost a quarter of what one
     // single shot issue used to.
-    const cap = beat === "final" ? 1100 : 600;
+    // Both beats carry longer, more specific choices than the older vaguer
+    // prompt, and the ending still needs room for the conclusion, the winner,
+    // the MVP and the draft read. Running out mid sentence costs a whole
+    // retry, which is dearer than the extra allowance.
+    const cap = beat === "final" ? 1300 : 750;
     const ask = async (model, msgs) => {
       const r = await fetch(ENDPOINT, {
         method: "POST",
@@ -484,6 +649,11 @@ End it.` }
     // the chain answers, and it breaks in specific ways: JSON that will not
     // parse, a paragraph cut off mid word, or choices built from the opposing
     // team's characters. Check for those and give it one more go.
+    // Spoken lines, in either curly or straight quotes. The prompt asks for
+    // curly, since those survive JSON without escaping, but accept both rather
+    // than send back an answer that did the right thing the other way.
+    const spokenLines = s => (String(s).match(/[“"][^”"]{3,}?[”"]/g) || []).length;
+
     const faults = t => {
       let p = null;
       try { p = JSON.parse(t); } catch (e){ return "the answer was not valid JSON"; }
@@ -491,14 +661,114 @@ End it.` }
       const joined = st.join(" ").trim();
       if (joined.length < 120) return "the story was too short to be finished";
       if (st.some(x => String(x).trim().length < 40)) return "a paragraph was cut off";
+      // Without this the writer happily narrates an entire silent battle. It is
+      // the one fault worth spending a retry on, because prose with no voices
+      // reads like a match report rather than a comic.
+      if (spokenLines(joined) < st.length)
+        return "the characters barely spoke, it read as narration rather than a comic";
+      // Dialogue alone is not enough: one isolated shout per character is a
+      // list, not a scene. At least one paragraph has to hold a real exchange,
+      // a line and an answer, which needs two spoken lines in the same one.
+      if (!st.some(x => spokenLines(x) >= 2))
+        return "nobody actually talked to anybody, every line was a lone announcement "
+             + "with no reply";
+      // The writer keeps ending a paragraph with a tally of who is out. That is
+      // a scoreboard, and it breaks the fiction harder than anything else here.
+      if (/\b(?:the\s+)?(?:two\s+)?fallen\s+characters\b|\bare\s+(?:now\s+)?(?:out|eliminated)\s*:|\bcharacters?\s+eliminated\s+(?:so\s+far|are)\b/i.test(joined))
+        return "it ended with a list of who was eliminated, which reads as a scoreboard "
+             + "instead of showing them go out in the action";
+      // The ending once said a character was out, then that they were still in
+      // the fight, then listed them as standing, all in one sentence. A name
+      // that appears on both sides of the ledger means the writer lost track.
+      if (beat === "final"){
+        const tail = String(st[st.length - 1] || "");
+        const outNames = new Set();
+        const upNames  = new Set();
+        for (const n of allNames){
+          const near = new RegExp(
+            "\\b" + n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
+            "\\b[^.!?]{0,60}?\\b(is|are|was|were)\\s+(?:also\\s+)?(out|down|finished|beaten|gone)\\b", "i");
+          const upre = new RegExp(
+            "\\b" + n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
+            "\\b[^.!?]{0,60}?\\b(?:still\\s+(?:standing|up|in|fighting)|last\\s+one[s]?\\s+standing)\\b", "i");
+          if (near.test(tail)) outNames.add(n);
+          if (upre.test(tail)) upNames.add(n);
+        }
+        const both = [...outNames].filter(n => upNames.has(n));
+        if (both.length)
+          return "the ending said " + both.join(" and ") + " was both out of the fight and "
+               + "still standing, so it contradicted itself";
+      }
       if (beat !== "final"){
         const ch = Array.isArray(p.choices) ? p.choices : [];
         if (ch.length < 2) return "there were not two choices";
         if (mine.length && !ch.every(c => mine.some(n => String(c).includes(n))))
           return "the choices used characters from the wrong side";
       }
+      // The opening beat names the issue. Nothing else asks for it, so if the
+      // writer drops the field the page simply has no title, which is how it
+      // went missing rather than coming out wrong.
+      if (beat === "open"){
+        const ti = String(p.title || "").replace(/^["“”']+|["“”']+$/g, "").trim();
+        if (!ti) return "there was no title field, and the opening beat has to name the issue";
+        const words = ti.split(/\s+/).length;
+        if (words > 9) return "the title was a sentence rather than a cover title of a few words";
+        // The stock failure is two abstract nouns bolted together for the
+        // alliteration, which would suit any fight ever written. A title of a
+        // couple of words has to earn them: a place, a name, or "the".
+        const filler = /^(?:chaos|fury|savage|epic|ultimate|final|brutal|deadly|clash|collision|showdown|carnage|mayhem|havoc|rampage|onslaught|unleashed|reckoning|destiny|titans|legends|heroes|villains|battle|war|conflict|fight|brawl|rumble|melee|smackdown|throwdown|standoff|face-?off|beatdown|slugfest)$/i;
+        const parts = ti.split(/\s+/).filter(Boolean);
+        if (parts.length <= 3 && parts.every(w => filler.test(w.replace(/[^A-Za-z]/g, ""))))
+          return `the title "${ti}" is generic, it would fit any fight at all, `
+               + `so name the place or the one image this issue turns on`;
+      }
       const stray = outsiders([joined, p.mvp, p.read, ...(p.choices || [])].join(" "), allNames);
       if (stray.length) return "it named " + stray.join(" and ") + ", who nobody drafted";
+      // Killing the same character twice was the commonest continuity break,
+      // and the writer never noticed because nothing checked.
+      const outNow = Array.isArray(p.out) ? p.out.map(x => String(x || "").trim()).filter(Boolean) : [];
+      const repeat = outNow.filter(n => alreadyOut.some(o => o.toLowerCase() === n.toLowerCase()));
+      if (repeat.length)
+        return repeat.join(" and ") + " had already been taken out earlier, so they cannot go out again";
+
+      // The owners are labels, not people in the room. "js's team collided with
+      // jj's" reads like a fixture list and breaks the fiction in the first line.
+      const ownerHit = sides.map(x => x.owner).filter(Boolean)
+        .filter(o => new RegExp("\\b" + o.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?:'s|\\u2019s)?\\b").test(joined));
+      if (ownerHit.length)
+        return "the prose named " + ownerHit.join(" and ") + ", who are the owners and are not in the fight, "
+             + "so refer to the sides by their characters instead";
+
+      // "you Marvel misfits" was a real taunt one of these wrote. The universe
+      // labels belong to the box the game deals from, not to anyone inside the
+      // story. Only checked when no drafted character carries the word, so
+      // Ms. Marvel and Captain Marvel do not trip it.
+      for (const label of ["Marvel", "DC"]){
+        if (allNames.some(n => n.toLowerCase().includes(label.toLowerCase()))) continue;
+        if (new RegExp("\\b" + label + "\\b").test(joined))
+          return "a character said " + label + ", which is a publisher and not something "
+               + "anyone in the story has heard of";
+      }
+
+      if (beat !== "final"){
+        // Each of the first two beats is meant to thin the field. Without this
+        // the middle beat quietly passed with nobody going out at all, and the
+        // ending then had to account for characters who never fell on the page.
+        if (outNow.length < 2)
+          return "nobody was taken out in this beat, and it has to end with at least two "
+               + "named characters out of the fight, shown going out in the action";
+      } else {
+        // By the last line the losing side must be gone, all of them. The page
+        // hands back everyone already out, so this is checkable rather than a
+        // matter of trusting the prose.
+        const winnerName = String((p.winner && String(p.winner)) || (r && r.winner) || "").toLowerCase();
+        const losing = sides.filter(x => x.owner && x.owner.toLowerCase() !== winnerName.replace(/['\u2019]s$/, ""));
+        const downed = new Set([...alreadyOut, ...outNow].map(n => n.toLowerCase()));
+        const standing = losing.flatMap(x => x.names).filter(n => !downed.has(n.toLowerCase()));
+        if (winnerName && losing.length && standing.length)
+          return standing.join(" and ") + " never went out, so the losing side still has "
+               + "somebody standing at the end, which is not a finish";
+      }
       return "";
     };
 
@@ -514,8 +784,13 @@ End it.` }
         messages[1],
         { role: "user", content:
           `Your last answer failed because ${wrong}. Write it again. Return one ` +
-          `JSON object, complete, with every paragraph written out in full. The ` +
+          `JSON object, complete, with every paragraph written out in full. ` +
+          `Every paragraph must contain two or three lines of spoken dialogue ` +
+          `in curly quotes “like this”, each sounding like the character who ` +
+          `says it. The ` +
           `only characters that exist are: ${allNames.join(", ")}. Name nobody else.` +
+          (beat === "open" ? ` Include the "title" field: a cover title of two to ` +
+           `six words for this issue.` : "") +
           (beat === "final" ? "" : ` Both choices must be actions taken by ` +
            `${forWho}'s own characters: ${mine.join(", ")}.`) }
       ]);
@@ -537,16 +812,26 @@ End it.` }
       : j && typeof j.story === "string" ? j.story.split(/\n\s*\n|\n/)
       : text.split(/\n\s*\n|\n/);
 
+    // Some models fence every spoken line in braces or brackets, {“like this”},
+    // apparently reading the JSON shape as a cue to mark up the dialogue too.
+    // The quotes themselves are correct underneath, so the validator sees valid
+    // speech and lets it through, and the reader gets a page full of braces.
+    // This has to run after JSON.parse, not on the raw text: stripping braces
+    // from the JSON string itself would take the object apart with it.
+    const unbrace = s => String(s)
+      .replace(/[{[(]\s*([“"][^”"]*[”"])\s*[)\]}]/g, "$1")   // {“line”} -> “line”
+      .replace(/[{}]/g, "");                                  // any stragglers
+
     const story = paraList
-      .map(p => scrub(destutter(String(p || "").trim()), allNames))
+      .map(p => scrub(destutter(unbrace(String(p || "").trim())), allNames))
       .filter(p => p && !/^\s*(?:[AB]|[12])[).:]\s/i.test(p))
       .slice(0, paras)
       .join("\n\n");
 
     // A model that answers with ["one.", "two."] would otherwise be stringified
     // into "one.,two." by String(), which is where the stray commas came from.
-    const clean = v => scrub(destutter(
-      (Array.isArray(v) ? v.join(" ") : String(v == null ? "" : v)).trim()), allNames);
+    const clean = v => scrub(destutter(unbrace(
+      (Array.isArray(v) ? v.join(" ") : String(v == null ? "" : v)).trim())), allNames);
     const choices = beat === "final" ? []
       : (j && Array.isArray(j.choices) ? j.choices.map(clean).filter(Boolean).slice(0, 2)
                                        : readChoices(text));
@@ -554,6 +839,19 @@ End it.` }
     return res.status(200).json({
       text: story || text.trim(),
       choices,
+      // The cover title, asked for on the opening beat only. Stripped of any
+      // quotes or trailing full stop the writer wrapped it in, and dropped
+      // entirely if it came back empty rather than shown as a blank heading.
+      title: beat === "open"
+        ? clean(j && j.title).replace(/^["“”'']+|["“”'']+$/g, "").replace(/[.]+$/, "").slice(0, 60)
+        : undefined,
+      // Who went out in this beat, matched back to the real roster so a
+      // near-miss spelling still counts. The page adds these to its running
+      // list and hands them back on the next beat.
+      out: (Array.isArray(j && j.out) ? j.out : [])
+        .map(n => allNames.find(a => a.toLowerCase() === String(n || "").trim().toLowerCase()))
+        .filter(Boolean)
+        .filter(n => !alreadyOut.some(o => o.toLowerCase() === n.toLowerCase())),
       // The recap is the only thing carried into the next beat, so if the writer
       // forgets it, fall back to the tail of what it just wrote.
       recap:  clean(j && j.recap) || story.split(/\s+/).slice(-30).join(" "),
