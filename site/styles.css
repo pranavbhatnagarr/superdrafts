@@ -1619,18 +1619,42 @@ svg.rs-icon{
 
 .reveal-face{
   position:absolute; inset:0;
-  border-radius:2px; border:2px solid var(--ink); overflow:hidden;
+  border-radius:2px; border:2px solid var(--ink);
   -webkit-backface-visibility:hidden; backface-visibility:hidden;
+  /* forces each face onto its own compositing layer. Belt-and-braces
+     alongside the backface-visibility/overflow split below: iOS Safari's
+     rasterizer is more reliable about respecting backface-visibility once
+     an element is already promoted to its own layer rather than deciding
+     to promote it mid-flip. */
+  -webkit-transform:translateZ(0); transform:translateZ(0);
   box-shadow:3px 3px 0 rgba(0,0,0,.4);
+  /* overflow does NOT live here - see .reveal-face-clip just below for why */
+}
+/* content clipping lives on its own inner element, never on .reveal-face
+   itself: overflow:hidden and backface-visibility:hidden on the SAME
+   element is a known WebKit bug on iOS/iPadOS Safari specifically (desktop
+   browsers, including desktop Safari, render it fine) - the overflow
+   clipping silently defeats the backface hiding, which is what let the
+   face-down "SD" mark keep showing through on phones and iPads even after
+   the -webkit-backface-visibility fix above. Splitting the two properties
+   across parent (backface-visibility, no overflow) and child (overflow, no
+   backface-visibility) sidesteps the bug entirely rather than working
+   around it. */
+.reveal-face-clip{
+  position:absolute; inset:0;
+  border-radius:2px; overflow:hidden;
 }
 /* the back: face-up at rest, faces away once flipped, so nobody's pick shows
-   before the reveal */
+   before the reveal. The background paints on the outer face same as
+   always; the centering for the mark inside it now targets the clip
+   wrapper, its only real child, since that wrapper is what actually holds
+   the content now. */
 .reveal-back{
-  display:grid; place-items:center;
   background:
     repeating-linear-gradient(45deg, rgba(240,192,74,.05) 0 2px, transparent 2px 14px),
     linear-gradient(160deg, #241a10, var(--ink));
 }
+.reveal-back .reveal-face-clip{ display:grid; place-items:center; }
 .reveal-back::after{
   content:""; position:absolute; inset:0; background:var(--grain);
   opacity:.3; mix-blend-mode:overlay;
@@ -1642,9 +1666,13 @@ svg.rs-icon{
   border:2px solid rgba(240,192,74,.55); border-radius:50%;
   width:1.9em; height:1.9em; display:grid; place-items:center;
 }
-/* the front: rotated away at rest, swings into view on the flip */
+/* the front: rotated away at rest, swings into view on the flip. Combined
+   with translateZ(0) in the same declaration, not left to .reveal-face's
+   own rule: transform doesn't merge across two separate rules on the same
+   element, the later, equally-specific one simply replaces it whole, which
+   would otherwise silently drop the layer-promotion hint on this face only. */
 .reveal-front{
-  -webkit-transform:rotateY(180deg); transform:rotateY(180deg);
+  -webkit-transform:rotateY(180deg) translateZ(0); transform:rotateY(180deg) translateZ(0);
   background:var(--pulp-2);
 }
 .reveal-front-img{

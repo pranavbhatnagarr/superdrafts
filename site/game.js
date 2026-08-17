@@ -1969,16 +1969,18 @@ function revealHtml(ranked, opts){
     return `
       <div class="reveal-card${x.place === 1 ? " reveal-win" : isLast ? " reveal-lose" : ""}" style="grid-column:${2 * i + 1};grid-row:1">
         <div class="reveal-card-inner" style="transition-delay:${i * 0.14}s">
-          <div class="reveal-face reveal-back"><span class="reveal-back-mark">SD</span></div>
+          <div class="reveal-face reveal-back"><div class="reveal-face-clip"><span class="reveal-back-mark">SD</span></div></div>
           <div class="reveal-face reveal-front">
-            ${artUrl ? `<img class="reveal-front-img" src="${artUrl}" alt="">`
-                     : `<span class="reveal-front-blank">?</span>`}
-            ${x.place === 1 ? `<span class="reveal-win-badge">★</span>` : ""}
-            <span class="reveal-front-scrim"></span>
-            <span class="reveal-front-info">
-              <span class="reveal-front-pub">${escTxt(pub)}</span>
-              <span class="reveal-front-name">${escTxt(x.name)}</span>
-            </span>
+            <div class="reveal-face-clip">
+              ${artUrl ? `<img class="reveal-front-img" src="${artUrl}" alt="">`
+                       : `<span class="reveal-front-blank">?</span>`}
+              ${x.place === 1 ? `<span class="reveal-win-badge">★</span>` : ""}
+              <span class="reveal-front-scrim"></span>
+              <span class="reveal-front-info">
+                <span class="reveal-front-pub">${escTxt(pub)}</span>
+                <span class="reveal-front-name">${escTxt(x.name)}</span>
+              </span>
+            </div>
           </div>
         </div>
       </div>`;
