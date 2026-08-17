@@ -90,6 +90,45 @@ const UNIVERSES = {
 const LADDER = ["S","A","B","C","D","E"];
 const POINTS = { S: 16, A: 8, B: 4, C: 2, D: 1, E: 0.5 };
 
+// One material per tier for the round reveal, in place of the plain "Tier A"
+// text it used to print: a struck medallion, the tier letter engraved in
+// the middle, one consistent badge design recoloured through five real
+// metals/materials, S at diamond down to D at wood, rather than five
+// different shapes. E has no material of its own in the brief, so it
+// shares wood with D, the bottom of the ladder either way.
+const TIER_MATERIAL = { S:"diamond", A:"gold", B:"silver", C:"bronze", D:"wood", E:"wood" };
+// Three stops each: a bright hit, the material's own colour, then a shadow
+// side, so the flat SVG fill reads as brushed metal (or grain, for wood)
+// rather than a solid colour swatch.
+const TIER_MATERIAL_STOPS = {
+  wood:    ["#d3ac78", "#8a5a34", "#4d3018"],
+  bronze:  ["#e7a06a", "#a35c22", "#5e340f"],
+  silver:  ["#f5f7f9", "#aab2ba", "#666e75"],
+  gold:    ["#fbe28a", "#c99a2e", "#7a5a12"],
+  diamond: ["#ffffff", "#8fd8f5", "#3f8fb8"]
+};
+let tierIconSeq = 0;
+const tierIconHtml = tier => {
+  const mat = TIER_MATERIAL[tier] || "wood";
+  const [hi, mid, lo] = TIER_MATERIAL_STOPS[mat];
+  // A fresh gradient id per icon: many fighters can share a tier in the
+  // same round, and an id reused across sibling <svg> elements is invalid,
+  // even though every browser tested happens to render it fine anyway.
+  const gid = `tg${++tierIconSeq}`;
+  return `<svg class="tier-icon tier-icon-${mat}" viewBox="0 0 48 48" role="img" aria-label="Tier ${tier || "?"}">`
+    + `<title>Tier ${tier || "?"}</title>`
+    + `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1">`
+    + `<stop offset="0%" stop-color="${hi}"/><stop offset="48%" stop-color="${mid}"/>`
+    + `<stop offset="100%" stop-color="${lo}"/></linearGradient></defs>`
+    + `<circle cx="24" cy="24" r="21" fill="none" stroke="url(#${gid})" stroke-width="4"/>`
+    + `<circle cx="24" cy="24" r="15.5" fill="none" stroke="url(#${gid})" stroke-width="1.4" opacity=".65"/>`
+    + `<text x="24" y="25" text-anchor="middle" dominant-baseline="central" `
+    + `font-family="var(--slab)" font-weight="900" font-size="23" fill="url(#${gid})" `
+    + `stroke="var(--ink)" stroke-width="0.6" paint-order="stroke">${escTxt(tier || "?")}</text>`
+    + `</svg>`;
+};
+
+
 // A week of prep moves a character along the ladder by its own prep rating.
 // Batman climbs three steps. The Hulk does not move. Superman slides down one,
 // because a week is long enough for the other side to find kryptonite.
@@ -369,11 +408,21 @@ function handle(m){
   // The story is written once, by the host, and every beat is shared, so all
   // of them read the same issue and see the same choices.
   if (m.t === "st" && !HOST){
-    // Rebuild from the same seed so the guest can render its own hand and
-    // stay in step without ever being told the other side's picks.
-    if (m.st && (!MATCH || !ST || ST.seed !== m.st.seed)){
-      ST = m.st; try { buildMatch(); } catch {}
-    } ST = m.st; stPaint(); }
+    // A null st is the host's explicit "that match is over, forget it"
+    // signal (see the again-button handler). Route it through the same
+    // resetMatchState() the host uses, or only ST itself clears here while
+    // this browser's own MATCH/revealedRound/shownSig/etc keep the last
+    // game's data, which is what let an already-fought character in the
+    // last game keep reading as "already used" in the next one.
+    if (!m.st){ resetMatchState(); stPaint(); }
+    else {
+      // Rebuild from the same seed so the guest can render its own hand and
+      // stay in step without ever being told the other side's picks.
+      if (!MATCH || !ST || ST.seed !== m.st.seed){
+        ST = m.st; try { buildMatch(); } catch {}
+      } ST = m.st; stPaint();
+    }
+  }
   // A guest sending the character they want in this round.
   if (m.t === "pick" && HOST && seatOf[m.cid] === m.p && typeof m.name === "string")
     takePick(P[m.p].name, m.name);
@@ -425,6 +474,14 @@ function applyState(s, local){
     setTimeout(() => { if (lot && !over) render(); }, s.lockLeft + 250);
   if (!local) started = true;
   if (over) return showFaceoff();
+  // A fresh sale is starting: over just flipped back to false, which only
+  // happens right after a deal, never mid-match. Any ST left over from the
+  // match that just finished is stale on THIS browser the moment that
+  // happens - normally the again-button handler's own send() already
+  // cleared it everywhere, this is just the fallback for a dropped message
+  // or a guest that reconnects mid-transition, so a repeated character name
+  // in the new deal never reads as "already sent" from the old match.
+  if (ST) resetMatchState();
   showScreen("auction");
   if (peerOn) setWire(true, peerLabel());          // names arrive after presence
 
@@ -1846,26 +1903,6 @@ function chosenMode(){
   return el ? el.value : "random";
 }
 
-// Minimal markdown: ## headings, **bold**, blank-line paragraphs. Enough for
-// what the writer returns, and it keeps the page free of outside libraries.
-function renderStory(md){
-  const esc = s => s.replace(/[&<>]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" }[c]));
-  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\*(.+?)\*/g, "<i>$1</i>");
-  const out = [];
-  let para = [];
-  const flush = () => { if (para.length){ out.push(`<p>${inline(para.join(" "))}</p>`); para = []; } };
-
-  for (const raw of md.trim().split("\n")){
-    const line = raw.trim();
-    if (!line){ flush(); continue; }
-    const h = line.match(/^#{1,4}\s+(.*)$/);          // heading owns its line only
-    if (h){ flush(); out.push(`<h3>${inline(h[1].trim())}</h3>`); continue; }
-    para.push(line.replace(/^[-*]\s+/, "\u2022 "));
-  }
-  flush();
-  return out.join("");
-}
-
 // The fight is written a beat at a time so the people playing get to steer it.
 // Two paragraphs, then the player whose turn it is picks what their side does,
 // then two more. Only the host ever talks to the writer, so a beat is never
@@ -1889,12 +1926,33 @@ let revealedRound = "";
 // fought this round, with a stamped VS between each pair. Pulls the art and
 // universe the same way the main lot card does, from the roster each owner
 // already has, so nothing new has to be fetched for this.
-function revealHtml(ranked, effectsReady){
+//
+// opts.historic marks a round that already resolved on an EARLIER render:
+// every round but the very latest one, once there is more than one. Those
+// always render already flipped, with the win/lose treatment already on,
+// since there is nothing left to wait for or animate; only the current
+// round still needs the flip and the delayed effects in opts.effectsReady.
+function revealHtml(ranked, opts){
+  const { effectsReady, historic } = opts || {};
   if (!ranked || !ranked.length) return "";
   const sig = ranked.map(x => x.owner + ":" + x.name).join("|");
-  const fresh = sig !== revealedRound;      // not yet flipped on this client
-  revealedRound = sig;
+  // revealedRound only ever tracks the CURRENT round's own flip: a historic
+  // round is never fresh (it already played its flip on an earlier render)
+  // and must not touch this, or rendering an older round after the newest
+  // one would overwrite the bookkeeping the newest round still needs.
+  const fresh = historic ? false : sig !== revealedRound;
+  if (!historic) revealedRound = sig;
+  const shown = historic || effectsReady;
   const roundWinner = (ranked.find(x => x.place === 1) || ranked[0]).name;
+  const n = ranked.length;
+
+  // A grid, not a flex row: a fighter column for every card, an auto-width
+  // column for every VS between them, so the tier chip underneath a given
+  // card can be placed in that SAME numbered column (see tierChips below)
+  // and land directly under its own card instead of the row of chips just
+  // centering itself independently of where the cards actually sit.
+  const gridCols = Array.from({ length: n * 2 - 1 },
+    (_, i) => i % 2 === 0 ? "minmax(0,1fr)" : "auto").join(" ");
 
   const cards = ranked.map((x, i) => {
     const seat = seats().find(q => P[q].name === x.owner);
@@ -1909,7 +1967,7 @@ function revealHtml(ranked, effectsReady){
     // this round, gets it now; the middle in a three-way stays untouched.
     const isLast = x.place === ranked.length;
     return `
-      <div class="reveal-card${x.place === 1 ? " reveal-win" : isLast ? " reveal-lose" : ""}">
+      <div class="reveal-card${x.place === 1 ? " reveal-win" : isLast ? " reveal-lose" : ""}" style="grid-column:${2 * i + 1};grid-row:1">
         <div class="reveal-card-inner" style="transition-delay:${i * 0.14}s">
           <div class="reveal-face reveal-back"><span class="reveal-back-mark">SD</span></div>
           <div class="reveal-face reveal-front">
@@ -1926,33 +1984,34 @@ function revealHtml(ranked, effectsReady){
       </div>`;
   });
 
-  // A VS badge between every adjacent pair, so three-seat rounds get two.
-  const withVs = [];
-  cards.forEach((c, i) => {
-    withVs.push(c);
-    if (i < cards.length - 1) withVs.push(`<span class="reveal-vs">VS</span>`);
-  });
+  // A VS badge between every adjacent pair, so three-seat rounds get two,
+  // each sitting in its own auto-width column between the two cards it
+  // separates.
+  const vsBadges = [];
+  for (let i = 0; i < n - 1; i++)
+    vsBadges.push(`<span class="reveal-vs" style="grid-column:${2 * i + 2};grid-row:1">VS</span>`);
 
   // is-fresh/is-shown govern only the flip itself, which always happens
-  // right away. is-effects is separate and arrives up to 10 seconds later:
+  // right away. is-effects is separate and arrives up to 3 seconds later:
   // it is what actually switches on the winner's glow and the loser's droop
   // and grayscale, see the matching rules in styles.css.
-  // The final tier line: same small red-caps styling as "Round X of 5" and
-  // the corner tally (a new class, not the same one, since .story-score is
-  // a left/right flex row for a different pair of fields and this needs to
-  // just be centered under the cards instead), naming every fighter who
-  // just clashed and the tier they actually fought at, prep and role shifts
-  // already folded in, gated on the same effects timer as the win/lose glow
-  // above it so it lands with the reveal rather than before it.
-  const tierLine = ranked
-    .map(x => `${escTxt(x.name)}: Tier ${escTxt(x.eff || "?")}`)
-    .join(" &middot; ");
+  // The tier chips: name, a material medallion, then "Tier", one per
+  // fighter column so each chip sits directly under its own card - same
+  // column number the card above it used, row 3 rather than row 1. Gated
+  // on the same effects timer as the win/lose glow so it lands with the
+  // reveal rather than before it.
+  const tierChips = ranked.map((x, i) =>
+    `<span class="tier-chip" style="grid-column:${2 * i + 1};grid-row:3">`
+    + `<span class="tier-chip-name">${escTxt(x.name)}</span>${tierIconHtml(x.eff)}`
+    + `<span class="tier-chip-label">Tier</span></span>`).join("");
 
-  return `<div class="round-reveal${fresh ? " is-fresh" : " is-shown"}${effectsReady ? " is-effects" : ""}" id="roundReveal">
-    ${withVs.join("")}
-  </div>
-  <p class="round-winner${effectsReady ? " is-effects" : ""}">Winner: <b>${escTxt(roundWinner)}</b></p>
-  <p class="round-tiers${effectsReady ? " is-effects" : ""}">${tierLine}</p>`;
+  return `<div class="round-reveal${historic ? " round-reveal-historic" : ""}${fresh ? " is-fresh" : " is-shown"}${shown ? " is-effects" : ""}"
+    style="grid-template-columns:${gridCols}">
+    ${cards.join("")}
+    ${vsBadges.join("")}
+    <p class="round-winner${shown ? " is-effects" : ""}" style="grid-column:1/-1;grid-row:2">Winner: <b>${escTxt(roundWinner)}</b></p>
+    ${tierChips}
+  </div>`;
 }
 
 // The end-of-match winner board and the mid-match corner tally, see below.
@@ -1961,9 +2020,9 @@ function revealHtml(ranked, effectsReady){
 // resolves, same as always: that is the reveal, and nothing about it waits.
 // What waits is the PAYOFF on top of it, the win/lose treatment (the gold
 // glow, the loser's droop and grayscale) and the scoreboard update, both
-// held back 10 seconds so they land once the paragraph has actually been
-// read rather than spoiling it instantly.
-const EFFECT_DELAY_MS = 10000;
+// held back 3 seconds so they land after a beat rather than spoiling the
+// reveal instantly.
+const EFFECT_DELAY_MS = 3000;
 let pendingEffects = null;             // { sig, showAt } for a round's effects still waiting
 let shownSig = "";                     // signature of the round whose effects have fired
 let shownStandings = null, shownWinner = null, shownRoundWinners = [];
@@ -2039,7 +2098,7 @@ function stPaint(){
     plain.push(ST.title.toUpperCase());
   }
 
-  // The win/lose effect and the scoreboard both wait 10 seconds from when
+  // The win/lose effect and the scoreboard both wait 3 seconds from when
   // this round's cards first appeared, so they land after there has been
   // time to read, not the instant the round resolves. The cards, VS and flip
   // are not gated by this at all, see the ST.beats loop below.
@@ -2058,33 +2117,30 @@ function stPaint(){
     // ST.roundWinners is grown with .push() on the SAME array across the
     // whole match. A bare reference here would silently keep growing after
     // this "freeze", showing the very next round's winner in the pie before
-    // its own 10 second wait had even started.
+    // its own 3 second wait had even started.
     shownRoundWinners = ST.roundWinners.slice();
     pendingEffects = null;
   }
 
   ST.beats.forEach((b, i) => {
-    // A small subheading per round, ahead of that round's reveal and text.
+    // A small subheading per round, ahead of that round's reveal.
     // Deliberately an h4 with its own class, not another h3: .story-body h3
     // already carries the big bold styling used for "Winner"/"The Draft
     // Read", and reusing it here would make every round number shout as
     // loud as those, rather than sit under them as a sub-heading should.
     html += `<h4 class="round-head">Round ${i + 1}</h4>`;
-    // The reveal belongs to whichever beat it caused: two cards flip face up
-    // to show who was actually sent, then the paragraph telling what they
-    // did follows underneath it. Only the most recent beat gets one, since
-    // ST.lastRound only ever holds the latest round's result. This is never
-    // delayed, cards and VS appear the moment the round resolves; only
-    // whether the win/lose treatment is armed yet (effectsReady) waits.
-    if (i === ST.beats.length - 1 && ST.lastRound)
-      html += revealHtml(ST.lastRound, revealSig(ST.lastRound) === shownSig);
-    html += renderStory(b.text);
+    // Every resolved round gets its reveal now, not just the latest: the
+    // point is to be able to look back over the whole match and see who
+    // fought and who won each round, not just the one that just happened.
+    // Only the newest one is still time-gated (see historic in
+    // revealHtml's own comment); everything earlier renders already
+    // flipped, with the win/lose treatment already settled.
+    const isLast = i === ST.beats.length - 1;
+    if (b.ranked)
+      html += revealHtml(b.ranked, isLast
+        ? { effectsReady: revealSig(b.ranked) === shownSig }
+        : { historic: true });
     plain.push(`Round ${i + 1}`);
-    plain.push(b.text);
-    if (b.pick){
-      html += `<p class="story-pick"><b>${escTxt(P[b.by].name)}</b> called it: ${escTxt(b.pick)}</p>`;
-      plain.push(`> ${P[b.by].name} called it: ${b.pick}`);
-    }
   });
 
   // Live from round 1's result onward, not just at the very end: it always
@@ -2107,9 +2163,11 @@ function stPaint(){
   // reveal rather than the cards just appearing already face up. Only for a
   // freshly-built one: an already-seen round painted again (a resize, an
   // unrelated repaint) rendered face up from the start and has nothing to
-  // flip.
-  const fresh = $("roundReveal");
-  if (fresh && fresh.classList.contains("is-fresh")){
+  // flip. Selected by class, not id: with every past round now rendered
+  // alongside the current one, .round-reveal is no longer a single element,
+  // and at most one of them ever carries .is-fresh at a time anyway.
+  const fresh = $("storyBody").querySelector(".round-reveal.is-fresh");
+  if (fresh){
     requestAnimationFrame(() => requestAnimationFrame(() => {
       fresh.classList.add("is-flipping");
       SFX.pull();
@@ -2132,7 +2190,7 @@ function stPaint(){
 
   // The pick panel. Each side sends one character a round and sees only its
   // own hand, which is the whole point of the format. Also waits on the
-  // same 10 second effects delay as the reveal above: without this, a fast
+  // same 3 second effects delay as the reveal above: without this, a fast
   // player could send round 2's pick, and even see round 2 begin, before
   // round 1's win/lose treatment and scoreboard had actually shown up.
   const effectsShown = !ST.lastRound || revealSig(ST.lastRound) === shownSig;
@@ -2193,10 +2251,28 @@ function stSend(){ if (HOST) send({ t: "st", st: ST }); }
 // locally by fight.js, so no writer, no tokens and no rate limit.
 let MATCH = null;
 
+// Wipes every trace of whatever match last ran on THIS browser: the synced
+// ST itself, the local MATCH built from it, and the handful of plain
+// module-level timers/flags (revealedRound, shownSig, pendingEffects,
+// shownStandings, shownWinner, shownRoundWinners) that track the reveal
+// animation and the delayed win/lose payoff. All of those live outside ST
+// on purpose (see their own comments above), which also means none of them
+// get cleared just by ST being replaced or nulled elsewhere - they have to
+// be reset here explicitly, on both browsers, or a name that repeats in the
+// next deal reads as "already sent" from a fight that finished games ago,
+// and the previous game's win/lose glow or scoreboard can flash for a
+// moment before the new match's own effects arrive.
+function resetMatchState(){
+  ST = null; MATCH = null;
+  pendingEffects = null; shownSig = ""; shownStandings = null; shownWinner = null;
+  shownRoundWinners = []; revealedRound = "";
+  clearTimeout(window.__effectDelayTimer);
+}
+
 function startStory(mode){
   if (!HOST || !allLocked() || !modeLeft(mode)) return;
   const runs = runsDone();
-  ST = { mode, v: verdict(mode), beats: [], turn: 0, runs: runs.concat(mode),
+  const nextST = { mode, v: verdict(mode), beats: [], turn: 0, runs: runs.concat(mode),
          awaiting: null, options: null, busy: false, err: "", end: null,
          // One seed, made here and synced, so both browsers narrate the same
          // match. fight.js never calls Math.random.
@@ -2213,12 +2289,12 @@ function startStory(mode){
          // the guest, so the scoreboard's pie chart needs its own synced
          // copy of this rather than reading fight.js's history directly.
          roundWinners: [] };
-  pendingEffects = null; shownSig = ""; shownStandings = null; shownWinner = null;
-  shownRoundWinners = [];
-  clearTimeout(window.__effectDelayTimer);
+  resetMatchState();
+  ST = nextST;
   buildMatch();
   stPaint(); stSend();
 }
+
 
 // Rebuilt from ST on whichever browser needs it. The host drives it, but a
 // guest that reloads can reconstruct the same match from the same seed.
@@ -2272,7 +2348,11 @@ function takePick(owner, name){
     ST.used[owner] = ST.used[owner] || [];
     if (!ST.used[owner].includes(sent)) ST.used[owner].push(sent);
   }
-  ST.beats.push({ text: res.text, by: null, pick: "" });
+  // Each beat carries its own round's ranked result now, not just an empty
+  // placeholder: stPaint renders every past round's cards from this, not
+  // only the latest, so the whole match stays visible as it goes rather
+  // than only ever showing whatever just happened.
+  ST.beats.push({ ranked: res.ranked });
   ST.standings = res.standings;
   ST.lastRound = res.ranked;
   // The pie chart's per-round wedge colours read from this, not from
@@ -2421,7 +2501,16 @@ $("againBtn").addEventListener("click", () => {
   if (!HOST) return;
   document.querySelectorAll(".fallback-ta").forEach(n => n.remove());
   $("copyHint").textContent = "";
-  ST = null; stPaint(); window.__story = null;
+  // Wipe the finished match everywhere, not just here: without the send()
+  // below, only the host's own ST clears, and a guest's browser keeps the
+  // last game's ST (including which characters were already sent to a
+  // fight) live all the way into the next one. If this new deal happens to
+  // draw the same character again for the same guest, myRemaining() reads
+  // that stale ST.used and refuses to offer it, i.e. exactly "I already
+  // used this one" from a fight that ended games ago.
+  resetMatchState();
+  stSend();
+  stPaint(); window.__story = null;
   $("writeBtn").disabled = false;
   $("writeHint").textContent = "One issue, written from the ten characters above.";
   if (boxCount() < MIN_BOX()) return;

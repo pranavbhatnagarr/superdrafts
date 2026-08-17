@@ -1576,22 +1576,29 @@ svg.rs-icon{
 .sc-card:disabled .sc-card-img{ filter:grayscale(.4); }
 
 /* the round reveal: two (or three) cards face down, flipping to show who was
-   actually sent this round, with a stamped VS between each pair. Sits above
-   that round's paragraph, so the beat reads reveal-first, story-after. */
+   actually sent this round, with a stamped VS between each pair, the winner
+   line, and the tier chips all sharing one grid. A grid rather than a flex
+   row: the tier chips sit in row 3 using the exact same column numbers the
+   cards above them used in row 1 (see the grid-column values game.js
+   writes inline per element), which is what puts each chip directly under
+   its own card instead of the chip row just centering itself as a separate
+   block. grid-template-columns itself is also written inline per round,
+   since the column count depends on how many fighters are in it (two or
+   three seats). */
 .round-reveal{
-  display:flex; align-items:center; justify-content:center;
-  gap:clamp(8px, 2.5vw, 18px);
+  display:grid; align-items:center;
+  column-gap:clamp(8px, 2.5vw, 18px); row-gap:6px;
   margin:6px 0 18px;
 }
 .reveal-card{
-  flex:0 1 auto;
+  justify-self:center;
   width:clamp(96px, 24vw, 160px);
   aspect-ratio:5 / 6.3;
-  perspective:1000px;
+  -webkit-perspective:1000px; perspective:1000px;
 }
 .reveal-card-inner{
   position:relative; width:100%; height:100%;
-  transform-style:preserve-3d;
+  -webkit-transform-style:preserve-3d; transform-style:preserve-3d;
   /* Linear, not eased. An eased curve here (even a gentle "standard" one)
      rotates past ~150 degrees, where foreshortening gets subtle enough that
      the eye reads the card as basically flipped, by only ~55% of the stated
@@ -1602,14 +1609,18 @@ svg.rs-icon{
   transition:transform 1.1s linear;
 }
 /* an already-seen round (a resize, an unrelated repaint) renders straight
-   into the flipped state, no transition, no second flip on every repaint */
-.round-reveal.is-shown .reveal-card-inner{ transform:rotateY(180deg); transition:none; }
-.round-reveal.is-flipping .reveal-card-inner{ transform:rotateY(180deg); }
+   into the flipped state, no transition, no second flip on every repaint.
+   -webkit-transform is set alongside the unprefixed one because some
+   webkit builds (this is what let the face-down "SD" mark show through
+   AFTER the flip, instead of the winner's art) only reliably rotate the
+   3D layer when the prefixed property is present too. */
+.round-reveal.is-shown .reveal-card-inner{ -webkit-transform:rotateY(180deg); transform:rotateY(180deg); transition:none; }
+.round-reveal.is-flipping .reveal-card-inner{ -webkit-transform:rotateY(180deg); transform:rotateY(180deg); }
 
 .reveal-face{
   position:absolute; inset:0;
   border-radius:2px; border:2px solid var(--ink); overflow:hidden;
-  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden; backface-visibility:hidden;
   box-shadow:3px 3px 0 rgba(0,0,0,.4);
 }
 /* the back: face-up at rest, faces away once flipped, so nobody's pick shows
@@ -1633,7 +1644,7 @@ svg.rs-icon{
 }
 /* the front: rotated away at rest, swings into view on the flip */
 .reveal-front{
-  transform:rotateY(180deg);
+  -webkit-transform:rotateY(180deg); transform:rotateY(180deg);
   background:var(--pulp-2);
 }
 .reveal-front-img{
@@ -1730,9 +1741,8 @@ svg.rs-icon{
 .round-reveal.is-effects .reveal-win-badge{ transform:scale(1); opacity:1; }
 
 /* the per-round winner line. Sits below the cards, invisible until the same
-   moment as everything else above: a plain visibility toggle rather than a
-   height/layout animation, so it never shifts the paragraph that follows
-   underneath it. */
+   moment as everything else above, then a plain opacity fade. Now a grid
+   child spanning every column (grid-column set inline in game.js). */
 .round-winner{
   margin:10px 0 4px; text-align:center;
   font:700 13px/1.3 var(--data); letter-spacing:.06em; text-transform:uppercase;
@@ -1745,17 +1755,63 @@ svg.rs-icon{
 }
 .round-winner.is-effects{ opacity:1; }
 
-/* the final-tier line: story-score's exact font (small, bold, red, spaced
-   caps) but centered rather than a left/right flex row, since this names
-   whoever just fought and nothing else needs to share the line with it.
-   Same fade-in timing as the winner line just above it. */
-.round-tiers{
-  margin:2px 0 10px; text-align:center;
-  font-size:11px; font-weight:700; letter-spacing:.1em;
-  text-transform:uppercase; color:var(--red-dk);
+/* the tier chips: one per fighter, name then a material medallion then
+   "Tier", in place of the old plain "Tier A" text. Each chip is a grid
+   child in row 3, placed in the same numbered column as its own card in
+   row 1 (see the grid-column values game.js writes inline), so it lands
+   directly under that card instead of the row of chips centering itself
+   as a block independent of where the cards actually sit. Same fade-in
+   timing as the winner line above it, driven off .round-reveal.is-effects
+   rather than a class of its own, since every chip in a round fades in
+   together. */
+.tier-chip{
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  justify-self:center;
   opacity:0; transition:opacity .5s ease .5s;
 }
-.round-tiers.is-effects{ opacity:1; }
+.round-reveal.is-effects .tier-chip{ opacity:1; }
+.tier-chip-name{
+  font-size:11px; font-weight:700; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--red-dk); text-align:center;
+}
+/* the medallion itself: a struck coin, the tier letter engraved in the
+   middle. Colour comes entirely from the gradient built inline in the SVG
+   (see tierIconHtml in game.js), one per tier's material, so nothing here
+   sets a fill; this only adds the drop shadow that reads as "struck metal"
+   rather than a flat sticker, plus a faint glow on diamond, the one
+   material that plausibly throws its own light. Sized up from its first
+   pass so the material actually reads at a glance instead of needing a
+   second look. */
+.tier-icon{
+  width:30px; height:30px; flex:0 0 auto;
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.45));
+}
+.tier-icon-diamond{
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.4)) drop-shadow(0 0 3px rgba(143,216,245,.65));
+}
+/* the word under the medallion, same small red-caps treatment as the
+   fighter's own name above it so "Tier" reads as part of the same label,
+   not a separate caption. Stacked under the icon rather than beside it now
+   that each chip has to fit within its own card's narrow column. */
+.tier-chip-label{
+  font-size:11px; font-weight:700; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--ink-3); text-align:center;
+}
+
+/* previous rounds render smaller than the current one: they are a record
+   to glance back at, not the thing the eye should land on. The current
+   round (never carrying this class) keeps the full size set on
+   .reveal-card itself. */
+.round-reveal-historic{ opacity:.88; }
+.round-reveal-historic .reveal-card{
+  width:clamp(64px, 15vw, 104px);
+}
+.round-reveal-historic .tier-icon{ width:22px; height:22px; }
+.round-reveal-historic .tier-chip-name,
+.round-reveal-historic .tier-chip-label{ font-size:10px; }
+.round-reveal-historic .reveal-vs{
+  font-size:clamp(11px, 3vw, 17px);
+}
 
 .reveal-card.reveal-lose{ transition:transform .5s ease; }
 .round-reveal.is-effects .reveal-lose{
@@ -1775,7 +1831,7 @@ svg.rs-icon{
 }
 
 .reveal-vs{
-  flex:0 0 auto;
+  justify-self:center; align-self:center;
   font:900 clamp(16px,4.5vw,26px)/1 var(--slab); color:var(--red);
   transform:rotate(-7deg) scale(.7); opacity:0;
   text-shadow:2px 2px 0 rgba(0,0,0,.35);
