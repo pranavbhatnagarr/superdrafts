@@ -171,6 +171,14 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
   // sudden death: any card but the ones already drawn out may be resent,
   // and the first round that is not itself a draw ends the whole match.
   let overtime = false;
+  // How many sudden-death rounds have been played. Tracked so a matchup
+  // that is genuinely dead even - every remaining card on both sides sits
+  // at the same effective tier - cannot draw forever. Once every card has
+  // had a full lap through overtime twice over with no sole leader ever
+  // emerging, resolve() below forces a result instead of letting the
+  // fallback in eligible() hand out the exact same pairing again and again.
+  let overtimeRounds = 0;
+  const OVERTIME_CAP = Math.max(...sides.map(s => s.fighters.length)) * 2;
 
   const all = () => sides.flatMap(s => s.fighters);
   const owners = all().filter(f => HOME[f.name]);
@@ -254,6 +262,7 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
       let done = false, championOwner = null;
 
       if (wasOvertime){
+        overtimeRounds++;
         // Sudden death: a shared top spot - a full draw or, in a three-seat
         // round, two tied for best with a worse third - changes nothing
         // but the drawn-out list above and keeps going, since the actual
@@ -266,6 +275,19 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
         if (soleLeader){
           done = true; championOwner = sides[roundWinnerSide].owner;
           points[roundWinnerSide] += 1;
+        } else if (overtimeRounds >= OVERTIME_CAP){
+          // A true deadlock: every card that could still be sent keeps
+          // landing on the same effective tier as its opposite number, so
+          // eligible()'s own drawnOut-exhausted fallback just hands out the
+          // identical pairing again once every card has had its lap - this
+          // round would otherwise draw forever with no winner ever
+          // declared. Break it with one coin flip off the match's own
+          // synced seed, so both browsers land on the same name without
+          // needing another round trip.
+          done = true;
+          const champ = pick(r, sides);
+          championOwner = champ.owner;
+          points[champ.ix] += 1;
         }
       } else {
         const regularOver = sides.every(s => s.fighters.every(f => f.used));

@@ -1981,6 +1981,34 @@ function revealHtml(ranked, opts){
   const maxPlace = Math.max(...ranked.map(x => x.place));
   const n = ranked.length;
 
+  // Display order only - NOT the ranking. `ranked` comes straight from
+  // fight.js sorted best-to-worst, so mapping it onto columns in that same
+  // order put the winner in column 1, i.e. the left seat, every single
+  // time. Every place/draw/eff value already lives on each entry, so
+  // reordering the array for display cannot touch who actually won; it
+  // only changes which column a given card prints in. Seeded off `sig`
+  // (identical on both browsers for the same round) rather than
+  // Math.random, so host and guest still render the same layout for the
+  // same round instead of disagreeing about where each card sits. A plain
+  // multiply-add LCG's low bits are not random enough to feed straight
+  // into `% (i+1)` here - it kept landing the shuffle back on the same
+  // slot far more than chance allowed - so this mixes the seed the same
+  // way fight.js's own rng() does before drawing from it.
+  let hSeed = 0;
+  for (let i = 0; i < sig.length; i++) hSeed = (Math.imul(hSeed, 31) + sig.charCodeAt(i)) | 0;
+  let a = hSeed >>> 0;
+  const shuffleRng = () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const shuffled = ranked.slice();
+  for (let i = shuffled.length - 1; i > 0; i--){
+    const j = Math.floor(shuffleRng() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
   // A grid, not a flex row: a fighter column for every card, an auto-width
   // column for every VS between them, so the tier chip underneath a given
   // card can be placed in that SAME numbered column (see tierChips below)
@@ -1989,7 +2017,7 @@ function revealHtml(ranked, opts){
   const gridCols = Array.from({ length: n * 2 - 1 },
     (_, i) => i % 2 === 0 ? "minmax(0,1fr)" : "auto").join(" ");
 
-  const cards = ranked.map((x, i) => {
+  const cards = shuffled.map((x, i) => {
     const seat = seats().find(q => P[q].name === x.owner);
     const entry = seat != null && P[seat].roster.find(r => r.char.name === x.name);
     const c = entry && entry.char;
@@ -2046,7 +2074,7 @@ function revealHtml(ranked, opts){
   // column number the card above it used, row 3 rather than row 1. Gated
   // on the same effects timer as the win/lose glow so it lands with the
   // reveal rather than before it.
-  const tierChips = ranked.map((x, i) =>
+  const tierChips = shuffled.map((x, i) =>
     `<span class="tier-chip" style="grid-column:${2 * i + 1};grid-row:3">`
     + `<span class="tier-chip-name">${escTxt(x.name)}</span>${tierIconHtml(x.eff)}`
     + `<span class="tier-chip-label">Tier</span></span>`).join("");
