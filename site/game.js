@@ -194,25 +194,34 @@ const money = n => "$" + n;
 let P, deck, lot, lotNum, over, deckLeft = 0;
 
 /* ==================================================================
- *  NETWORK
- *  Supabase Realtime broadcast only, no tables, nothing stored.
+ *  DATA + NETWORK
+ *  One Supabase project now does both jobs. Read-only REST calls pull the
+ *  roster/art/rivalries at boot (see loadStock() below); the same project's
+ *  Realtime broadcast+presence is what syncs bids/picks/state between the
+ *  two browsers once a table is open - no tables involved in that part,
+ *  nothing stored, just messages passed through.
  *  The player who opens the table is authoritative: they hold the deck,
  *  apply every rule, and publish the whole state. The joiner sends
  *  intents ("I bid 4") and renders whatever comes back. One referee
  *  means a simultaneous click can never sell the same issue twice.
  * ================================================================== */
-// These two are meant to be public and cannot be hidden: the browser itself
-// has to open the socket, so anything it needs, a reader can see. This is a
-// PUBLISHABLE key, which is why that is fine. It grants nothing except joining
-// broadcast channels. Keep it that way: create no tables in this project, and
-// if you ever do, turn on row level security. Secrets that must stay secret
-// (the LLM key) live in Vercel environment variables and are read only by
-// api/scenario.mjs on the server, never here.
+// This key is meant to be public and cannot be hidden: the browser itself
+// has to open the socket and issue the REST reads, so anything it needs, a
+// reader can see. This is a PUBLISHABLE key, which is why that is fine - it
+// grants nothing except reading `characters`/`rivalries` and joining
+// broadcast channels. Keep it that way: no writable tables in this project,
+// and if you ever add one, turn on row level security. Secrets that must
+// stay secret (the LLM key) live in Vercel environment variables and are
+// read only by api/scenario.mjs on the server, never here.
 // The full roster (names, universes, tiers, prep shifts, roles, blurbs) AND
 // the artwork both live in one `characters` table in Arul's Supabase project,
 // read only. It used to be split, STOCK hardcoded here and only images
 // fetched remotely, but the table now carries everything, so one request at
 // boot fills both STOCK and ART together. See loadStock() below.
+// NOTE: Realtime must be switched on for this project in the Supabase
+// dashboard (Project Settings → Realtime, or Database → Replication,
+// depending on plan/version) or connect() below will fail to open a
+// channel even though the REST reads keep working fine.
 const ART_URL = "https://trtccsljexjplnuhnlkz.supabase.co";
 const ART_KEY = "sb_publishable_3Yt4Gih8Ta_co31EDqy7Jw_-R5sBxMK";
 const ART = new Map();
@@ -287,8 +296,6 @@ async function loadStock(){
   if (lot) renderLot();                        // roster/art arrived after the first card
 }
 
-const SB_URL = "https://aexgfybbydtxjzpluiwo.supabase.co";
-const SB_KEY = "sb_publishable_Cr0FVJXaMsn3rsdgV9pWPw_et4aHvcL";
 const SAVE_KEY = "longbox.table";
 // A browser keeps one id so that reconnecting returns you to your own seat
 // rather than handing you someone else's roster.
@@ -334,7 +341,7 @@ function setWire(on, text){
 
 async function connect(){
   if (!window.supabase) throw new Error("offline");
-  sb = sb || window.supabase.createClient(SB_URL, SB_KEY);
+  sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
   chan = sb.channel("longbox-" + ROOM,
     { config: { broadcast: { self: false }, presence: { key: CID } } });
 
