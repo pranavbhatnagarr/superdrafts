@@ -1768,20 +1768,61 @@ svg.rs-icon{
 }
 .round-reveal.is-effects .reveal-win-badge{ transform:scale(1); opacity:1; }
 
-/* the per-round winner line. Sits below the cards, invisible until the same
-   moment as everything else above, then a plain opacity fade. Now a grid
-   child spanning every column (grid-column set inline in game.js). */
-.round-winner{
-  margin:22px 0 4px; text-align:center;
+/* the winner line: now a grid child spanning every column (grid-column set
+   inline in game.js), centered as before. Equal top and bottom margin here
+   is deliberate - .round-reveal's own row-gap (6px) already applies evenly
+   above and below this row, so matching margins on top of that keep the
+   gap to the cards above and the gap to the tier chips below genuinely
+   equal, not just close. Margin here is 42px, not 48px: the 6px row-gap
+   above adds on top of it, landing the actual visible gap at a true 48px
+   (0.5in at the standard 96px/in CSS reference), the same way it landed at
+   96px (1in) when this was 90px.
+   Selector is scoped to .story-body .round-winner, not just .round-winner,
+   on purpose: this paragraph renders inside #storyBody, which carries the
+   class .story-body, and .story-body p (a class-plus-element selector,
+   specificity 0,0,1,1) was silently beating plain .round-winner
+   (specificity 0,0,1,0) regardless of which rule came later in the file -
+   its own 13px margin was winning outright, which is why bumping the
+   margin here kept appearing to do nothing. Two classes together
+   (0,0,2,0) outranks .story-body p's 0,0,1,1 no matter what either rule's
+   own declared values are.
+   max-width:none is also required, not optional: .story-body p separately
+   sets max-width:68ch and margin-inline:auto to center a narrower text
+   column. My margin shorthand above already sets margin-left/right to 0 as
+   a side effect (needed for the 42px top/bottom values), which cancels out
+   that auto-centering - so with the 68ch cap still in effect, the now
+   zero-margined box just sat at the LEFT edge of its grid area instead of
+   centered, which is what actually put the text under the left card rather
+   than between both. Removing the cap lets this box fill its full grid
+   column (grid-column:1/-1, set inline in game.js) so text-align:center
+   centers the text across the whole reveal, cards and all, rather than
+   within some narrower box that was never centered in the first place. */
+.story-body .round-winner{
+  margin:42px 0 42px; text-align:center; max-width:none;
   font:700 13px/1.3 var(--data); letter-spacing:.06em; text-transform:uppercase;
   color:var(--ink-3);
   opacity:0; transition:opacity .5s ease .5s;
 }
-.round-winner b{
-  font-family:var(--slab); font-weight:900; text-transform:none;
-  letter-spacing:0; color:var(--stamp); font-size:15px;
+/* Same specificity fix as .story-body .round-winner above, plus a font
+   swap on top of it: --slab ("Ultra") is a heavy display face built for
+   short shouty headlines, not a name like "Invincible" at 15px, where its
+   blocky strokes stop reading as letters and start reading as a shape.
+   --data (Archivo Narrow) is the same clean, legible face already used for
+   every other label on this reveal (the tier chips, "Tier", the round
+   header), so switching to it here makes the winner's name match the rest
+   of the reveal's voice instead of standing out as harder to read than
+   everything around it. Colour is --ink (the site's near-black), not
+   --stamp's red, per request - 700 is used for the weight, not 900, since
+   only 400/500/600/700 (and italic 400) are the Archivo Narrow weights
+   actually loaded in index.html's font link; asking for 900 on a weight
+   that was never downloaded gets synthetically faux-bolded by the browser
+   instead of rendering the real cut of the font, which looks noticeably
+   worse than just asking for a weight that exists. */
+.story-body .round-winner b{
+  font-family:var(--data); font-weight:700; text-transform:none;
+  letter-spacing:0; color:var(--ink); font-size:15px;
 }
-.round-winner.is-effects{ opacity:1; }
+.story-body .round-winner.is-effects{ opacity:1; }
 
 /* the tier chips: one per fighter, name then a material medallion then
    "Tier", in place of the old plain "Tier A" text. Each chip is a grid
@@ -1811,7 +1852,7 @@ svg.rs-icon{
    first pass so the material actually reads at a glance instead of needing
    a second look. */
 .tier-icon{
-  width:30px; height:30px; flex:0 0 auto;
+  width:37.5px; height:37.5px; flex:0 0 auto;
   filter:drop-shadow(0 1px 1px rgba(0,0,0,.45));
 }
 .tier-icon-diamond{
@@ -1841,7 +1882,7 @@ svg.rs-icon{
 .round-reveal-historic .reveal-card{
   width:clamp(64px, 15vw, 104px);
 }
-.round-reveal-historic .tier-icon{ width:22px; height:22px; }
+.round-reveal-historic .tier-icon{ width:27.5px; height:27.5px; }
 .round-reveal-historic .tier-chip-name,
 .round-reveal-historic .tier-chip-label{ font-size:10px; }
 .round-reveal-historic .reveal-vs{
@@ -1864,6 +1905,52 @@ svg.rs-icon{
 .round-reveal.is-effects .reveal-lose .reveal-face{
   box-shadow:1px 2px 0 rgba(0,0,0,.3);
 }
+
+/* the draw treatment: win and lose at once, both muted rather than either
+   one at full strength, since a draw is neither - a pale grey ring stands
+   in for the win ring's gold, the art still greys down and the card still
+   droops same as a loss, just less of each, so a drawn card reads as
+   "something happened here, but nobody actually won it" instead of either
+   extreme. Same effects-timer gating as everything else on the reveal.
+   One selector, not two: .reveal-front IS .reveal-face on this element (it
+   carries both classes), so a separate `.reveal-draw .reveal-face` shadow
+   rule would tie with this one on specificity and, since box-shadow never
+   merges across rules, whichever rule happened to sit later in the file
+   would win outright and silently erase the other's shadow. Both the ring
+   and the settling shadow live in this one declaration instead, so there
+   is only ever one box-shadow value in play here, not two competing ones. */
+.reveal-draw .reveal-front{ transition:box-shadow .6s ease; }
+.round-reveal.is-effects .reveal-draw .reveal-front{
+  box-shadow:
+    0 0 0 1.5px #4a4a4a,
+    0 0 0 3px #bfbfbf,
+    0 0 0 4.5px #7d7d7d,
+    0 2px 10px 0 rgba(0,0,0,.35),
+    0 0 16px 2px rgba(190,190,190,.5);
+}
+.reveal-card.reveal-draw{ transition:transform .5s ease; }
+.round-reveal.is-effects .reveal-draw{
+  transform:rotate(-2deg) translateY(3px);
+}
+.reveal-draw .reveal-front-img{ transition:filter .55s ease; }
+.round-reveal.is-effects .reveal-draw .reveal-front-img{
+  filter:grayscale(.7) brightness(.85);
+}
+/* the "=" badge in place of the win star: same size, position and pop-in
+   as .reveal-win-badge, silver rather than gold so it never reads as a
+   quieter win by mistake. */
+.reveal-draw-badge{
+  position:absolute; top:6px; right:6px; z-index:3;
+  width:22px; height:22px; border-radius:50%;
+  display:grid; place-items:center;
+  background:radial-gradient(circle at 35% 30%, #e6e6e6, #a8a8a8 55%, #6c6c6c 100%);
+  border:1.5px solid #555;
+  color:#262626; font-size:13px; font-weight:900; line-height:1;
+  box-shadow:0 2px 6px rgba(0,0,0,.5);
+  transform:scale(0); opacity:0;
+  transition:transform .45s cubic-bezier(.2,1.4,.4,1) .25s, opacity .3s ease .25s;
+}
+.round-reveal.is-effects .reveal-draw-badge{ transform:scale(1); opacity:1; }
 
 .reveal-vs{
   justify-self:center; align-self:center;
@@ -1956,5 +2043,5 @@ svg.rs-icon{
   background:rgba(0,0,0,.04); font:italic 500 15px/1.4 var(--data); }
 
 .enc-opt.enc-used{ opacity:.4; }
-.enc-opt.enc-used .enc-body b::after{ content:" (written)"; font:600 11px var(--data);
+.enc-opt.enc-used .enc-body b::after{ content:" (fought)"; font:600 11px var(--data);
   letter-spacing:.08em; text-transform:uppercase; vertical-align:middle; }

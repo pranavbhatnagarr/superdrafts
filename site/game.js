@@ -1875,12 +1875,19 @@ function paintRoles(){
   $("writeBtn").disabled = !ready || !iCall;
   $("writeHint").textContent = !ready
     ? "Waiting on " + seats().filter(p => !P[p].locked).map(p => P[p].name).join(" and ") + "."
-    : iCall ? "Every role is locked. Write it."
+    : iCall ? "Every role is locked. Start it."
             : `Every role is locked. ${P[caller()].name} calls the encounter.`;
 }
 
 /* ------------------------- the writer ------------------------- */
 const MODE_NAME = { random: "Random encounter", prep: "A week of prep" };
+
+// A round number past the roster size is sudden death, not a sixth regular
+// round: "Round 6 of 5" would read as a bug even though it is not one. Every
+// place that prints a round number goes through this so the label and the
+// actual picking rules (myRemaining(), MATCH's own eligible()) never say
+// two different things about which phase the match is in.
+const roundLabel = n => n <= SLOTS ? `Round ${n}` : `Overtime ${n - SLOTS}`;
 
 // Each draft is worth two issues, one of each encounter. Writing the same one
 // twice would cost tokens to tell the same story, so a used encounter closes.
@@ -1909,7 +1916,7 @@ function paintEncounter(){
   $("encounter").classList.toggle("not-yours", !iCall);
   const left = 2 - runsDone().length;
   $("encWho").textContent =
-    left === 0 ? "Both encounters have been written. This draft is finished."
+    left === 0 ? "Both encounters have been fought. This draft is finished."
     : runsDone().length === 1
       ? (iCall ? "One encounter left. Run the other to see how it would have gone."
                : `${P[boss].name} has one encounter left to call.`)
@@ -1962,7 +1969,16 @@ function revealHtml(ranked, opts){
   const fresh = historic ? false : sig !== revealedRound;
   if (!historic) revealedRound = sig;
   const shown = historic || effectsReady;
-  const roundWinner = (ranked.find(x => x.place === 1) || ranked[0]).name;
+  // A draw has no single winner ONLY when the top spot itself is shared:
+  // two or three seats tied for place 1. A fighter can carry x.draw
+  // without that being true - in a three-seat round, two fighters can tie
+  // with each other for a WORSE spot while a third stands alone in first,
+  // and that third fighter is a perfectly real, undisputed winner even
+  // though the other two are drawn cards in the very same round.
+  const topPlace = ranked.filter(x => x.place === 1);
+  const roundWinner = topPlace.length === 1 ? topPlace[0].name : null;
+  const drawNames = topPlace.length > 1 ? topPlace.map(x => x.name) : [];
+  const maxPlace = Math.max(...ranked.map(x => x.place));
   const n = ranked.length;
 
   // A grid, not a flex row: a fighter column for every card, an auto-width
@@ -1981,19 +1997,28 @@ function revealHtml(ranked, opts){
     const pub = c ? ((UNIVERSES[c.pub] || {}).name || c.pub) : "";
     // Last place is the only one that actually lost: in a three-seat round,
     // second still scored a point, and giving them the droop-and-grayscale
-    // treatment alongside the real loser overstated it. Only the very last
-    // place, whichever position that is for however many fighters are in
-    // this round, gets it now; the middle in a three-way stays untouched.
-    const isLast = x.place === ranked.length;
+    // treatment alongside the real loser overstated it. Only whoever holds
+    // the WORST place actually present this round gets it - place numbers
+    // can skip a slot now that ties share one (two tied for 1st means the
+    // next place is 2, not 3), so this checks against the real maximum
+    // rather than assuming it always equals the seat count.
+    // A draw overrides both: any fighter who shares a tier with at least
+    // one other fighter this round gets the combined win-and-lose
+    // treatment instead, regardless of where in the ranking that tie
+    // landed - win or lose language does not apply to a card that did
+    // neither.
+    const isLast = x.place === maxPlace;
+    const cardClass = x.draw ? " reveal-draw" : x.place === 1 ? " reveal-win" : isLast ? " reveal-lose" : "";
     return `
-      <div class="reveal-card${x.place === 1 ? " reveal-win" : isLast ? " reveal-lose" : ""}" style="grid-column:${2 * i + 1};grid-row:1">
+      <div class="reveal-card${cardClass}" style="grid-column:${2 * i + 1};grid-row:1">
         <div class="reveal-card-inner" style="transition-delay:${i * 0.14}s">
           <div class="reveal-face reveal-back"><div class="reveal-face-clip"><span class="reveal-back-mark">SD</span></div></div>
           <div class="reveal-face reveal-front">
             <div class="reveal-face-clip">
               ${artUrl ? `<img class="reveal-front-img" src="${artUrl}" alt="">`
                        : `<span class="reveal-front-blank">?</span>`}
-              ${x.place === 1 ? `<span class="reveal-win-badge">★</span>` : ""}
+              ${x.draw ? `<span class="reveal-draw-badge">=</span>`
+                       : x.place === 1 ? `<span class="reveal-win-badge">★</span>` : ""}
               <span class="reveal-front-scrim"></span>
               <span class="reveal-front-info">
                 <span class="reveal-front-pub">${escTxt(pub)}</span>
@@ -2026,11 +2051,15 @@ function revealHtml(ranked, opts){
     + `<span class="tier-chip-name">${escTxt(x.name)}</span>${tierIconHtml(x.eff)}`
     + `<span class="tier-chip-label">Tier</span></span>`).join("");
 
+  const winnerLine = roundWinner
+    ? `Winner: <b>${escTxt(roundWinner)}</b>`
+    : `Stalemate: <b>${escTxt(drawNames.join(" & "))}</b>`;
+
   return `<div class="round-reveal${historic ? " round-reveal-historic" : ""}${fresh ? " is-fresh" : " is-shown"}${shown ? " is-effects" : ""}"
     style="grid-template-columns:${gridCols}">
     ${cards.join("")}
     ${vsBadges.join("")}
-    <p class="round-winner${shown ? " is-effects" : ""}" style="grid-column:1/-1;grid-row:2">Winner: <b>${escTxt(roundWinner)}</b></p>
+    <p class="round-winner${shown ? " is-effects" : ""}" style="grid-column:1/-1;grid-row:2">${winnerLine}</p>
     ${tierChips}
   </div>`;
 }
@@ -2149,7 +2178,7 @@ function stPaint(){
     // already carries the big bold styling used for "Winner"/"The Draft
     // Read", and reusing it here would make every round number shout as
     // loud as those, rather than sit under them as a sub-heading should.
-    html += `<h4 class="round-head">Round ${i + 1}</h4>`;
+    html += `<h4 class="round-head">${roundLabel(i + 1)}</h4>`;
     // Every resolved round gets its reveal now, not just the latest: the
     // point is to be able to look back over the whole match and see who
     // fought and who won each round, not just the one that just happened.
@@ -2161,7 +2190,7 @@ function stPaint(){
       html += revealHtml(b.ranked, isLast
         ? { effectsReady: revealSig(b.ranked) === shownSig }
         : { historic: true });
-    plain.push(`Round ${i + 1}`);
+    plain.push(roundLabel(i + 1));
   });
 
   // Live from round 1's result onward, not just at the very end: it always
@@ -2202,7 +2231,7 @@ function stPaint(){
   // already show the final score, and the left side switches to the tier
   // caption the same way it always has.
   const leftText = shownWinner ? tierScoreCaption()
-    : (ST.end || !ST.standings) ? "" : `Round ${Math.min(ST.round || 1, SLOTS)} of ${SLOTS}`;
+    : (ST.end || !ST.standings) ? "" : roundLabel(ST.round || 1);
   const rightText = shownWinner ? "" : matchTallyText(shownStandings);
   $("storyScoreLeft").textContent = leftText;
   $("storyScoreRight").textContent = rightText;
@@ -2227,7 +2256,9 @@ function stPaint(){
     // textContent escapes on its own; escTxt here would show the entities.
     $("scWho").textContent = sent
       ? `${sent} is in. Waiting on the others.`
-      : `Round ${Math.min(ST.round || 1, SLOTS)}. Send one of yours. They will not see who until it lands.`;
+      : ST.overtime
+        ? `${roundLabel(ST.round || 1)}. Sudden death — send anyone but a card that already drew. They will not see who until it lands.`
+        : `${roundLabel(ST.round || 1)}. Send one of yours. They will not see who until it lands.`;
     const opts = $("scOpts");
     opts.innerHTML = "";
     mine.forEach(c => {
@@ -2261,7 +2292,7 @@ function stPaint(){
     ? "Something went wrong. You can run it again."
     : spent ? "Both encounters are done. Run it again for a fresh draft."
     : done ? "Run the other encounter to see how the same five would have done."
-           : "Five rounds, one character each, nobody sees the other pick.";
+           : "Five rounds, one character each, nobody sees the other pick. A tied score after five forces sudden death.";
 }
 
 // Guests send the intent, the host owns the state. Same shape as bidding.
@@ -2305,6 +2336,18 @@ function startStory(mode){
          // only ever called on the host, so a guest's own local MATCH copy
          // never learns anything was used and would show all five forever.
          used: {},
+         // Same reasoning again, this time for which characters have been
+         // part of a draw and are barred from ever being resent: MATCH's own
+         // per-side drawnOut set is host-only internal state, never reaches
+         // the guest on its own, so the guest's own myRemaining() needs a
+         // synced copy to compute overtime eligibility correctly.
+         drawnOut: {},
+         // Flips true the moment regular rounds end tied and stays true for
+         // the rest of the match. Read by myRemaining() (which pool of
+         // cards is legal) and by the round-label code (Round N vs
+         // Overtime N), both of which need to agree with fight.js's own
+         // internal phase without querying a host-only MATCH object.
+         overtime: false,
          // Who won each round, in order, one entry per resolved round. Same
          // reasoning as .used: MATCH's own internal history never reaches
          // the guest, so the scoreboard's pie chart needs its own synced
@@ -2329,14 +2372,27 @@ function buildMatch(){
   ST.standings = MATCH.standings();
 }
 
-// Who this player still has in hand. Derived from ST.used (synced to both
-// browsers) rather than MATCH.available(): MATCH's own .used flags only ever
-// get set on the host, inside takePick(), so a guest reading its own local
-// MATCH instance would see all five as available forever, and this was
-// exactly the "only one player's cards ever disappear" bug. ST.used is
-// plain data that travels with every state push, so both sides agree.
+// Who this player still has in hand. Derived from ST.used/ST.drawnOut
+// (synced to both browsers) rather than MATCH.available(): MATCH's own
+// internal .used flags and per-side drawnOut sets only ever get updated on
+// the host, inside takePick(), so a guest reading its own local MATCH
+// instance would see all five as available forever, and this was exactly
+// the "only one player's cards ever disappear" bug. ST.used/ST.drawnOut are
+// plain data that travel with every state push, so both sides agree.
+// Two different pools depending on phase, mirroring fight.js's own
+// eligible(): before overtime, only cards never yet sent; once ST.overtime
+// is set, every card except the ones that have drawn is legal again,
+// including cards a regular round already used - sudden death replays the
+// same five, it does not deal a fresh hand. A side with nothing left
+// un-drawn falls back to its full roster, same reasoning as fight.js's own
+// fallback, so the two never disagree about what is legal to offer.
 function myRemaining(){
   if (!ST || !P[ME]) return [];
+  const drawnOut = new Set(ST.drawnOut && ST.drawnOut[P[ME].name] || []);
+  if (ST.overtime){
+    const elig = P[ME].roster.filter(r => !drawnOut.has(r.char.name));
+    return (elig.length ? elig : P[ME].roster).map(r => r.char);
+  }
   const used = new Set(ST.used && ST.used[P[ME].name] || []);
   return P[ME].roster.filter(r => !used.has(r.char.name)).map(r => r.char);
 }
@@ -2369,22 +2425,39 @@ function takePick(owner, name){
     ST.used[owner] = ST.used[owner] || [];
     if (!ST.used[owner].includes(sent)) ST.used[owner].push(sent);
   }
+  // Same again for whoever just drew: MATCH's own per-side drawnOut set is
+  // host-only, so it has to be copied out into synced state the same way
+  // .used already is, or the guest's own myRemaining() never learns a card
+  // is barred from overtime and offers it again.
+  res.ranked.forEach(x => {
+    if (!x.draw) return;
+    ST.drawnOut[x.owner] = ST.drawnOut[x.owner] || [];
+    if (!ST.drawnOut[x.owner].includes(x.name)) ST.drawnOut[x.owner].push(x.name);
+  });
+  ST.overtime = res.overtimeNow;
   // Each beat carries its own round's ranked result now, not just an empty
   // placeholder: stPaint renders every past round's cards from this, not
   // only the latest, so the whole match stays visible as it goes rather
-  // than only ever showing whatever just happened.
+  // than only ever showing whatever just happened. Draw status and whether
+  // the round was fought in overtime both live inside b.ranked itself
+  // (each fighter's own .draw flag) or are derivable from the round's
+  // position against SLOTS (see roundLabel) - nothing else needs storing
+  // here.
   ST.beats.push({ ranked: res.ranked });
   ST.standings = res.standings;
   ST.lastRound = res.ranked;
   // The pie chart's per-round wedge colours read from this, not from
   // MATCH's own history, for the same reason .used lives on ST: only ST
-  // actually reaches the guest.
-  const winner = res.ranked.find(x => x.place === 1) || res.ranked[0];
-  ST.roundWinners.push(winner.owner);
+  // actually reaches the guest. Whoever holds place 1 ALONE is the winner;
+  // if two or three share it, nobody has a single winner to record - null
+  // rather than arbitrarily picking one of the tied names.
+  const topPlace = res.ranked.filter(x => x.place === 1);
+  const winner = topPlace.length === 1 ? topPlace[0] : null;
+  ST.roundWinners.push(winner && winner.owner);
   ST.picks = {}; ST.locked = [];
   ST.round = MATCH.roundNo();
   if (res.done) ST.end = { winner: res.champion, standings: res.standings };
-  res.upset ? SFX.sold() : SFX.pass();
+  res.isDraw ? SFX.pass() : SFX.sold();
   stPaint(); stSend();
 }
 
@@ -2533,7 +2606,7 @@ $("againBtn").addEventListener("click", () => {
   stSend();
   stPaint(); window.__story = null;
   $("writeBtn").disabled = false;
-  $("writeHint").textContent = "One issue, written from the ten characters above.";
+  $("writeHint").textContent = "One issue, fought by the ten characters above.";
   if (boxCount() < MIN_BOX()) return;
   P = seats().map(q => ({ name: P[q].name, purse: PURSE, roster: [], locked: false }));
   lot = null; lastFx = 0; drawnLot = -1;
