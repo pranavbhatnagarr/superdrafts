@@ -79,7 +79,8 @@ const UNIVERSES = {
   DS:  { name: "Demon Slayer",   group: "Anime"  },
   BC:  { name: "Black Clover",   group: "Anime"  },
   SL:  { name: "Solo Leveling",  group: "Anime"  },
-  HP:  { name: "Harry Potter",   group: "Other"  }
+  HP:  { name: "Harry Potter",   group: "Other"  },
+  MISC:{ name: "Misc",           group: "Other"  }
 };
 
 // Tiers are scaled honestly across universes, never rebalanced. A weaker world
@@ -87,43 +88,56 @@ const UNIVERSES = {
 // Sukuna and Sung Jinwoo genuinely earn S alongside Superman and Thor.
 // Tier points are deliberately steep. One S has to outweigh a handful of Cs,
 // otherwise a tier is just a label and the draft is decided by volume.
-const LADDER = ["S","A","B","C","D","E"];
-const POINTS = { S: 16, A: 8, B: 4, C: 2, D: 1, E: 0.5 };
+// S+ sits one rung above S and no character is ever printed at it - see the
+// comment on effTier just below for how a character actually gets there.
+const LADDER = ["S+","S","A","B","C","D","E"];
+const POINTS = { "S+": 32, S: 16, A: 8, B: 4, C: 2, D: 1, E: 0.5 };
 
 // One material per tier for the round reveal, in place of the plain "Tier A"
 // text it used to print: a struck medallion, the tier letter engraved in
-// the middle, one consistent badge design recoloured through five real
-// metals/materials, S at diamond down to D at wood, rather than five
-// different shapes. E has no material of its own in the brief, so it
-// shares wood with D, the bottom of the ladder either way.
-const TIER_MATERIAL = { S:"diamond", A:"gold", B:"silver", C:"bronze", D:"wood", E:"wood" };
+// the middle, one consistent badge design recoloured through six real
+// materials, S+ at prism down to D at wood, rather than different shapes
+// per tier. E has no material of its own in the brief, so it shares wood
+// with D, the bottom of the ladder either way. S+ is never a character's
+// printed tier - only prep, role fit, or both can push a card up into it -
+// so prism is a boost's own material, not one any card is born with.
+const TIER_MATERIAL = { "S+":"prism", S:"diamond", A:"gold", B:"silver", C:"bronze", D:"wood", E:"wood" };
 // Three stops each: a bright hit, the material's own colour, then a shadow
 // side, so the flat SVG fill reads as brushed metal (or grain, for wood)
-// rather than a solid colour swatch.
+// rather than a solid colour swatch. Prism breaks that pattern on purpose -
+// four stops sweeping through a full spectrum rather than one hue shaded
+// light to dark, since it has to read as "beyond diamond" at a glance
+// rather than just another blue.
 const TIER_MATERIAL_STOPS = {
   wood:    ["#d3ac78", "#8a5a34", "#4d3018"],
   bronze:  ["#e7a06a", "#a35c22", "#5e340f"],
   silver:  ["#f5f7f9", "#aab2ba", "#666e75"],
   gold:    ["#fbe28a", "#c99a2e", "#7a5a12"],
-  diamond: ["#ffffff", "#8fd8f5", "#3f8fb8"]
+  diamond: ["#ffffff", "#8fd8f5", "#3f8fb8"],
+  prism:   ["#ffe6fb", "#c88bff", "#5b8dff", "#3f3f8f"]
 };
 let tierIconSeq = 0;
 const tierIconHtml = tier => {
   const mat = TIER_MATERIAL[tier] || "wood";
-  const [hi, mid, lo] = TIER_MATERIAL_STOPS[mat];
+  const stops = TIER_MATERIAL_STOPS[mat];
   // A fresh gradient id per icon: many fighters can share a tier in the
   // same round, and an id reused across sibling <svg> elements is invalid,
   // even though every browser tested happens to render it fine anyway.
   const gid = `tg${++tierIconSeq}`;
+  // Stops spread evenly regardless of count, so prism's four-stop spectrum
+  // and everyone else's three-stop shade both just work off the same loop.
+  const stopTags = stops.map((c, i) =>
+    `<stop offset="${Math.round(i / (stops.length - 1) * 100)}%" stop-color="${c}"/>`).join("");
+  // S+ is two characters, not one: a smaller font than the rest keeps it
+  // inside the same medallion without crowding the ring.
+  const fontSize = tier && tier.length > 1 ? 16 : 23;
   return `<svg class="tier-icon tier-icon-${mat}" viewBox="0 0 48 48" role="img" aria-label="Tier ${tier || "?"}">`
     + `<title>Tier ${tier || "?"}</title>`
-    + `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1">`
-    + `<stop offset="0%" stop-color="${hi}"/><stop offset="48%" stop-color="${mid}"/>`
-    + `<stop offset="100%" stop-color="${lo}"/></linearGradient></defs>`
+    + `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1">${stopTags}</linearGradient></defs>`
     + `<circle cx="24" cy="24" r="21" fill="none" stroke="url(#${gid})" stroke-width="4"/>`
     + `<circle cx="24" cy="24" r="15.5" fill="none" stroke="url(#${gid})" stroke-width="1.4" opacity=".65"/>`
     + `<text x="24" y="25" text-anchor="middle" dominant-baseline="central" `
-    + `font-family="var(--slab)" font-weight="900" font-size="23" fill="url(#${gid})" `
+    + `font-family="var(--slab)" font-weight="900" font-size="${fontSize}" fill="url(#${gid})" `
     + `stroke="var(--ink)" stroke-width="0.6" paint-order="stroke">${escTxt(tier || "?")}</text>`
     + `</svg>`;
 };
@@ -132,6 +146,11 @@ const tierIconHtml = tier => {
 // A week of prep moves a character along the ladder by its own prep rating.
 // Batman climbs three steps. The Hulk does not move. Superman slides down one,
 // because a week is long enough for the other side to find kryptonite.
+// The climb is never capped below S+ specifically: it is capped at index 0,
+// same as it always was, and S+ simply became the new index 0 once LADDER
+// grew a rung. A base-S character with a fitting role, prep, or both is the
+// only way there - nothing below S has enough climb in it to reach past S
+// itself, let alone past that.
 function effTier(ch, mode, role){
   let i = LADDER.indexOf(ch.tier);
   if (mode === "prep") i -= (ch.prep || 0);

@@ -18,8 +18,14 @@
  *  one seed the host makes and syncs. Same seed in, same fight out.
  * ------------------------------------------------------------------ */
 
-const LADDER = ["S","A","B","C","D","E"];
-const POINTS = { S:16, A:8, B:4, C:2, D:1, E:0.5 };
+// S+ sits one rung above S and no character is ever printed at it: it only
+// exists as a destination, reached when a base-S character's prep bonus,
+// role fit, or both push them past the top of their own printed tier.
+// effTier's own clamp below is what actually enforces "no higher than the
+// top of the ladder" - extending LADDER with S+ at index 0 is the whole
+// change; nothing else here needs to know it's special.
+const LADDER = ["S+","S","A","B","C","D","E"];
+const POINTS = { "S+":32, S:16, A:8, B:4, C:2, D:1, E:0.5 };
 
 /* Small deterministic PRNG. Math.random cannot be used anywhere in here:
    the two players would get different stories for the same fight. */
