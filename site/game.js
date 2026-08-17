@@ -54,11 +54,10 @@ function roleShift(ch, role, mode){
   let d = 0;
   if (suits) d += 1;
   if (ch.bad && ch.bad.includes(role)) d -= 1;
-  // The encounter rewards the role only in the hands of someone it suits. A
-  // week of prep does nothing for a Strategist with no head for it, and chaos
-  // does not favour a Wildcard who has no trick to pull.
-  if (suits && role === "S" && mode === "prep")   d += 1;
-  if (suits && role === "W" && mode === "random") d += 1;
+  // No encounter bonus. Strategist used to gain a rung in prep and Wildcard
+  // one in a random encounter, which stacked with the prep climb and the role
+  // fit and put too many characters on S. A role is worth one rung either way
+  // now, and the encounter only decides whether the prep climb applies.
   return d;
 }
 
@@ -179,10 +178,24 @@ async function loadStock(){
   $("joinBtn").disabled = true;
   $("setupMsg").textContent = "Loading the roster…";
   try {
-    const r = await fetch(
-      ART_URL + "/rest/v1/characters?select=name,universe,real_name,blurb,tier,"
-        + "prep_shift,fit_roles,bad_roles,image_url,lines&universe=not.is.null",
+    // Ask for everything, but do not let one missing column take the game down.
+    // A schema change mid-session used to 400 the whole request and leave the
+    // setup screen dead; now the optional columns drop out one at a time and
+    // the sale still runs, just without whatever that column fed.
+    const CORE = "name,universe,real_name,tier,fit_roles,bad_roles,image_url";
+    const OPTIONAL = ["prep_shift", "blurb", "lines"];
+    const ask = cols => fetch(
+      ART_URL + "/rest/v1/characters?select=" + cols + "&universe=not.is.null",
       { headers: { apikey: ART_KEY, Authorization: "Bearer " + ART_KEY } });
+
+    let have = OPTIONAL.slice(), r = await ask([CORE, ...have].join(","));
+    while (!r.ok && have.length){
+      const missing = have.find(c => String(r.statusText).includes(c)) ||
+                      (await r.clone().text().then(t => have.find(c => t.includes(c))).catch(() => null));
+      if (!missing) break;
+      have = have.filter(c => c !== missing);
+      r = await ask([CORE, ...have].join(","));
+    }
     if (!r.ok) throw new Error("HTTP " + r.status);
     const rows = await r.json();
     if (!rows.length) throw new Error("empty roster");
@@ -554,6 +567,22 @@ function paintPending(){
 }
 
 // Host: give someone a chair. Reuses their old one if they are coming back.
+// Two people at one table can easily pick the same name, and almost every bit
+// of match state is keyed by it: ST.picks, ST.used, and the sides inside
+// fight.js. Duplicates meant one seat's pick silently overwrote another's, so
+// a three hander sent the same character twice and the third seat never
+// scored. Names are made unique the moment a chair is given out.
+function uniqueName(want, seat){
+  const base = String(want || "").trim().slice(0, 14) || "Buyer";
+  const taken = new Set(seats().filter(q => q !== seat).map(q => P[q] && P[q].name));
+  if (!taken.has(base)) return base;
+  for (let n = 2; n < 20; n++){
+    const tag = " " + n, tryName = base.slice(0, 14 - tag.length) + tag;
+    if (!taken.has(tryName)) return tryName;
+  }
+  return base.slice(0, 12) + " " + seat;
+}
+
 function admit(cid, name){
   if (!HOST) return;
   let seat = seatOf[cid];
@@ -568,7 +597,7 @@ function admit(cid, name){
     seatOf[cid] = seat;
   }
   knocks.delete(cid);
-  P[seat].name = (name || SEATS[seat].pencil).slice(0, 14);
+  P[seat].name = uniqueName(name || SEATS[seat].pencil, seat);
   send({ t: "seat", cid, seat, np: NP });
   paintPending();
   if (!started && Object.keys(seatOf).length < NP - 1){
