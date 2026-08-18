@@ -3,19 +3,33 @@
 A comic-shop back-issue auction for two or three players, on any devices, anywhere
 in the world. Draft a roster out of a shared box, then watch it fight.
 
-Everything lives in this folder as four plain files. No build step, no
-framework, no bundler — open `index.html` in a browser and the game runs.
+Everything the browser needs lives in `site/`, deployed as-is with no build
+step. The `api/` folder holds a serverless LLM writer that exists but isn't
+currently wired up — the fight you'll actually see is resolved entirely
+client-side by `fight.js`. Everything outside `site/` is local tooling: a dev
+server and a script that regenerates character dialogue, neither of which
+ships to players.
 
 ```
-index.html      the shell: screens, structure, one <script type="module"> tag
-game.js         the whole app - auction, sync, roles, scoreboard, sound
-fight.js        the fight engine - five blind rounds, resolved locally
-styles.css      everything visual
+superdrafts/
+├── site/                    ← this whole folder is what gets deployed
+│   ├── index.html           the shell: screens, structure, one <script> tag
+│   ├── game.js              the whole app - auction, sync, roles, scoreboard, sound
+│   ├── fight.js             the fight engine - five blind rounds, resolved locally
+│   ├── styles.css           everything visual
+│   └── api/
+│       └── scenario.mjs     server-side LLM fight writer - present, not called by game.js
+├── build_lines.mjs          regenerates characters' taunt/reply/falling dialogue
+├── dev-server.mjs           local static server, for looking at it yourself
+├── package.json             deps for the two scripts above only - not for site/
+├── package-lock.json
+└── README.md
 ```
 
-That's it. Nothing to install, nothing to `npm install`, nothing that talks to
-a server except Supabase, and Supabase only carries messages between the two
-or three browsers at the table — it never stores anything.
+Nothing in `site/` depends on `package.json` — it's four static files (plus
+the currently-dormant `api/`), openable straight in a browser. `package.json`
+and its two `.mjs` scripts exist purely so *you* can regenerate dialogue or
+preview the game locally; they never run in production.
 
 ## How a table works
 
@@ -128,11 +142,16 @@ locally. If you're setting this up fresh from the GitHub repo:
 
 1. Go to [vercel.com/new](https://vercel.com/new), sign in with GitHub, and
    import this repo.
-2. Leave the build settings alone — there's no framework and no build step,
-   just static files, so the defaults work.
-3. No environment variables are needed. The fight is resolved entirely in
-   the browser by `fight.js`; nothing calls out to a server or an LLM.
-4. Deploy. Vercel gives you a permanent URL immediately, and every future
+2. **Set Root Directory to `site`.** This is the one setting that matters —
+   the deployable files live in `site/`, not the repo root, so Vercel needs
+   to be told to look there or every page 404s. **Settings → General → Root
+   Directory → `site`**, if you're changing it after the fact.
+3. Leave the build settings alone otherwise — no framework, no build step,
+   just static files.
+4. No environment variables are needed to play the game. `site/api/` holds
+   an LLM fight writer that game.js never calls; you only need to touch that
+   if you decide to wire it up later.
+5. Deploy. Vercel gives you a permanent URL immediately, and every future
    push to the main branch redeploys it automatically.
 
 ## Playing
@@ -144,13 +163,16 @@ locally. If you're setting this up fresh from the GitHub repo:
 4. They open it, type a name, hit **Join**. The sale starts once everyone's
    seated.
 
-## Trying it locally first
+## Local tooling
 
-Any static file server works, since there's no build step:
+Two small scripts live at the repo root, outside `site/`, for you to use —
+neither one ships to players:
 
 ```
-npx serve .
+npm install
+node dev-server.mjs      # serves site/ locally so you can look at it yourself
+node build_lines.mjs     # regenerates characters' taunt/reply/falling dialogue
 ```
 
-or just open `index.html` directly in a browser. Either way, a friend on
-another machine can't reach it — this is only for looking at it yourself.
+A friend on another machine can't reach `dev-server.mjs`'s address — it's
+only for previewing your own changes before you push.
