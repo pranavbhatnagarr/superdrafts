@@ -56,10 +56,22 @@ function drawer(r){
 // Same maths the auction screen already shows, so a clash and the tier score
 // on the ledger can never disagree.
 function effTier(ch, mode, role, roleShift){
+  const i = effValue(ch, mode, role, roleShift);
+  return LADDER[Math.max(0, Math.min(LADDER.length - 1, i))];
+}
+
+// The same sum without the clamp. effTier caps at S+, so a base S wearing a
+// suiting role and a base A with prep AND a suiting role both print "S+" and
+// are indistinguishable - which is fine in a regular round, where a shared
+// tier is meant to be a real stalemate, and fatal in overtime, where it sends
+// the match round and round with no way to separate them. Sudden death reads
+// this instead: how far past the cap a fighter actually got, then what tier
+// they started from. Whoever was weaker to begin with loses the tie.
+function effValue(ch, mode, role, roleShift){
   let i = LADDER.indexOf(ch.tier);
   if (mode === "prep") i -= (ch.prep || 0);
   i -= roleShift(ch, role, mode);
-  return LADDER[Math.max(0, Math.min(LADDER.length - 1, i))];
+  return i;
 }
 
 // The rule now: whichever fighter has the strictly better tier always wins,
@@ -81,18 +93,28 @@ function effTier(ch, mode, role, roleShift){
 //     overtime resend the same as a full draw, while the lone fighter is
 //     never touched by it - see pointsForGroups just below for what each
 //     of them actually scores.
-function rankFighters(fighters){
+function rankFighters(fighters, strict){
+  // A regular round compares the printed tier and nothing else, so equals
+  // draw. Overtime compares how far past the cap they got and then the tier
+  // they started from, so only two genuinely identical cards can still draw.
+  const key = f => strict
+    ? [LADDER.indexOf(f.eff), f.val, f.baseIdx]
+    : [LADDER.indexOf(f.eff)];
+  const same = (a, b) => key(a).every((v, i) => v === key(b)[i]);
+  const cmp = (a, b) => { const x = key(a), y = key(b);
+    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i];
+    return 0; };
   const withIdx = fighters.map(f => ({ f, idx: LADDER.indexOf(f.eff) }));
   // Stable sort: ties keep the order they were sent in, which only ever
   // surfaces as which name prints first within a tied group, never as an
   // actual ranking between them - there isn't one.
-  withIdx.sort((a, b) => a.idx - b.idx);
+  withIdx.sort((a, b) => cmp(a.f, b.f));
   const order = withIdx.map(x => x.f);
 
   const groups = [];
   for (const x of withIdx){
     const last = groups[groups.length - 1];
-    if (last && last.idx === x.idx) last.fighters.push(x.f);
+    if (last && same(last.fighters[0], x.f)) last.fighters.push(x.f);
     else groups.push({ idx: x.idx, fighters: [x.f] });
   }
   const tied = new Set();
@@ -155,14 +177,22 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
   const sides = teams.map((t, ix) => ({
     ix, owner: t.owner,
     fighters: t.fighters.map(f => ({
-      ...f, side: ix, eff: effTier(f, mode, f.role, roleShift), used: false
+      ...f, side: ix, eff: effTier(f, mode, f.role, roleShift),
+      val: effValue(f, mode, f.role, roleShift),
+      baseIdx: LADDER.indexOf(f.tier), used: false
     })),
     // Names permanently barred from being resent once they have been part
     // of a draw, in a regular round or in overtime. Regular-round eligibility
     // still runs on each fighter's own .used flag above; this is the
     // separate list overtime eligibility runs on instead (see available()
     // and resolve() below) - the two never overlap in what they gate.
-    drawnOut: new Set()
+    drawnOut: new Set(),
+    // Raw capability: the same tier score the ledger shows, but always
+    // computed as if the encounter were random, so a week of prep never
+    // feeds into it. This is the last word when sudden death cannot
+    // separate two sides on the cards they sent.
+    rawScore: t.fighters.reduce((n, f) =>
+      n + (POINTS[effTier(f, "random", f.role, roleShift)] || 0), 0)
   }));
   const points = sides.map(() => 0);
   const history = [];
@@ -171,15 +201,6 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
   // sudden death: any card but the ones already drawn out may be resent,
   // and the first round that is not itself a draw ends the whole match.
   let overtime = false;
-  // How many sudden-death rounds have been played. Tracked so a matchup
-  // that is genuinely dead even - every remaining card on both sides sits
-  // at the same effective tier - cannot draw forever. Once every card has
-  // had a full lap through overtime twice over with no sole leader ever
-  // emerging, resolve() below forces a result instead of letting the
-  // fallback in eligible() hand out the exact same pairing again and again.
-  let overtimeRounds = 0;
-  const OVERTIME_CAP = Math.max(...sides.map(s => s.fighters.length)) * 2;
-
   const all = () => sides.flatMap(s => s.fighters);
   const owners = all().filter(f => HOME[f.name]);
   const homeChar = owners.length ? pick(r, owners) : null;
@@ -233,7 +254,7 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
       if (chosen.length !== sides.length) return null;   // a pick was missing or ineligible
       if (!wasOvertime) chosen.forEach(f => { f.used = true; });
 
-      const { order: ranked, groups, tied, fullDraw } = rankFighters(chosen);
+      const { order: ranked, groups, tied, fullDraw } = rankFighters(chosen, wasOvertime);
       // The round's top group: one fighter in it means a clean, undisputed
       // best - a real winner, whether or not anyone else in the round also
       // happens to tie for a lower spot with somebody. More than one
@@ -262,7 +283,6 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
       let done = false, championOwner = null;
 
       if (wasOvertime){
-        overtimeRounds++;
         // Sudden death: a shared top spot - a full draw or, in a three-seat
         // round, two tied for best with a worse third - changes nothing
         // but the drawn-out list above and keeps going, since the actual
@@ -275,17 +295,22 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
         if (soleLeader){
           done = true; championOwner = sides[roundWinnerSide].owner;
           points[roundWinnerSide] += 1;
-        } else if (overtimeRounds >= OVERTIME_CAP){
-          // A true deadlock: every card that could still be sent keeps
-          // landing on the same effective tier as its opposite number, so
-          // eligible()'s own drawnOut-exhausted fallback just hands out the
-          // identical pairing again once every card has had its lap - this
-          // round would otherwise draw forever with no winner ever
-          // declared. Break it with one coin flip off the match's own
-          // synced seed, so both browsers land on the same name without
-          // needing another round trip.
+        } else if (sides.every(x => x.fighters.every(f => x.drawnOut.has(f.name)))){
+          // Every card on every side has now been drawn out: sudden death
+          // has tried the whole roster and every pairing came back level,
+          // which is the state the match used to sit in forever, handing
+          // out the same pairing again each time eligible() ran out of
+          // un-drawn names. Settle it on raw capability instead, the same
+          // tier score the ledger shows but always computed as if the
+          // encounter were random, so a week of prep never decides it.
+          // Only a dead heat there falls to the seed, and that means two
+          // identically built teams.
           done = true;
-          const champ = pick(r, sides);
+          const best = Math.max(...points);
+          const live = sides.filter((x, i) => points[i] === best);
+          const top = Math.max(...live.map(x => x.rawScore));
+          const front = live.filter(x => x.rawScore === top);
+          const champ = front.length === 1 ? front[0] : pick(r, front);
           championOwner = champ.owner;
           points[champ.ix] += 1;
         }
