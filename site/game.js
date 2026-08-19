@@ -47,8 +47,6 @@ const roleIconHtml = k => `<svg class="rs-icon" viewBox="0 0 512 512" aria-hidde
 
 // A fitting role is worth a tier, an absurd one costs a tier, and the encounter
 // decides whether the Strategist or the Wildcard is the one that matters.
-const roleName = k => (ROLES.find(r => r.k === k) || {}).name || "";
-
 function roleShift(ch, role, mode){
   if (!role) return 0;
   const suits = !!(ch.fit && ch.fit.includes(role));
@@ -75,13 +73,18 @@ const nameList = ps => ps.map(q => P[q].name).join(" and ");
 const UNIVERSES = {
   MAR: { name: "Marvel",         group: "Comics" },
   DC:  { name: "DC",             group: "Comics" },
+  BOYS:{ name: "The Boys",       group: "Comics" },
+  INV: { name: "Invincible",     group: "Comics" },
   NAR: { name: "Naruto",         group: "Anime"  },
   JJK: { name: "Jujutsu Kaisen", group: "Anime"  },
   DS:  { name: "Demon Slayer",   group: "Anime"  },
   BC:  { name: "Black Clover",   group: "Anime"  },
   SL:  { name: "Solo Leveling",  group: "Anime"  },
+  HXH: { name: "Hunter x Hunter",group: "Anime"  },
   HP:  { name: "Harry Potter",   group: "Other"  },
-  MISC:{ name: "Misc",           group: "Other"  }
+  RE:  { name: "Resident Evil",  group: "Other"  },
+  INF: { name: "Infamous",       group: "Other"  },
+  MK:  { name: "Mortal Kombat",  group: "Other"  }
 };
 
 // Tiers are scaled honestly across universes, never rebalanced. A weaker world
@@ -187,8 +190,46 @@ const ACK_MS = 1600;
 let lockTill = 0;                 // local clock: when this screen may bid again
 const locked = () => Date.now() < lockTill;
 
+// A live bid puts the rival on the clock: 8 seconds to answer (outbid, or
+// pass and hand it over) before the lot sells itself to whoever is
+// standing. The last 3 of those seconds get the 3-2-1 countdown on the
+// card. Purely a pacing device, same spirit as ACK_MS above, just longer
+// and rendered rather than just felt.
+const BID_TIMER_MS = 8000;
+const BID_URGENT_MS = 3000;
+let bidDeadlineLocal = 0;         // local clock: when the standing bid auto-sells
+let bidTimerShown = 0;            // last countdown digit painted, so repaints don't restart the pop
+
+// Same idea for the fight itself: 5 seconds to send a fighter each round,
+// with the same last-3-seconds countdown. This one is purely client-side -
+// nothing here is host-authoritative, sendPick() already knows how to reach
+// the host either way, so each browser can just clock its own player and
+// send a random pick from their own remaining hand if the clock runs out.
+const PICK_TIMER_MS = 5000;
+const PICK_URGENT_MS = 3000;
+let pickDeadlineLocal = 0;        // local clock: when an unmade pick auto-sends
+let pickRoundKey = null;          // identifies the current pick opportunity, so a repaint mid-countdown doesn't restart it
+let pickTimerShown = 0;
+
+// The two setup steps before a fight even starts - assigning roles, and
+// (for whoever kept the most money) choosing the encounter and starting it.
+// Neither is a live back-and-forth the way bidding or a fight-round pick is,
+// so the window is wider (21s, not 5-8) and the countdown only kicks in for
+// the last 5 seconds rather than the last 3. Both are purely client-side,
+// same reasoning as the pick timer above: lockRoles() and writeFight()
+// already know how to reach the host either way.
+const ROLE_TIMER_MS = 21000;
+const ROLE_URGENT_MS = 5000;
+let roleDeadlineLocal = 0;
+let roleTimerShown = 0;
+
+const MODE_TIMER_MS = 21000;
+const MODE_URGENT_MS = 5000;
+let modeDeadlineLocal = 0;
+let modeTimerShown = 0;
+
 // What is in the box. The host owns this and it travels to the joiner.
-let BOX = { u: ["MAR","DC"], tiers: true };
+let BOX = { u: ["MAR","DC"], tiers: false };
 
 /* ---------------------------- solo play ---------------------------- */
 // A game against the computer is the same game with nobody on the other end
@@ -480,7 +521,8 @@ function handle(m){
 
 function snapshot(fx){
   const lockLeft = lot && lot.lockUntil ? Math.max(0, lot.lockUntil - Date.now()) : 0;
-  return { P, lot, lotNum, over, box: BOX, np: NP, lockLeft,
+  const bidLeft = lot && lot.bidDeadline ? Math.max(0, lot.bidDeadline - Date.now()) : 0;
+  return { P, lot, lotNum, over, box: BOX, np: NP, lockLeft, bidLeft,
            deckLeft: deck ? deck.length : 0, fx: fx || null };
 }
 
@@ -516,6 +558,10 @@ function applyState(s, local){
   clearTimeout(window.__lockTimer);
   if (s.lockLeft) window.__lockTimer =
     setTimeout(() => { if (lot && !over) render(); }, s.lockLeft + 250);
+  // Same idea as lockTill just above: a local clock the countdown UI reads
+  // from, rebuilt from the host's remaining time rather than trusting our
+  // own clock to agree with theirs.
+  bidDeadlineLocal = s.bidLeft ? Date.now() + s.bidLeft : 0;
   if (!local) started = true;
   if (over) return showFaceoff();
   // A fresh sale is starting: over just flipped back to false, which only
@@ -984,6 +1030,11 @@ function resumeTable(){
   if (!sv) return;
   HOST = true; ME = 0; started = true;
   ROOM = sv.ROOM; deck = sv.deck; P = sv.P; lot = sv.lot; lotNum = sv.lotNum; over = sv.over;
+  // A saved lot's bidDeadline is just a timestamp from before the reload; the
+  // actual JS timer that would act on it is gone with the old page. Without
+  // this, the countdown UI could reappear (rebuilt from that stale
+  // timestamp) with nothing behind it to ever resolve the lot.
+  if (lot && !lot.sold && lot.bidDeadline) scheduleBidTimer();
   connect().then(() => { pushState(); }).catch(() => nudge("Could not reopen that table."));
 }
 
@@ -1035,12 +1086,51 @@ function canPass(p){
 }
 
 function nextLot(){
+  clearTimeout(window.__bidTimer);
   if (bought() >= SLOTS * NP) return finish();
   if (lotNum >= perSale() || !deck.length) return finish();
   lotNum++;
   lot = { char: deck.shift(), price: 0, high: null, opener: (lotNum - 1) % NP,
           passed: seats().map(() => false) };
+  // Same clock, running from lot zero: nobody has to open it, but if
+  // neither buyer does within the window, something still has to happen
+  // (see scheduleBidTimer's own comment for which outcome it picks).
+  lot.bidDeadline = Date.now() + BID_TIMER_MS;
+  scheduleBidTimer();
   pushState();
+}
+
+// Host only: 8 seconds after a bid lands, if nobody has answered it, the
+// lot just sells itself to whoever is standing. The same clock also covers
+// the lot BEFORE anyone has bid at all (see nextLot() above): running out
+// with no bids either passes it in unsold (same as both buyers declining
+// by hand) or, if the lot is compulsory and somebody has to buy it anyway,
+// sells it to that buyer at the $1 opening price rather than leaving it
+// unresolved forever - obliged() below is exactly the rule the "Pass"
+// button already enforces for a compulsory lot, just applied here to a
+// buyer who never acted at all. Re-armed on every fresh bid (bid() calls
+// this again, and the clearTimeout below drops the old one), and harmless
+// to fire late: the lot/high/price check below means a stale timer from a
+// bid that has since been outbid or resolved does nothing.
+function scheduleBidTimer(){
+  clearTimeout(window.__bidTimer);
+  if (!lot || lot.sold) return;
+  const ref = lot, high = lot.high, price = lot.price;
+  // Normally this runs right after lot.bidDeadline was just set to
+  // "now + BID_TIMER_MS", so wait works out the same either way. It only
+  // matters after resumeTable() restores a deadline stamped before a
+  // reload: waiting out whatever time is actually left (possibly already
+  // past, which just resolves it on the next tick) instead of handing out
+  // a fresh 8 seconds nobody asked for.
+  const wait = lot.bidDeadline ? Math.max(0, lot.bidDeadline - Date.now()) : BID_TIMER_MS;
+  window.__bidTimer = setTimeout(() => {
+    if (lot !== ref || lot.sold) return;
+    if (high === null){
+      const ob = obliged();
+      return ob === null ? passIn(0) : award(ob, 1);
+    }
+    if (lot.high === high && lot.price === price) award(high, price);
+  }, wait);
 }
 
 /* ---------------------------- actions ---------------------------- */
@@ -1058,6 +1148,8 @@ function bid(p, amount){
   // Nobody left who could answer: it is theirs. Folding is final, so a rival
   // who has already passed can never come back to contest this.
   if (!rivals(p).some(q => inPlay(q) && !lot.passed[q])) return award(p, amt);
+  lot.bidDeadline = Date.now() + BID_TIMER_MS;
+  scheduleBidTimer();
   pushState();
 }
 
@@ -1096,6 +1188,7 @@ function award(p, price){
   // A lot settles exactly once. Controls stay on screen through the stamp
   // animation, so without this a second click resells the same issue.
   if (lot.sold) return;
+  clearTimeout(window.__bidTimer);
   lot.sold = true;
   lot.high = p; lot.price = price;
   P[p].purse -= price;
@@ -1582,13 +1675,13 @@ function fitName(){
   // and push the footer off the card. So the name gets a height budget too,
   // smaller when a picture is sharing the cover with it.
   const hasArt = !$("cvArt").hidden;
-  const maxH = cover.clientHeight * (hasArt ? 0.21 : 0.32);
+  const maxH = cover.clientHeight * (hasArt ? 0.155 : 0.32);
   let s = Math.min(52, Math.max(18, cover.clientWidth * 0.163));
   el.style.fontSize = s + "px";
   const fits = () =>
     el.scrollWidth <= el.clientWidth + 1 &&
     el.getBoundingClientRect().height <= maxH;
-  while (s > 13 && !fits()){ s -= 1; el.style.fontSize = s + "px"; }
+  while (s > 10 && !fits()){ s -= 1; el.style.fontSize = s + "px"; }
 }
 
 
@@ -1725,6 +1818,141 @@ function renderSticker(){
 }
 
 const setGo = (panel, off) => { const g = panel.querySelector(".pn-go"); if (g) g.disabled = off; };
+
+// Polled on an interval (see setInterval(driveBidTimer, ...) below) rather
+// than scheduled per-second: bidDeadlineLocal can be rebuilt at any moment
+// by a fresh state push (a new bid resets it, a sale resolving clears it),
+// so a plain countdown that only recomputes when told to would drift or
+// miss the reset. Cheap enough to just re-derive the digit every tick.
+function driveBidTimer(){
+  const el = $("bidTimer"), issue = $("issue");
+  if (!el || $("auction").hidden){ if (el) el.hidden = true; return; }
+  const numEl = $("bidTimerNum");
+  const active = lot && !lot.sold && bidDeadlineLocal > 0;
+  const msLeft = active ? bidDeadlineLocal - Date.now() : -1;
+  const urgent = msLeft > 0 && msLeft <= BID_URGENT_MS;
+  if (issue) issue.classList.toggle("timer-urgent", urgent);
+  if (!urgent){
+    el.hidden = true;
+    bidTimerShown = 0;
+    return;
+  }
+  const n = Math.min(3, Math.max(1, Math.ceil(msLeft / 1000)));
+  el.hidden = false;
+  if (n !== bidTimerShown){
+    bidTimerShown = n;
+    numEl.textContent = n;
+    // Same reflow-restart trick as stamp() above: forces the pop animation
+    // to replay from the start for each new digit rather than the browser
+    // treating an already-running animation as unchanged.
+    numEl.style.animation = "none";
+    void numEl.offsetWidth;
+    numEl.style.animation = "";
+  }
+}
+setInterval(driveBidTimer, 100);
+
+// Same polling approach as driveBidTimer above, plus the one thing that
+// function doesn't need to do itself: when the clock actually runs out,
+// this is a client-local decision (no host round-trip to wait on), so it
+// just sends a random pick from the player's own remaining hand right here.
+function drivePickTimer(){
+  const el = $("pickTimer"), cw = $("storyChoice");
+  if (!el || !cw || $("faceoff").hidden){ if (el) el.hidden = true; return; }
+  if (!ST || !pickDeadlineLocal){
+    el.hidden = true; pickTimerShown = 0; cw.classList.remove("timer-urgent");
+    return;
+  }
+  const msLeft = pickDeadlineLocal - Date.now();
+  if (msLeft <= 0){
+    pickDeadlineLocal = 0;
+    el.hidden = true; pickTimerShown = 0; cw.classList.remove("timer-urgent");
+    const mine = myRemaining();
+    const sent = ST.picks && ST.picks[P[ME].name];
+    if (mine.length && !sent) sendPick(mine[Math.floor(Math.random() * mine.length)].name);
+    return;
+  }
+  const urgent = msLeft <= PICK_URGENT_MS;
+  cw.classList.toggle("timer-urgent", urgent);
+  if (!urgent){ el.hidden = true; pickTimerShown = 0; return; }
+  const n = Math.min(3, Math.max(1, Math.ceil(msLeft / 1000)));
+  const numEl = $("pickTimerNum");
+  el.hidden = false;
+  if (n !== pickTimerShown){
+    pickTimerShown = n;
+    numEl.textContent = n;
+    numEl.style.animation = "none";
+    void numEl.offsetWidth;
+    numEl.style.animation = "";
+  }
+}
+setInterval(drivePickTimer, 100);
+
+// 21 seconds to lock my own roles, 5-4-3-2-1 in the last 5. Auto-fills
+// whatever's still unassigned and locks it in if I run out the clock.
+function driveRoleTimer(){
+  const el = $("roleTimer");
+  const side = document.querySelector(".role-side.mine");
+  if ($("faceoff").hidden || !el || !side || !roleDeadlineLocal){
+    if (side) side.classList.remove("timer-urgent");
+    return;
+  }
+  const msLeft = roleDeadlineLocal - Date.now();
+  if (msLeft <= 0){
+    roleDeadlineLocal = 0;
+    side.classList.remove("timer-urgent");
+    if (!P[ME].locked){ autoAssignRoles(ME); lockRoles(ME); }
+    return;
+  }
+  const urgent = msLeft <= ROLE_URGENT_MS;
+  side.classList.toggle("timer-urgent", urgent);
+  if (!urgent){ el.hidden = true; roleTimerShown = 0; return; }
+  const n = Math.min(5, Math.max(1, Math.ceil(msLeft / 1000)));
+  const numEl = $("roleTimerNum");
+  el.hidden = false;
+  if (n !== roleTimerShown){
+    roleTimerShown = n;
+    numEl.textContent = n;
+    numEl.style.animation = "none";
+    void numEl.offsetWidth;
+    numEl.style.animation = "";
+  }
+}
+setInterval(driveRoleTimer, 100);
+
+// Same 21-second clock for whoever calls the encounter: if they never
+// press Start, it starts itself with whatever's currently selected
+// (random, by default) once the clock runs out.
+function driveModeTimer(){
+  const el = $("modeTimer"), fs = $("encounter");
+  if ($("faceoff").hidden || !el || !fs || !modeDeadlineLocal){
+    if (fs) fs.classList.remove("timer-urgent");
+    if (el) el.hidden = true;
+    return;
+  }
+  const msLeft = modeDeadlineLocal - Date.now();
+  if (msLeft <= 0){
+    modeDeadlineLocal = 0;
+    fs.classList.remove("timer-urgent");
+    el.hidden = true; modeTimerShown = 0;
+    writeFight();
+    return;
+  }
+  const urgent = msLeft <= MODE_URGENT_MS;
+  fs.classList.toggle("timer-urgent", urgent);
+  if (!urgent){ el.hidden = true; modeTimerShown = 0; return; }
+  const n = Math.min(5, Math.max(1, Math.ceil(msLeft / 1000)));
+  const numEl = $("modeTimerNum");
+  el.hidden = false;
+  if (n !== modeTimerShown){
+    modeTimerShown = n;
+    numEl.textContent = n;
+    numEl.style.animation = "none";
+    void numEl.offsetWidth;
+    numEl.style.animation = "";
+  }
+}
+setInterval(driveModeTimer, 100);
 
 function renderPanels(){
   const solo = soloRun();
@@ -1879,9 +2107,24 @@ function setRole(p, i, key){
   }
 }
 
+// Fills whatever's left unassigned with a random one-role-each pairing, for
+// the 21-second role timer running out. Plain Math.random, not the seeded
+// fight RNG: this happens before the match/seed exist at all, purely local
+// setup, same as any other UI randomness in this file.
+function autoAssignRoles(p){
+  const openIdx = P[p].roster.map((r, i) => ({ r, i })).filter(({ r }) => !r.role).map(({ i }) => i);
+  const freeRoles = ROLES.map(x => x.k).filter(k => !P[p].roster.some(r => r.role === k));
+  for (let i = freeRoles.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [freeRoles[i], freeRoles[j]] = [freeRoles[j], freeRoles[i]];
+  }
+  openIdx.forEach((idx, n) => { if (freeRoles[n]) setRole(p, idx, freeRoles[n]); });
+}
+
 function lockRoles(p){
   if (!rolesDone(p) || P[p].locked) return;
   P[p].locked = true;
+  if (p === ME){ roleDeadlineLocal = 0; roleTimerShown = 0; }
   SFX.sold();
   if (HOST) pushState(); else send({ t: "roles", p, cid: CID, roles: P[p].roster.map(r => r.role) });
   paintRoles();
@@ -2025,7 +2268,10 @@ function paintRoles(){
               </div>
             </li>`;
           }).join("")
-        }</ul>`;
+        }</ul>
+        <div class="role-timer" id="roleTimer" hidden aria-hidden="true">
+          <span class="role-timer-num" id="roleTimerNum">5</span>
+        </div>`;
       sec.querySelectorAll(".role-chip").forEach(chip => {
         chip.querySelector(".rc-name").textContent = P[p].roster[Number(chip.dataset.idx)].char.name;
       });
@@ -2060,6 +2306,17 @@ function paintRoles(){
 
   roleFlash = null;   // consumed: the burst plays on this paint only
 
+  // Arm once, the first repaint that finds me unlocked - not on every
+  // repaint, or a drag mid-countdown (which also calls paintRoles()) would
+  // keep resetting my own clock. Cleared in lockRoles() above the moment I
+  // lock, and naturally re-arms for the next deal since .locked goes back
+  // to false there too.
+  if (!P[ME].locked){
+    if (!roleDeadlineLocal) roleDeadlineLocal = Date.now() + ROLE_TIMER_MS;
+  } else {
+    roleDeadlineLocal = 0; roleTimerShown = 0;
+  }
+
   paintEncounter();
 
   const ready = allLocked();
@@ -2070,6 +2327,13 @@ function paintRoles(){
     ? "Waiting on " + seats().filter(p => !P[p].locked).map(p => P[p].name).join(" and ") + "."
     : iCall ? "Every role is locked. Start it."
             : `Every role is locked. ${P[caller()].name} calls the encounter.`;
+  // The mode-selection clock only ever applies to me, only once everyone's
+  // roles are locked and it's actually my call to make.
+  if (ready && iCall){
+    if (!modeDeadlineLocal) modeDeadlineLocal = Date.now() + MODE_TIMER_MS;
+  } else {
+    modeDeadlineLocal = 0; modeTimerShown = 0;
+  }
 }
 
 /* ------------------------- the writer ------------------------- */
@@ -2474,6 +2738,20 @@ function stPaint(){
     const mine = myRemaining();
     const sent = ST.picks && ST.picks[P[ME].name];
     const waiting = (ST.locked || []).filter(n => n !== P[ME].name);
+    // Arm the 5-second clock the moment this becomes a live, unmade choice;
+    // clear it once sent. Keyed on the round (and overtime phase) rather
+    // than just "sent or not", so a repaint mid-countdown (another player's
+    // bid... pick landing, a resize, anything that calls stPaint again)
+    // never restarts a clock that is already running for this same round.
+    if (sent){
+      pickDeadlineLocal = 0; pickRoundKey = null;
+    } else {
+      const key = (ST.round || 1) + (ST.overtime ? "-ot" : "");
+      if (pickRoundKey !== key){
+        pickRoundKey = key;
+        pickDeadlineLocal = Date.now() + PICK_TIMER_MS;
+      }
+    }
     // textContent escapes on its own; escTxt here would show the entities.
     $("scWho").textContent = sent
       ? `${sent} is in. Waiting on the others.`
@@ -2501,12 +2779,17 @@ function stPaint(){
       if (!sent) b.addEventListener("click", () => sendPick(c.name));
       opts.appendChild(b);
     });
-    if (!mine.length) $("scWho").textContent = "Nobody left to send.";
+    if (!mine.length){ $("scWho").textContent = "Nobody left to send."; pickDeadlineLocal = 0; pickRoundKey = null; }
+  } else {
+    // Not a live picking moment (round over, busy resolving, waiting on
+    // effects): no clock should be ticking.
+    pickDeadlineLocal = 0; pickRoundKey = null;
   }
 
   // Only the person who called the encounter can start it, and only once.
   const done = !!ST.end || !!ST.err;
   const spent = ST.runs && ST.runs.length >= 2 && !ST.err;
+  const iCall = caller() === ME;
   paintEncounter();
   $("writeBtn").disabled = ST.busy || !done || spent;
   $("writeHint").textContent = ST.err
@@ -2514,6 +2797,13 @@ function stPaint(){
     : spent ? "Both encounters are done. Run it again for a fresh draft."
     : done ? "Run the other encounter to see how the same five would have done."
            : "Five rounds, one character each, nobody sees the other pick. A tied score after five forces sudden death.";
+  // Same clock as the first encounter's selection, armed here too for the
+  // "run the other one" wait between matches.
+  if (iCall && done && !spent && !ST.busy){
+    if (!modeDeadlineLocal) modeDeadlineLocal = Date.now() + MODE_TIMER_MS;
+  } else {
+    modeDeadlineLocal = 0; modeTimerShown = 0;
+  }
 }
 
 // Guests send the intent, the host owns the state. Same shape as bidding.
@@ -2544,6 +2834,8 @@ function resetMatchState(){
   ST = null; MATCH = null;
   pendingEffects = null; shownSig = ""; shownStandings = null; shownWinner = null;
   shownRoundWinners = []; revealedRound = "";
+  pickDeadlineLocal = 0; pickRoundKey = null;
+  modeDeadlineLocal = 0; modeTimerShown = 0;
   clearTimeout(window.__effectDelayTimer);
 }
 
@@ -2590,7 +2882,7 @@ function startStory(mode){
 // guest that reloads can reconstruct the same match from the same seed.
 function buildMatch(){
   const teams = seats().map(q => ({
-    owner: P[q].name,
+    owner: P[q].name, purse: P[q].purse,
     fighters: P[q].roster.map(r => ({ ...r.char, role: r.role, price: r.price }))
   }));
   MATCH = createMatch({ teams, mode: ST.mode, seed: ST.seed, roleShift, rivalries: RIVALRIES });

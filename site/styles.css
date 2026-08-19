@@ -262,8 +262,8 @@ body{
 .tier-toggle em{ display:block; margin-top:3px; font-size:12.5px; line-height:1.45; color:var(--ink-3); max-width:56ch; }
 
 .box-count{
-  margin:0; font-size:11px; font-weight:700; letter-spacing:.13em;
-  text-transform:uppercase; color:var(--ink-3);
+  margin:0; font-size:15px; font-weight:800; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--ink);
 }
 .box-count.thin{ color:var(--red-dk); }
 
@@ -296,9 +296,13 @@ body{
 /* A picture IS the head shot, so the initials box stands down wherever art
    exists and hands its space to the art. The tier moves up to the masthead. */
 .cover.has-art .cv-box{ display:none; }
-.cover.has-art .cv-name{ margin-top:4px; }
+/* the price sticker (z-index:4, see .sticker) hangs over the top-right
+   corner and paints above the cover, so a long name sitting right under
+   the masthead can render invisibly beneath it. Reserving that width means
+   fitName()'s own auto-shrink (it measures this element's clientWidth)
+   keeps the text clear of the sticker instead of just going under it. */
+.cover.has-art .cv-name{ margin-top:4px; max-width:calc(100% - 70px); }
 .cover.has-art .cv-note{
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
   flex:0 0 auto;            /* only the art flexes; this line must not be clipped */
 }
 /* The picture already says who this is, so the civilian name comes off and
@@ -737,6 +741,7 @@ body{
 .cv-top{
   display:flex; justify-content:space-between; align-items:center;
   padding-bottom:7px; border-bottom:3px solid var(--ink);
+  flex-shrink:0;
 }
 .cv-pub{
   font-family:var(--slab); font-size:14px; letter-spacing:.01em;
@@ -757,6 +762,7 @@ body{
   border:2px solid var(--ink);
   font-family:var(--slab); font-size:25px; line-height:1;
   letter-spacing:-.045em; color:var(--ink);
+  flex-shrink:0;
 }
 .cover[data-grp="Comics"] .cv-box{ background:rgba(192,54,31,.13); }
 .cover[data-grp="Anime"]  .cv-box{ background:rgba(39,73,127,.13); }
@@ -770,22 +776,35 @@ body{
   text-transform:uppercase; color:var(--ink);
   text-wrap:balance;
   text-shadow:1.5px 2px 0 rgba(176,46,36,.20);
+  /* fitName() shrinks the font to fit, but a three-word name at the size
+     floor can still run long; this is the hard backstop so it truncates
+     inside the card instead of spilling past the edge. flex-shrink:0
+     matters just as much as the clamp: without it, the flex column below
+     squashes this box (and its already-clamped 2 lines) whenever total
+     content runs taller than the card - cv-art, not the name, is meant to
+     be the one that gives. */
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  overflow:hidden; word-break:break-word; flex-shrink:0;
 }
 .cv-alias{
   margin:9px 0 0; font-family:var(--type);
   font-size:13px; color:var(--ink-2);
+  flex-shrink:0;
 }
 .cv-hr{
   margin:11px 0 9px; height:4px;
   border-top:1px solid var(--rule); border-bottom:3px double var(--rule);
+  flex-shrink:0;
 }
 .cv-note{
   margin:0; min-height:0; overflow:hidden; font-size:14.5px; font-style:italic;
-  line-height:1.44; color:var(--ink-2); max-width:34ch;
+  line-height:1.44; color:var(--ink-2); max-width:100%;
+  white-space:nowrap; text-overflow:ellipsis; flex-shrink:0;
 }
 .cv-bot{
   display:flex; justify-content:space-between; gap:10px;
   margin-top:auto; padding-top:10px; border-top:1px solid var(--rule);
+  flex-shrink:0;
 }
 .cv-cond{
   font-size:10px; font-weight:700; letter-spacing:.15em;
@@ -823,6 +842,39 @@ body{
 .st-who{
   font-family:var(--type); font-size:10.5px; color:var(--ink-3);
   text-align:center; line-height:1.25; overflow-wrap:break-word;
+}
+
+/* the 3-2-1 countdown in a bidder's last 3 seconds to answer. Sits above
+   even the price sticker (z-index:4) since this is the thing that most
+   needs to be seen right now. pointer-events:none so it never blocks a
+   frantic click on the bid buttons underneath it. */
+.bid-timer{
+  position:absolute; inset:0; z-index:6;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none;
+}
+.bid-timer-num{
+  font-family:var(--wax); font-size:clamp(70px,20vw,128px); line-height:1;
+  color:#fff2df;
+  text-shadow:0 0 8px rgba(214,32,26,.9), 0 0 34px rgba(214,32,26,.65), 0 4px 0 rgba(0,0,0,.55);
+  animation:bidTimerPop .82s cubic-bezier(.2,.9,.25,1) both;
+}
+@keyframes bidTimerPop{
+  0%{ transform:scale(2.1) rotate(-8deg); opacity:0; }
+  38%{ transform:scale(1.06) rotate(3deg); opacity:1; }
+  64%{ transform:scale(.97) rotate(-1deg); }
+  100%{ transform:scale(1) rotate(0deg); opacity:1; }
+}
+/* the card itself gets nervous along with the number: a quick red-edged
+   shake for as long as the countdown is live. */
+.issue.timer-urgent .cover{
+  animation:timerShake .42s ease-in-out infinite;
+  box-shadow:0 0 0 3px rgba(214,32,26,.6), 0 26px 50px -22px rgba(0,0,0,.9);
+}
+@keyframes timerShake{
+  0%, 100%{ transform:rotate(-1deg); }
+  25%{ transform:rotate(-1.8deg); }
+  75%{ transform:rotate(-.2deg); }
 }
 
 .call{
@@ -1051,6 +1103,7 @@ body{
 .encounter{
   width:min(720px,100%); margin:0; padding:0; border:0;
   display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px;
+  position:relative;
 }
 .encounter .fm-head{
   grid-column:1 / -1; margin:0; text-align:center;
@@ -1096,6 +1149,7 @@ body{
   padding:12px 14px 13px; text-align:left;
   background:linear-gradient(180deg, rgba(255,255,255,.20), rgba(120,90,50,.13)), var(--pulp-3);
   border:1px solid rgba(70,52,28,.5);
+  position:relative;
 }
 .role-side .ledger-tab{
   margin:-12px -14px 11px; padding:7px 14px 6px;
@@ -1413,6 +1467,7 @@ svg.rs-icon{
   .pn-other span{ display:none; }
   .sticker{ width:96px; right:-10px; top:-14px; }
   .st-price{ font-size:31px; }
+  .cover.has-art .cv-name{ max-width:calc(100% - 56px); }
   .slot{ font-size:12.5px; }
   .purse-figure{ font-size:32px; }
   .pn-state{ min-height:0; }
@@ -1511,7 +1566,61 @@ svg.rs-icon{
    removed. If cards are still narrow after this, the container itself is not
    the cause and the real answer is whatever DevTools reports as #storyChoice's
    computed width. */
-#storyChoice{ width:100%; box-sizing:border-box; }
+#storyChoice{ width:100%; box-sizing:border-box; position:relative; }
+
+/* the 3-2-1 countdown for the 5-second pick clock, painted over the whole
+   card-picker so it reads as pressure on the choice itself, not a random
+   badge off to the side. Same pop/urgency treatment as .bid-timer on the
+   auction card, just scoped to this box instead of the issue. */
+.pick-timer{
+  position:absolute; inset:0; z-index:5;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none;
+}
+.pick-timer-num{
+  font-family:var(--wax); font-size:clamp(64px,16vw,110px); line-height:1;
+  color:#fff2df;
+  text-shadow:0 0 8px rgba(214,32,26,.9), 0 0 34px rgba(214,32,26,.65), 0 4px 0 rgba(0,0,0,.55);
+  animation:bidTimerPop .82s cubic-bezier(.2,.9,.25,1) both;
+}
+/* the whole card-picker gets the same urgent shake as the auction card
+   during its last 3 seconds. */
+.story-choice.timer-urgent .sc-opts{
+  animation:timerShake .42s ease-in-out infinite;
+}
+.story-choice.timer-urgent .sc-who{ color:var(--red-dk); }
+
+/* the 21-second "start it or it starts itself" clock over the encounter
+   picker, and its sibling over each player's own role board. Same pop and
+   shake as the auction/pick timers, just longer-lived: these are solo setup
+   steps, not a live back-and-forth, so the window is wider and the digit
+   only starts counting down from 5, not 3. */
+.mode-timer{
+  position:absolute; inset:0; z-index:5;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none;
+}
+.mode-timer-num, .role-timer-num{
+  font-family:var(--wax); font-size:clamp(56px,14vw,96px); line-height:1;
+  color:#fff2df;
+  text-shadow:0 0 8px rgba(214,32,26,.9), 0 0 34px rgba(214,32,26,.65), 0 4px 0 rgba(0,0,0,.55);
+  animation:bidTimerPop .82s cubic-bezier(.2,.9,.25,1) both;
+}
+.encounter.timer-urgent .enc-opt{
+  animation:timerShake .42s ease-in-out infinite;
+}
+.encounter.timer-urgent .fm-head{ color:var(--red-dk); }
+
+.role-timer{
+  position:absolute; inset:0; z-index:5;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none;
+}
+.role-side.timer-urgent{
+  animation:timerShake .42s ease-in-out infinite;
+  box-shadow:0 0 0 3px rgba(214,32,26,.6);
+}
+
 .sc-who{ margin:0 0 8px; font:700 12px/1.3 var(--data); letter-spacing:.09em;
   text-transform:uppercase; color:var(--kraft-dk); }
 .sc-opt{ appearance:none; text-align:left; cursor:pointer; padding:12px 14px;
