@@ -2094,7 +2094,7 @@ function revealHtml(ranked, opts){
     ? `Winner: <b>${escTxt(roundWinner)}</b>`
     : `Stalemate: <b>${escTxt(drawNames.join(" & "))}</b>`;
 
-  return `<div class="round-reveal${historic ? " round-reveal-historic" : ""}${fresh ? " is-fresh" : " is-shown"}${shown ? " is-effects" : ""}"
+  return `<div class="round-reveal${ranked.length > 2 ? " is-three" : ""}${historic ? " round-reveal-historic" : ""}${fresh ? " is-fresh" : " is-shown"}${shown ? " is-effects" : ""}"
     style="grid-template-columns:${gridCols}">
     ${cards.join("")}
     ${vsBadges.join("")}
