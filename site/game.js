@@ -172,7 +172,12 @@ function verdict(mode){
   return { scores, gap, close: gap <= CLOSE, winner: gap <= CLOSE ? null : lead };
 }
 
-const perSale = () => 10 * NP;   // twenty for two buyers, thirty for three
+// Lots dealt per sale. Deliberately tight: at ten per buyer half the box went
+// unsold, so passing on a mid tier cost nothing and the compulsory rule handed
+// out filler at a dollar at the end. Anyone could ignore every B and C, spend
+// the purse on one monster and still fill a roster. Fifteen for two buyers
+// leaves five spare across the table, twenty five for three leaves ten.
+const perSale = () => NP === 3 ? 25 : 15;
 
 // After any bid the table freezes for a beat so everyone sees it land before
 // the next one goes in. Without this the fastest connection wins every
@@ -600,9 +605,10 @@ function paintNP(){
     b.setAttribute("aria-pressed", on ? "true" : "false");
     b.innerHTML = `<b></b><em></em>`;
     b.querySelector("b").textContent = n === 2 ? "Two buyers" : "Three buyers";
+    const lots = n === 3 ? 25 : 15;
     b.querySelector("em").textContent = n === 2
-      ? "Head to head. Twenty lots, five each."
-      : "Free for all, five against five against five. Thirty lots.";
+      ? `Head to head. ${lots} lots, five each.`
+      : `Free for all, five against five against five. ${lots} lots.`;
     b.addEventListener("click", () => { NP = n; refreshSetupBox(); });
     row.appendChild(b);
   }
@@ -611,9 +617,7 @@ function paintNP(){
 function refreshSetupBox(){
   paintNP();
   $("coverEdition").textContent =
-    `Twenty Lots \u00b7 Ten Sold \u00b7 ${NP === 3 ? "Three" : "Two"} Buyers`
-      .replace("Twenty", NP === 3 ? "Thirty" : "Twenty")
-      .replace("Ten Sold", NP === 3 ? "Fifteen Sold" : "Ten Sold");
+    `${perSale()} Lots \u00b7 ${5 * NP} Sold \u00b7 ${NP === 3 ? "Three" : "Two"} Buyers`;
   BOX.tiers = $("showTiers").checked;
   paintBox($("uniChips"), $("boxCount"), refreshSetupBox);
 }
