@@ -2083,3 +2083,15 @@ svg.rs-icon{
 .enc-opt.enc-used{ opacity:.4; }
 .enc-opt.enc-used .enc-body b::after{ content:" (fought)"; font:600 11px var(--data);
   letter-spacing:.08em; text-transform:uppercase; vertical-align:middle; }
+
+
+/* ---- playing the computer ---- */
+/* The solo toggle sits under the buyer-count bands and reads as one of them
+   rather than a separate control, because it answers the same question:
+   who is in the other chairs. */
+.bot-row{ display:flex; flex-direction:column; gap:10px; margin-top:10px; }
+.band-solo.on{ border-color:var(--stamp); }
+.bot-levels{ display:flex; flex-wrap:wrap; gap:6px; }
+.bot-note{
+  margin:0; font:italic 500 13px/1.35 var(--data); color:var(--ink-3);
+}

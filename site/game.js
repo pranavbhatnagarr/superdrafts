@@ -1,4 +1,5 @@
 import { createMatch } from "./fight.js";
+import { createBot, LEVELS, LEVEL_BLURB } from "./bot.js";
 
 // Hand written exchanges for pairs with real history. Loaded once with the
 // roster; the match falls back to generic lines for anyone not in here.
@@ -188,6 +189,17 @@ const locked = () => Date.now() < lockTill;
 
 // What is in the box. The host owns this and it travels to the joiner.
 let BOX = { u: ["MAR","DC"], tiers: true };
+
+/* ---------------------------- solo play ---------------------------- */
+// A game against the computer is the same game with nobody on the other end
+// of the wire. The human is still the host and still owns every rule; the
+// other chairs are simply filled by decisions made in bot.js instead of by
+// messages arriving from another browser. connect() is never called, which
+// leaves chan undefined, which makes send() the no-op it already guards for.
+let SOLO = false;
+let BOT_LEVEL = "medium";
+let BOTS = {};              // seat -> bot instance, host only
+let botBusy = false;        // one scheduled bot action at a time
 
 const MIN_BOX = () => perSale();   // one full sale
 const inBox = c => BOX.u.includes(c[1]);
@@ -477,6 +489,7 @@ function pushState(fx){
   send({ t: "state", s });
   try { localStorage.setItem(SAVE_KEY, JSON.stringify({ ROOM, deck, ...s })); } catch {}
   applyState(s, true);
+  if (SOLO) botTick();
 }
 
 function applyState(s, local){
@@ -612,6 +625,45 @@ function paintNP(){
     b.addEventListener("click", () => { NP = n; refreshSetupBox(); });
     row.appendChild(b);
   }
+  paintBotRow();
+}
+
+// Who is in the other chairs. Off means people, on means the computer, and
+// the difficulty only appears once it is actually going to be used.
+function paintBotRow(){
+  const row = $("botRow"); if (!row) return;
+  row.innerHTML = "";
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "band band-solo" + (SOLO ? " on" : "");
+  toggle.setAttribute("aria-pressed", SOLO ? "true" : "false");
+  toggle.innerHTML = "<b></b><em></em>";
+  toggle.querySelector("b").textContent = SOLO ? "Playing the computer" : "Play the computer";
+  toggle.querySelector("em").textContent = SOLO
+    ? (NP === 3 ? "Two of them, and no waiting for anybody." : "No table, no code, no waiting for anybody.")
+    : "On your own. Start straight away, no code to send.";
+  toggle.addEventListener("click", () => { SOLO = !SOLO; refreshSetupBox(); });
+  row.appendChild(toggle);
+
+  if (!SOLO) return;
+  const chips = document.createElement("div");
+  chips.className = "chips bot-levels";
+  for (const lv of LEVELS){
+    const c = document.createElement("button");
+    c.type = "button";
+    c.className = "chip" + (BOT_LEVEL === lv ? " on" : "");
+    c.setAttribute("aria-pressed", BOT_LEVEL === lv ? "true" : "false");
+    c.textContent = lv[0].toUpperCase() + lv.slice(1);
+    c.title = LEVEL_BLURB[lv];
+    c.addEventListener("click", () => { BOT_LEVEL = lv; refreshSetupBox(); });
+    chips.appendChild(c);
+  }
+  row.appendChild(chips);
+  const note = document.createElement("p");
+  note.className = "bot-note";
+  note.textContent = LEVEL_BLURB[BOT_LEVEL];
+  row.appendChild(note);
 }
 
 function refreshSetupBox(){
@@ -757,6 +809,136 @@ async function openTable(){
   $("lobbyBox").textContent = boxSummary();
   $("shareLink").value = location.origin + location.pathname + "?r=" + ROOM;
   showScreen("lobby");
+}
+
+// The same opening as openTable, minus every part that involves anybody
+// else: no room code, no channel, no lobby, no waiting. The sale starts on
+// the spot.
+function openSolo(){
+  const n = myName();
+  if (!n) return nudge("Put your name on the tab first.");
+  if (boxCount() < MIN_BOX()) return nudge("The box is too thin for that many buyers. Add a universe.");
+  HOST = true; ME = 0; started = true; ROOM = "";
+  const face = ["Ada", "Vex", "Rook"];
+  P = seats().map(q => ({
+    name: q === 0 ? n : face[q - 1] + " (" + BOT_LEVEL + ")",
+    purse: PURSE, roster: [], locked: false
+  }));
+  seatOf = {};
+  BOTS = {};
+  const helpers = { POINTS, effTier, roleShift, slots: SLOTS, purse: PURSE };
+  seats().forEach(q => {
+    if (q === 0) return;
+    BOTS[q] = createBot({ level: BOT_LEVEL,
+      helpers: { ...helpers, seed: (Math.random() * 2 ** 31) | 0 } });
+  });
+  dealDeck(); nextLot();
+  showScreen("auction");
+  botTick();
+}
+
+/* Every bot decision the sale needs, driven off the same state pushes the
+   rules already make. Nothing here reaches past what a person sitting in
+   that chair could see: the lot on the block, its own purse, and rosters
+   that are on screen for everybody once the auction ends. */
+function botThink(fn, ms){
+  if (botBusy) return;
+  botBusy = true;
+  clearTimeout(botIdle);
+  setTimeout(() => { botBusy = false; fn(); }, ms);
+}
+
+// State pushes are not enough on their own. The last push of the auction
+// happens before the face-off screen is on show, so a tick driven only by
+// pushes looks at a hidden board, finds nothing to do, and never runs again.
+// A slow idle beat covers every gap like that without the bots ever acting
+// twice, since botThink still gates on botBusy.
+let botIdle = null;
+function botWait(){
+  clearTimeout(botIdle);
+  botIdle = setTimeout(botTick, 700);
+}
+
+function botTick(){
+  clearTimeout(botIdle);
+  // Deliberately not gated on `over`: that flag means the AUCTION has
+  // finished, not the game. Gating on it here made the bots go silent at
+  // exactly the moment the role board appeared, which is the first thing
+  // they are needed for after the sale.
+  if (!SOLO || !HOST) return;
+  if (botBusy) return botWait();
+
+  // 1. the auction
+  if (!over && lot && !lot.sold && !$("auction").hidden){
+    const seat = seats().find(q => q !== 0 && BOTS[q] && inPlay(q) && !lot.passed[q] && lot.high !== q);
+    if (seat !== undefined){
+      const b = BOTS[seat];
+      const d = b.bid({
+        char: lot.char, mode: "random", ask: askPrice(), ceiling: ceiling(seat),
+        purse: P[seat].purse, slotsLeft: slotsLeft(seat), mustBuy: obliged() === seat
+      });
+      const wait = 700 + Math.random() * 700;
+      return botThink(() => {
+        if (!lot || lot.sold) return botTick();
+        if (d.act === "bid") bid(seat, d.amount); else pass(seat);
+        botTick();
+      }, wait);
+    }
+  }
+
+  // 2. the role board
+  if (!$("faceoff").hidden && P.some((x, q) => q !== 0 && BOTS[q] && !x.locked)){
+    const seat = seats().find(q => q !== 0 && BOTS[q] && !P[q].locked);
+    return botThink(() => {
+      const keys = BOTS[seat].assignRoles(P[seat].roster, chosenMode());
+      keys.forEach((k, i) => setRole(seat, i, k));
+      lockRoles(seat);
+      paintRoles();
+      botTick();
+    }, 900);
+  }
+
+  // 3. the encounter, when a bot kept the most money
+  if (!$("faceoff").hidden && allLocked() && !ST && BOTS[caller()]){
+    const seat = caller();
+    return botThink(() => {
+      const mode = BOTS[seat].encounter(P[seat].roster);
+      const radio = document.querySelector(`input[name="encounter"][value="${mode}"]`);
+      if (radio) radio.checked = true;
+      if (modeLeft(mode)) startStory(mode);
+      botTick();
+    }, 1100);
+  }
+
+  // 4. sending a fighter
+  if (ST && !ST.end && MATCH){
+    const avail = MATCH.available();
+    const seat = seats().find(q => q !== 0 && BOTS[q] && !ST.picks[P[q].name]);
+    if (seat !== undefined){
+      const mine = (avail.find(a => a.owner === P[seat].name) || { names: [] }).names;
+      if (!mine.length) return;
+      const tierOf = name => {
+        const r = P[seat].roster.find(x => x.char.name === name);
+        return r ? effTier(r.char, ST.mode, r.role) : "E";
+      };
+      const rivals = seats().filter(q => q !== seat).map(q =>
+        ((avail.find(a => a.owner === P[q].name) || { names: [] }).names).map(nm => {
+          const r = P[q].roster.find(x => x.char.name === nm);
+          return { name: nm, tier: r ? effTier(r.char, ST.mode, r.role) : "E" };
+        }));
+      return botThink(() => {
+        const choice = BOTS[seat].pick({
+          mine: mine.map(nm => ({ name: nm, tier: tierOf(nm) })), rivals, mode: ST.mode
+        });
+        if (choice) takePick(P[seat].name, choice);
+        botTick();
+      }, 1200 + Math.random() * 600);
+    }
+  }
+
+  // nothing to do this instant: the human is still thinking, or a screen has
+  // not appeared yet. Come back shortly rather than going silent for good.
+  if (!ST || !ST.end) botWait();
 }
 
 async function joinTable(){
@@ -2335,7 +2517,12 @@ function stPaint(){
 }
 
 // Guests send the intent, the host owns the state. Same shape as bidding.
-function stSend(){ if (HOST) send({ t: "st", st: ST }); }
+// The fight has its own state path, separate from pushState, so the bots
+// need waking here too or they would sit out every round.
+function stSend(){
+  if (HOST) send({ t: "st", st: ST });
+  if (SOLO) botTick();
+}
 
 // The five round match. Each side sends one character, nobody sees the other
 // pick until both are in, and every character fights exactly once. Resolved
@@ -2539,7 +2726,7 @@ $("musicToggle").addEventListener("click", () => {
 setSfx(sfxOn);
 // paints the label only; the sound itself waits for the first gesture above
 if (!musicOn) setMusic(false); else $("musicToggle").textContent = "music on";
-$("openBox").addEventListener("click", openTable);
+$("openBox").addEventListener("click", () => SOLO ? openSolo() : openTable());
 $("joinBtn").addEventListener("click", joinTable);
 $("knockBtn").addEventListener("click", askForChair);
 $("knockName").addEventListener("keydown", e => { if (e.key === "Enter") askForChair(); });
