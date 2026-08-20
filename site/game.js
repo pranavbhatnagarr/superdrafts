@@ -205,11 +205,6 @@ let bidTimerShown = 0;            // last countdown digit painted, so repaints d
 // nothing here is host-authoritative, sendPick() already knows how to reach
 // the host either way, so each browser can just clock its own player and
 // send a random pick from their own remaining hand if the clock runs out.
-const PICK_TIMER_MS = 5000;
-const PICK_URGENT_MS = 3000;
-let pickDeadlineLocal = 0;        // local clock: when an unmade pick auto-sends
-let pickRoundKey = null;          // identifies the current pick opportunity, so a repaint mid-countdown doesn't restart it
-let pickTimerShown = 0;
 
 // The two setup steps before a fight even starts - assigning roles, and
 // (for whoever kept the most money) choosing the encounter and starting it.
@@ -218,15 +213,7 @@ let pickTimerShown = 0;
 // the last 5 seconds rather than the last 3. Both are purely client-side,
 // same reasoning as the pick timer above: lockRoles() and writeFight()
 // already know how to reach the host either way.
-const ROLE_TIMER_MS = 21000;
-const ROLE_URGENT_MS = 5000;
-let roleDeadlineLocal = 0;
-let roleTimerShown = 0;
 
-const MODE_TIMER_MS = 21000;
-const MODE_URGENT_MS = 5000;
-let modeDeadlineLocal = 0;
-let modeTimerShown = 0;
 
 // What is in the box. The host owns this and it travels to the joiner.
 let BOX = { u: ["MAR","DC"], tiers: false };
@@ -1858,29 +1845,11 @@ function driveBidTimer(){
 }
 setInterval(driveBidTimer, 100);
 
-// Same polling approach as driveBidTimer above, plus the one thing that
-// function doesn't need to do itself: when the clock actually runs out,
-// this is a client-local decision (no host round-trip to wait on), so it
-// just sends a random pick from the player's own remaining hand right here.
-// drivePickTimer used to run the post-auction countdown. The clocks are gone;
-// this only makes sure the badge never shows.
-function drivePickTimer(){ const el = $("pickTimer"); if (el) el.hidden = true; }
-drivePickTimer();
-
-// 21 seconds to lock my own roles, 5-4-3-2-1 in the last 5. Auto-fills
-// whatever's still unassigned and locks it in if I run out the clock.
-// driveRoleTimer used to run the post-auction countdown. The clocks are gone;
-// this only makes sure the badge never shows.
-function driveRoleTimer(){ const el = $("roleTimer"); if (el) el.hidden = true; }
-driveRoleTimer();
-
-// Same 21-second clock for whoever calls the encounter: if they never
-// press Start, it starts itself with whatever's currently selected
-// (random, by default) once the clock runs out.
-// driveModeTimer used to run the post-auction countdown. The clocks are gone;
-// this only makes sure the badge never shows.
-function driveModeTimer(){ const el = $("modeTimer"); if (el) el.hidden = true; }
-driveModeTimer();
+// Bidding is the ONLY thing on a clock. The roles board, the encounter call
+// and the round picker used to run 21s/21s/5s countdowns that auto-filled
+// and locked for you. They're deliberately gone: those steps are the part of
+// the game people want to think about, and a clock that picks for you turns
+// a decision into a forfeit. Nothing after the auction is timed.
 
 function renderPanels(){
   const solo = soloRun();
@@ -2052,7 +2021,7 @@ function autoAssignRoles(p){
 function lockRoles(p){
   if (!rolesDone(p) || P[p].locked) return;
   P[p].locked = true;
-  if (p === ME){ roleDeadlineLocal = 0; roleTimerShown = 0; }
+  if (p === ME){ }
   SFX.sold();
   if (HOST) pushState(); else send({ t: "roles", p, cid: CID, roles: P[p].roster.map(r => r.role) });
   paintRoles();
@@ -2196,10 +2165,7 @@ function paintRoles(){
               </div>
             </li>`;
           }).join("")
-        }</ul>
-        <div class="role-timer" id="roleTimer" hidden aria-hidden="true">
-          <span class="role-timer-num" id="roleTimerNum">5</span>
-        </div>`;
+        }</ul>`;
       sec.querySelectorAll(".role-chip").forEach(chip => {
         chip.querySelector(".rc-name").textContent = P[p].roster[Number(chip.dataset.idx)].char.name;
       });
@@ -2693,11 +2659,10 @@ function stPaint(){
       if (!sent) b.addEventListener("click", () => sendPick(c.name));
       opts.appendChild(b);
     });
-    if (!mine.length){ $("scWho").textContent = "Nobody left to send."; pickDeadlineLocal = 0; pickRoundKey = null; }
+    if (!mine.length){ $("scWho").textContent = "Nobody left to send."; pickRoundKey = null; }
   } else {
     // Not a live picking moment (round over, busy resolving, waiting on
     // effects): no clock should be ticking.
-    pickDeadlineLocal = 0; pickRoundKey = null;
   }
 
   // Only the person who called the encounter can start it, and only once.
@@ -2742,8 +2707,6 @@ function resetMatchState(){
   ST = null; MATCH = null;
   pendingEffects = null; shownSig = ""; shownStandings = null; shownWinner = null;
   shownRoundWinners = []; revealedRound = "";
-  pickDeadlineLocal = 0; pickRoundKey = null;
-  modeDeadlineLocal = 0; modeTimerShown = 0;
   clearTimeout(window.__effectDelayTimer);
 }
 

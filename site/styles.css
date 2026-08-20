@@ -323,7 +323,6 @@ body{
 .cv-tier[data-t="D"],
 .cv-tier[data-t="E"]{ background:var(--ink-3); }
 
-
 /* ---------- seats: two flank the stage, three sit under it ---------- */
 .ledgers{ display:contents; }
 .ledger.seat-0{ grid-area:l0; }
@@ -364,7 +363,6 @@ body{
 @media (max-width: 620px){
   .np-row{ grid-template-columns:1fr; }
 }
-
 
 /* ---------- the bid ladder ---------- */
 .ladder{
@@ -413,7 +411,6 @@ body{
 .pn-go:disabled{ opacity:.35; cursor:not-allowed; }
 .panel.remote .pn-go{ display:none; }
 
-
 /* ---------- character art on the cover ---------- */
 /* a fixed share of the cover, so the panel never collapses on a small screen */
 .cv-art{
@@ -458,7 +455,6 @@ body{
      zone actually needs MORE reserved width than desktop, not less. */
   .cover.has-art .cv-name{ max-width:calc(100% - 112px); }
 }
-
 
 /* ---------- the door ---------- */
 .knock-tab{ margin-top:22px; }
@@ -1152,7 +1148,6 @@ body{
 }
 .enc-opt:has(input:focus-visible){ outline:3px solid #f0c04a; outline-offset:2px; }
 
-
 /* ---------- role assignment ---------- */
 .roles-wrap{ width:min(920px,100%); }
 .roles-note{
@@ -1583,58 +1578,9 @@ svg.rs-icon{
    computed width. */
 #storyChoice{ width:100%; box-sizing:border-box; position:relative; }
 
-/* the 3-2-1 countdown for the 5-second pick clock, painted over the whole
-   card-picker so it reads as pressure on the choice itself, not a random
-   badge off to the side. Same pop/urgency treatment as .bid-timer on the
-   auction card, just scoped to this box instead of the issue. */
-.pick-timer{
-  position:absolute; inset:0; z-index:5;
-  display:flex; align-items:center; justify-content:center;
-  pointer-events:none;
-}
-.pick-timer-num{
-  font-family:var(--wax); font-size:clamp(64px,16vw,110px); line-height:1;
-  color:#fff2df;
-  text-shadow:0 0 8px rgba(214,32,26,.9), 0 0 34px rgba(214,32,26,.65), 0 4px 0 rgba(0,0,0,.55);
-  animation:bidTimerPop .82s cubic-bezier(.2,.9,.25,1) both;
-}
-/* the whole card-picker gets the same urgent shake as the auction card
-   during its last 3 seconds. */
-.story-choice.timer-urgent .sc-opts{
-  animation:timerShake .42s ease-in-out infinite;
-}
-.story-choice.timer-urgent .sc-who{ color:var(--red-dk); }
-
-/* the 21-second "start it or it starts itself" clock over the encounter
-   picker, and its sibling over each player's own role board. Same pop and
-   shake as the auction/pick timers, just longer-lived: these are solo setup
-   steps, not a live back-and-forth, so the window is wider and the digit
-   only starts counting down from 5, not 3. */
-.mode-timer{
-  position:absolute; inset:0; z-index:5;
-  display:flex; align-items:center; justify-content:center;
-  pointer-events:none;
-}
-.mode-timer-num, .role-timer-num{
-  font-family:var(--wax); font-size:clamp(56px,14vw,96px); line-height:1;
-  color:#fff2df;
-  text-shadow:0 0 8px rgba(214,32,26,.9), 0 0 34px rgba(214,32,26,.65), 0 4px 0 rgba(0,0,0,.55);
-  animation:bidTimerPop .82s cubic-bezier(.2,.9,.25,1) both;
-}
-.encounter.timer-urgent .enc-opt{
-  animation:timerShake .42s ease-in-out infinite;
-}
-.encounter.timer-urgent .fm-head{ color:var(--red-dk); }
-
-.role-timer{
-  position:absolute; inset:0; z-index:5;
-  display:flex; align-items:center; justify-content:center;
-  pointer-events:none;
-}
-.role-side.timer-urgent{
-  animation:timerShake .42s ease-in-out infinite;
-  box-shadow:0 0 0 3px rgba(214,32,26,.6);
-}
+/* Only bidding has a clock. The countdowns that used to sit over the round
+   picker, the encounter call and the roles board are gone along with their
+   styles, so nothing after the auction paints a digit. */
 
 .sc-who{ margin:0 0 8px; font:700 12px/1.3 var(--data); letter-spacing:.09em;
   text-transform:uppercase; color:var(--kraft-dk); }
@@ -2207,7 +2153,6 @@ svg.rs-icon{
 .enc-opt.enc-used{ opacity:.4; }
 .enc-opt.enc-used .enc-body b::after{ content:" (fought)"; font:600 11px var(--data);
   letter-spacing:.08em; text-transform:uppercase; vertical-align:middle; }
-
 
 /* ---- playing the computer ---- */
 /* The solo toggle sits under the buyer-count bands and reads as one of them
