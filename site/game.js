@@ -614,6 +614,12 @@ function paintBox(chipsEl, countEl, onChange){
   chipsEl.innerHTML = "";
   let group = "";
   for (const [code, u] of Object.entries(UNIVERSES)){
+    // A world with nobody in it yet is not a choice, it is a dead chip reading
+    // zero. Skipping it lets a universe be declared here before its characters
+    // exist: the chip appears by itself the moment the first one lands, with
+    // no second deploy. Hunter x Hunter and Mortal Kombat are both waiting on
+    // exactly that.
+    if (!STOCK.some(c => c[1] === code)) continue;
     if (u.group !== group){
       group = u.group;
       const h = document.createElement("span");
