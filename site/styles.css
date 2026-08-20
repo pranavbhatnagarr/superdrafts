@@ -300,8 +300,12 @@ body{
    corner and paints above the cover, so a long name sitting right under
    the masthead can render invisibly beneath it. Reserving that width means
    fitName()'s own auto-shrink (it measures this element's clientWidth)
-   keeps the text clear of the sticker instead of just going under it. */
-.cover.has-art .cv-name{ margin-top:4px; max-width:calc(100% - 70px); }
+   keeps the text clear of the sticker instead of just going under it.
+   108px = sticker's own 120px width, minus its -16px right overhang, plus
+   this element's 16px left offset from .cover's own padding, plus ~20px
+   of clearance - .cover's padding has to be counted here too, or the
+   overlap comes right back at the card's actual edge. */
+.cover.has-art .cv-name{ margin-top:4px; max-width:calc(100% - 108px); }
 .cover.has-art .cv-note{
   flex:0 0 auto;            /* only the art flexes; this line must not be clipped */
 }
@@ -449,6 +453,10 @@ body{
   .cv-art{ margin-top:8px; }
   .cv-bot{ padding-top:6px; }
   .cv-cond{ font-size:8.5px; }
+  /* narrower card padding here (12px vs desktop's 16px) but the sticker is
+     still full size until the 620px breakpoint below shrinks it, so this
+     zone actually needs MORE reserved width than desktop, not less. */
+  .cover.has-art .cv-name{ max-width:calc(100% - 112px); }
 }
 
 
@@ -782,9 +790,16 @@ body{
      matters just as much as the clamp: without it, the flex column below
      squashes this box (and its already-clamped 2 lines) whenever total
      content runs taller than the card - cv-art, not the name, is meant to
-     be the one that gives. */
+     be the one that gives. overflow-wrap/word-break stay at their normal
+     defaults on purpose: fitName() measures scrollWidth against clientWidth
+     to decide how far to shrink, and if the browser is allowed to split a
+     single word mid-letter to make that check pass early, a name like
+     "Nightcrawler" renders as "Nightcr" / "awler" at a large size instead
+     of shrinking to fit on one line, which is the only acceptable outcome
+     for a single word. A second line should only ever hold a different
+     whole word, never a fragment of the first. */
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
-  overflow:hidden; word-break:break-word; flex-shrink:0;
+  overflow:hidden; overflow-wrap:normal; word-break:normal; flex-shrink:0;
 }
 .cv-alias{
   margin:9px 0 0; font-family:var(--type);
@@ -1467,7 +1482,7 @@ svg.rs-icon{
   .pn-other span{ display:none; }
   .sticker{ width:96px; right:-10px; top:-14px; }
   .st-price{ font-size:31px; }
-  .cover.has-art .cv-name{ max-width:calc(100% - 56px); }
+  .cover.has-art .cv-name{ max-width:calc(100% - 92px); }
   .slot{ font-size:12.5px; }
   .purse-figure{ font-size:32px; }
   .pn-state{ min-height:0; }
