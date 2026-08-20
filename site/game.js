@@ -1856,103 +1856,25 @@ setInterval(driveBidTimer, 100);
 // function doesn't need to do itself: when the clock actually runs out,
 // this is a client-local decision (no host round-trip to wait on), so it
 // just sends a random pick from the player's own remaining hand right here.
-function drivePickTimer(){
-  const el = $("pickTimer"), cw = $("storyChoice");
-  if (!el || !cw || $("faceoff").hidden){ if (el) el.hidden = true; return; }
-  if (!ST || !pickDeadlineLocal){
-    el.hidden = true; pickTimerShown = 0; cw.classList.remove("timer-urgent");
-    return;
-  }
-  const msLeft = pickDeadlineLocal - Date.now();
-  if (msLeft <= 0){
-    pickDeadlineLocal = 0;
-    el.hidden = true; pickTimerShown = 0; cw.classList.remove("timer-urgent");
-    const mine = myRemaining();
-    const sent = ST.picks && ST.picks[P[ME].name];
-    if (mine.length && !sent) sendPick(mine[Math.floor(Math.random() * mine.length)].name);
-    return;
-  }
-  const urgent = msLeft <= PICK_URGENT_MS;
-  cw.classList.toggle("timer-urgent", urgent);
-  if (!urgent){ el.hidden = true; pickTimerShown = 0; return; }
-  const n = Math.min(3, Math.max(1, Math.ceil(msLeft / 1000)));
-  const numEl = $("pickTimerNum");
-  el.hidden = false;
-  if (n !== pickTimerShown){
-    pickTimerShown = n;
-    numEl.textContent = n;
-    numEl.style.animation = "none";
-    void numEl.offsetWidth;
-    numEl.style.animation = "";
-  }
-}
-setInterval(drivePickTimer, 100);
+// drivePickTimer used to run the post-auction countdown. The clocks are gone;
+// this only makes sure the badge never shows.
+function drivePickTimer(){ const el = $("pickTimer"); if (el) el.hidden = true; }
+drivePickTimer();
 
 // 21 seconds to lock my own roles, 5-4-3-2-1 in the last 5. Auto-fills
 // whatever's still unassigned and locks it in if I run out the clock.
-function driveRoleTimer(){
-  const el = $("roleTimer");
-  const side = document.querySelector(".role-side.mine");
-  if ($("faceoff").hidden || !el || !side || !roleDeadlineLocal){
-    if (side) side.classList.remove("timer-urgent");
-    return;
-  }
-  const msLeft = roleDeadlineLocal - Date.now();
-  if (msLeft <= 0){
-    roleDeadlineLocal = 0;
-    side.classList.remove("timer-urgent");
-    if (!P[ME].locked){ autoAssignRoles(ME); lockRoles(ME); }
-    return;
-  }
-  const urgent = msLeft <= ROLE_URGENT_MS;
-  side.classList.toggle("timer-urgent", urgent);
-  if (!urgent){ el.hidden = true; roleTimerShown = 0; return; }
-  const n = Math.min(5, Math.max(1, Math.ceil(msLeft / 1000)));
-  const numEl = $("roleTimerNum");
-  el.hidden = false;
-  if (n !== roleTimerShown){
-    roleTimerShown = n;
-    numEl.textContent = n;
-    numEl.style.animation = "none";
-    void numEl.offsetWidth;
-    numEl.style.animation = "";
-  }
-}
-setInterval(driveRoleTimer, 100);
+// driveRoleTimer used to run the post-auction countdown. The clocks are gone;
+// this only makes sure the badge never shows.
+function driveRoleTimer(){ const el = $("roleTimer"); if (el) el.hidden = true; }
+driveRoleTimer();
 
 // Same 21-second clock for whoever calls the encounter: if they never
 // press Start, it starts itself with whatever's currently selected
 // (random, by default) once the clock runs out.
-function driveModeTimer(){
-  const el = $("modeTimer"), fs = $("encounter");
-  if ($("faceoff").hidden || !el || !fs || !modeDeadlineLocal){
-    if (fs) fs.classList.remove("timer-urgent");
-    if (el) el.hidden = true;
-    return;
-  }
-  const msLeft = modeDeadlineLocal - Date.now();
-  if (msLeft <= 0){
-    modeDeadlineLocal = 0;
-    fs.classList.remove("timer-urgent");
-    el.hidden = true; modeTimerShown = 0;
-    writeFight();
-    return;
-  }
-  const urgent = msLeft <= MODE_URGENT_MS;
-  fs.classList.toggle("timer-urgent", urgent);
-  if (!urgent){ el.hidden = true; modeTimerShown = 0; return; }
-  const n = Math.min(5, Math.max(1, Math.ceil(msLeft / 1000)));
-  const numEl = $("modeTimerNum");
-  el.hidden = false;
-  if (n !== modeTimerShown){
-    modeTimerShown = n;
-    numEl.textContent = n;
-    numEl.style.animation = "none";
-    void numEl.offsetWidth;
-    numEl.style.animation = "";
-  }
-}
-setInterval(driveModeTimer, 100);
+// driveModeTimer used to run the post-auction countdown. The clocks are gone;
+// this only makes sure the badge never shows.
+function driveModeTimer(){ const el = $("modeTimer"); if (el) el.hidden = true; }
+driveModeTimer();
 
 function renderPanels(){
   const solo = soloRun();
@@ -2311,11 +2233,8 @@ function paintRoles(){
   // keep resetting my own clock. Cleared in lockRoles() above the moment I
   // lock, and naturally re-arms for the next deal since .locked goes back
   // to false there too.
-  if (!P[ME].locked){
-    if (!roleDeadlineLocal) roleDeadlineLocal = Date.now() + ROLE_TIMER_MS;
-  } else {
-    roleDeadlineLocal = 0; roleTimerShown = 0;
-  }
+  // No clock on the role board. Choosing five roles is the one genuinely
+  // considered decision in the game and it does not want a countdown over it.
 
   paintEncounter();
 
@@ -2329,11 +2248,7 @@ function paintRoles(){
             : `Every role is locked. ${P[caller()].name} calls the encounter.`;
   // The mode-selection clock only ever applies to me, only once everyone's
   // roles are locked and it's actually my call to make.
-  if (ready && iCall){
-    if (!modeDeadlineLocal) modeDeadlineLocal = Date.now() + MODE_TIMER_MS;
-  } else {
-    modeDeadlineLocal = 0; modeTimerShown = 0;
-  }
+  // and none on the encounter choice either, for the same reason.
 }
 
 /* ------------------------- the writer ------------------------- */
@@ -2743,15 +2658,8 @@ function stPaint(){
     // than just "sent or not", so a repaint mid-countdown (another player's
     // bid... pick landing, a resize, anything that calls stPaint again)
     // never restarts a clock that is already running for this same round.
-    if (sent){
-      pickDeadlineLocal = 0; pickRoundKey = null;
-    } else {
-      const key = (ST.round || 1) + (ST.overtime ? "-ot" : "");
-      if (pickRoundKey !== key){
-        pickRoundKey = key;
-        pickDeadlineLocal = Date.now() + PICK_TIMER_MS;
-      }
-    }
+    // Sending a fighter is untimed. A five second clock that fired a random
+    // card on your behalf took the round away from whoever was still deciding.
     // textContent escapes on its own; escTxt here would show the entities.
     $("scWho").textContent = sent
       ? `${sent} is in. Waiting on the others.`
@@ -2797,13 +2705,7 @@ function stPaint(){
     : spent ? "Both encounters are done. Run it again for a fresh draft."
     : done ? "Run the other encounter to see how the same five would have done."
            : "Five rounds, one character each, nobody sees the other pick. A tied score after five forces sudden death.";
-  // Same clock as the first encounter's selection, armed here too for the
-  // "run the other one" wait between matches.
-  if (iCall && done && !spent && !ST.busy){
-    if (!modeDeadlineLocal) modeDeadlineLocal = Date.now() + MODE_TIMER_MS;
-  } else {
-    modeDeadlineLocal = 0; modeTimerShown = 0;
-  }
+  // No clock between matches either.
 }
 
 // Guests send the intent, the host owns the state. Same shape as bidding.
