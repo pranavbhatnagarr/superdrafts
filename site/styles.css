@@ -194,6 +194,17 @@ body{
   font-size:12.5px; color:var(--ink-3);
 }
 
+/* A cross reference, the way a price guide points at its own back section:
+   set in the same typewriter as the line around it, one shade darker with a
+   hairline under it. Deliberately quiet. The guide is for anyone who goes
+   looking for it at the bottom of the rules, not a second front door. */
+.fm-link{
+  color:var(--ink-2); text-decoration:none;
+  border-bottom:1px solid var(--kraft);
+  transition:color .14s, border-color .14s;
+}
+.fm-link:hover{ color:var(--ink); border-bottom-color:var(--ink); }
+
 /* rubber-stamp button */
 .stamp-btn{
   display:block; width:100%; padding:0; border:0; background:none;
