@@ -120,15 +120,6 @@
 .tg-headrow > *{ padding:9px 6px; align-self:end; }
 .tg-headrow abbr{ text-decoration:none; border-bottom:1px dotted var(--kraft); cursor:help; }
 
-/* The chain reads across the header once, rather than an arrow in every one
-   of nine hundred cells. */
-.tg-arrowed{ position:relative; }
-.tg-arrowed::before{
-  content:""; position:absolute; left:-4px; bottom:13px; width:8px; height:8px;
-  border-top:1.5px solid var(--kraft); border-right:1.5px solid var(--kraft);
-  transform:rotate(45deg); opacity:.8;
-}
-
 .tg-c-name{ padding:7px 10px; min-width:0; display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
 .tg-name{
   font:600 14.5px/1.25 var(--data); color:var(--ink);
@@ -184,6 +175,7 @@
 .tg-c-roles{ display:grid; grid-template-columns:repeat(5,1fr); align-items:center; }
 .tg-mark-cell{ display:grid; place-items:center; padding:6px 0; }
 
+.tg-head .tg-c-roles{ display:block; padding-left:0; padding-right:0; }
 .tg-roleheads{ display:grid; grid-template-columns:repeat(5,1fr); }
 .tg-rolehead{ display:grid; place-items:center; }
 .tg-rolehead svg{ width:17px; height:17px; fill:var(--kraft-dk); }
@@ -282,7 +274,7 @@
    in the game itself, and the key above still explains them. */
 @media (max-width:819px){
   .tg-table{ --tg-grid: minmax(0,1fr) 44px 44px 32px 54px; }
-  .tg-c-roles{ display:none; }
+  .tg-c-roles, .tg-head .tg-c-roles{ display:none; }
   .tg-real{ display:none; }
   .tg-headrow > *{ padding:8px 5px; font-size:9px; letter-spacing:.08em; }
   .tg-c-grade, .tg-c-prep{ padding:6px 4px; }
