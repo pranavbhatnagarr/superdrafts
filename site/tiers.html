@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tier Guide · Super Drafts</title>
+<meta name="description" content="Every character in Super Drafts: what they are printed at, what a fitting role buys them, and how far a week of prep can take them.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Ultra&family=Archivo+Narrow:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Special+Elite&family=Permanent+Marker&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="tiers.css">
+</head>
+<body class="guide-body">
+<!--
+The same publication as the sale, turned to the back of the book. A price guide
+prints one row per issue and one column per grade, values climbing left to right;
+this prints one row per character and one column per state they can reach. Nothing
+here is new invention: kraft, pulp, condensed figures, manila dividers and the two
+grease pencils, all lifted straight off the cover. A reader who came from the box
+should not be able to tell they changed documents, only sections.
+-->
+
+<div class="lamp" aria-hidden="true"></div>
+
+<main class="screen guide-screen">
+  <div class="guide-cover guide-wide">
+    <div class="cover-rules" aria-hidden="true"></div>
+
+    <p class="cover-edition">Reference Section &middot; The Whole Box</p>
+    <h1 class="cover-title">Tier Guide</h1>
+    <p class="cover-sub">What they are printed at, and how far they climb.</p>
+
+    <div class="cover-strip">
+      <span id="tgCount">Loading the roster</span><i></i><span id="tgWorlds">&nbsp;</span><i></i><span id="tgTop">&nbsp;</span>
+    </div>
+
+    <section class="tg-read" aria-label="How to read this guide">
+      <h2 class="fm-head">How to read a row</h2>
+      <ol class="tg-steps">
+        <li>
+          <b>Printed.</b> The tier on the card. Nobody is printed at S+, and no
+          amount of climbing takes anyone past it.
+        </li>
+        <li>
+          <b>A fitting role.</b> Put a character in a job that suits them and they
+          fight one rung higher. Put them in one that does not and they drop a rung,
+          which is the fall this guide does not print.
+        </li>
+        <li>
+          <b>A week of prep.</b> Worth however many rungs their prep rating says,
+          nought to two, and only in a prep encounter. A random encounter buys none of it.
+        </li>
+        <li>
+          <b>Ceiling.</b> Both at once, which is the best that character can ever
+          fight at. It is also the only road to S+.
+        </li>
+      </ol>
+    </section>
+
+    <section class="tg-filters" aria-label="Narrow the guide">
+      <div class="tg-search">
+        <label class="tg-label" for="tgQ">Look one up</label>
+        <input id="tgQ" class="tab-input" type="search" autocomplete="off" spellcheck="false"
+               placeholder="name, or civilian name" aria-describedby="tgResult">
+      </div>
+
+      <div class="tg-facet">
+        <span class="tg-label" id="tgWorldLbl">Worlds</span>
+        <div class="chips tg-chips" id="tgWorldChips" role="group" aria-labelledby="tgWorldLbl"></div>
+      </div>
+
+      <div class="tg-facet">
+        <span class="tg-label" id="tgCeilLbl">Ceiling of</span>
+        <div class="chips tg-chips" id="tgCeilChips" role="group" aria-labelledby="tgCeilLbl"></div>
+      </div>
+
+      <div class="tg-facet tg-facet-sort">
+        <span class="tg-label" id="tgSortLbl">Ordered by</span>
+        <div class="chips tg-chips" id="tgSortChips" role="group" aria-labelledby="tgSortLbl"></div>
+      </div>
+
+      <p class="tg-result" id="tgResult" role="status"></p>
+    </section>
+
+    <div class="tg-scroll">
+      <div class="tg-table" id="tgTable" role="table" aria-label="Every character by tier">
+        <div class="tg-head" role="rowgroup">
+          <div class="tg-row tg-headrow" role="row">
+            <span class="tg-c-name"  role="columnheader">Character</span>
+            <span class="tg-c-grade" role="columnheader">Printed</span>
+            <span class="tg-c-grade" role="columnheader">Fitting role</span>
+            <span class="tg-c-prep" role="columnheader"><abbr title="Rungs a week of prep is worth to them">Prep</abbr></span>
+            <span class="tg-c-grade tg-c-ceil" role="columnheader">Ceiling</span>
+            <span class="tg-c-roles" role="columnheader">
+              <span class="tg-roleheads" id="tgRoleHeads"></span>
+            </span>
+          </div>
+        </div>
+        <div class="tg-body" id="tgBody" role="rowgroup"></div>
+      </div>
+    </div>
+
+    <p class="tg-none" id="tgNone" hidden>
+      Nothing in the box under that name.
+      <button type="button" class="tg-clear" id="tgClear">Clear the filters</button>
+    </p>
+
+    <section class="tg-key" aria-label="Key">
+      <h2 class="fm-head">Key</h2>
+      <dl class="tg-keylist" id="tgKey"></dl>
+      <p class="tg-note">
+        Tiers are scaled honestly across worlds and never rebalanced against each
+        other. A lighter universe simply sits lower down the page.
+      </p>
+    </section>
+
+    <p class="cover-hint tg-back">
+      <a href="index.html">Back to the box</a>
+    </p>
+  </div>
+</main>
+
+<script type="module" src="tiers.js"></script>
+</body>
+</html>

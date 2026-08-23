@@ -282,11 +282,7 @@ Deno.serve(async (req) => {
       // Same atomic-claim fix as the bid write above, and for the same
       // reason: this write had no guard at all, so a pass arriving just
       // after a competing timeout call closed the lot would silently
-      // succeed against an already-decided row. Worse here, since the
-      // purse deduction for a solo-run "pay to pass" used to happen
-      // BEFORE this write - a late pass could get charged real money for
-      // an action that didn't actually count. Claiming first, then only
-      // charging the cost if the claim genuinely won, fixes both at once.
+      // succeed against an already-decided row.
       const { data: claimed, error: claimErr } = await sb
         .from("lots")
         .update({ passed_by: newPassed })
@@ -299,8 +295,21 @@ Deno.serve(async (req) => {
 
       const cost = passCost(seat);
       if (cost) {
-        const me = seats.find((s) => s.seat === seat)!;
-        await sb.from("seats").update({ purse: me.purse - cost }).eq("table_id", table_id).eq("seat", seat);
+        // Atomic decrement, not the old read-then-write (`me.purse -
+        // cost`, computed from the seats snapshot fetched at the top of
+        // this request). In the narrow window where the SAME seat sent
+        // two pass requests for this lot almost simultaneously, the
+        // second call could read that same pre-deduction purse and its
+        // write would silently undo the first deduction instead of
+        // stacking on top of it - the exact same class of bug as the
+        // seats-roster award race, just far lower stakes (a $1
+        // miscount, not an erased character). decrement_purse's single
+        // relative UPDATE is safely atomic under concurrent calls with
+        // no explicit locking needed - see its own migration comment.
+        const { error: chargeErr } = await sb.rpc("decrement_purse", {
+          p_table_id: table_id, p_seat: seat, p_amount: cost,
+        });
+        if (chargeErr) return json({ error: chargeErr.message }, 400);
       }
 
       if (lot.high_seat !== null) {

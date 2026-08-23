@@ -50,6 +50,27 @@ Deno.serve(async (req) => {
     if (exErr) return json({ error: exErr.message }, 400);
     if (existing) return json({ ok: true, already_started: true });
 
+    // The client (writeFight()) already checks allLocked() before ever
+    // calling this - but that's a UI gate, not a security boundary.
+    // Nothing previously stopped a call straight to this function,
+    // bypassing the UI entirely, from starting a fight before anyone had
+    // actually locked a single role - not a stat-manipulation cheat, but
+    // a real skip-ahead/griefing vector the server should be the one to
+    // close, the same way every other action here doesn't trust the
+    // client's own gating. Every seat has to exist AND be locked before
+    // a match can start at all.
+    const { data: table, error: tErr } = await sb
+      .from("tables").select("np").eq("id", table_id).single();
+    if (tErr) return json({ error: tErr.message }, 400);
+
+    const { data: seats, error: sErr } = await sb
+      .from("seats").select("locked").eq("table_id", table_id);
+    if (sErr) return json({ error: sErr.message }, 400);
+
+    if (!seats || seats.length < table.np || !seats.every((s: any) => s.locked)) {
+      return json({ error: "every seat must lock their roles before the fight can start" }, 409);
+    }
+
     // crypto.getRandomValues, not Math.random - real entropy, and not
     // reproducible/predictable by anything watching this function run.
     const seed = crypto.getRandomValues(new Uint32Array(1))[0];

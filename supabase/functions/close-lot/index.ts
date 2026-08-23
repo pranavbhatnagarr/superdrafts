@@ -93,11 +93,30 @@ Deno.serve(async (req) => {
       if (claimErr) throw claimErr;
       if (!claimed || claimed.length === 0) return;
 
-      const winner = seats.find((s) => s.seat === p)!;
-      const newRoster = [...(winner.roster || []), { char: lot.card, price }];
-      await sb.from("seats").update({ purse: winner.purse - price, roster: newRoster }).eq("table_id", table_id).eq("seat", p);
+      // Atomic append via the same award_seat Postgres function place-bid
+      // uses - see that migration's own comment for the exact race this
+      // closes. This function's own award() had the OLD, unsafe plain
+      // read-modify-write here until now: read the winner's roster once
+      // from the seats array fetched at the top of the request, then
+      // blindly write a brand-new array back. A timeout resolution (this
+      // path) racing against a DIFFERENT lot's award for the SAME seat -
+      // entirely possible, since this can fire from cron, from place-
+      // bid's own lazy-check, or from any connected client's scheduled
+      // timer, all independently - could silently overwrite that other
+      // award's roster addition. The exact same bug place-bid had,
+      // simply never actually fixed here despite being identical code.
+      const { error: awardErr } = await sb.rpc("award_seat", {
+        p_table_id: table_id, p_seat: p, p_price: price, p_card: lot.card,
+      });
+      if (awardErr) throw awardErr;
 
-      const totalBought = bought() - (winner.roster?.length || 0) + newRoster.length;
+      // Re-fetch the real total fresh, not from the in-memory `seats`
+      // snapshot from the top of this request - that snapshot is exactly
+      // what caused the bug above, so "is everyone actually full" needs
+      // the CURRENT database state.
+      const { data: freshSeats, error: fsErr } = await sb.from("seats").select("roster").eq("table_id", table_id);
+      if (fsErr) throw fsErr;
+      const totalBought = (freshSeats || []).reduce((n, s) => n + (s.roster?.length || 0), 0);
       if (totalBought >= SLOTS * NP) {
         await sb.from("tables").update({ finished: true }).eq("id", table_id);
         return;

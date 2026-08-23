@@ -1,0 +1,286 @@
+/* ==================================================================
+   THE TIER GUIDE, the back of the same book.
+   Everything here inherits the cover's materials from styles.css and adds
+   only what a grading table needs: hairline rules, tabular figures, manila
+   dividers down the side of the box, and one grease-pencil number a row.
+   ================================================================== */
+
+.guide-screen{
+  min-height:100vh;
+  display:grid; place-items:start center;
+  padding:clamp(20px,5vw,64px) 16px 84px;
+}
+
+/* The chart needs more width than the cover does. Same paper, wider page. */
+.guide-wide{ width:min(1080px,100%); }
+
+/* ---------------- one authored moment: the guide is set down ----------------
+   A short rise with an exponential ease-out, then the dividers drop in behind
+   it. It plays once on load; tiers.js takes the class back off so filtering
+   never replays it, and a reader who does not want motion never sees it. */
+@keyframes tgSettle{
+  from{ opacity:0; transform:translateY(14px); }
+  to  { opacity:1; transform:none; }
+}
+@keyframes tgTab{
+  from{ opacity:0; transform:translateX(-10px); }
+  to  { opacity:1; transform:none; }
+}
+.tg-in .guide-wide{ animation:tgSettle .52s cubic-bezier(.16,1,.3,1) both; }
+.tg-in .tg-divtab{
+  animation:tgTab .42s cubic-bezier(.16,1,.3,1) both;
+  animation-delay:calc(90ms + var(--i, 0) * 34ms);   /* --i is set per divider in tiers.js */
+}
+
+@media (prefers-reduced-motion: reduce){
+  .tg-in .guide-wide, .tg-in .tg-divtab{ animation:none; }
+}
+
+/* ---------------------------- how to read a row ---------------------------- */
+.tg-read{ margin:22px 0 4px; }
+.tg-steps{
+  margin:10px 0 0; padding:0; list-style:none;
+  display:grid; gap:1px;
+  background:var(--rule);                 /* the gaps are the rules */
+  border:1px solid var(--rule);
+}
+.tg-steps li{
+  margin:0; padding:11px 13px;
+  /* Opaque on purpose. The rules between these panels are the parent's dark
+     wash showing through a 1px gap, so a translucent cell lets that wash come
+     through the panel as well and the pulp goes grey. */
+  background:#eee6d0;
+  font:400 14px/1.5 var(--data); color:var(--ink-2);
+}
+.tg-steps b{
+  display:block; margin-bottom:2px;
+  font:700 11px/1.3 var(--data); letter-spacing:.13em; text-transform:uppercase;
+  color:var(--ink);
+}
+@media (min-width:760px){
+  .tg-steps{ grid-template-columns:repeat(4,1fr); }
+}
+
+/* ------------------------------- the filters ------------------------------- */
+.tg-filters{
+  margin:26px 0 14px; padding-top:18px;
+  border-top:2px solid var(--ink);
+  display:grid; gap:14px;
+}
+.tg-label{
+  display:block; margin-bottom:7px;
+  font:700 10.5px/1.3 var(--data); letter-spacing:.15em; text-transform:uppercase;
+  color:var(--kraft-dk);
+}
+.tg-search .tab-input{ width:min(340px,100%); font-size:16px; padding-top:4px; padding-bottom:4px; }
+.tg-chips{ display:flex; flex-wrap:wrap; gap:6px; }
+.tg-chips .chip{ padding:5px 10px; font-size:12.5px; }
+
+.tg-result{
+  margin:2px 0 0;
+  font:400 12.5px/1.4 var(--type); color:var(--ink-3);
+}
+
+/* -------------------------------- the chart --------------------------------
+   Seven fields on one line: who they are, the three states they can reach,
+   the prep rating that gets them to the third, and a fixed five-slot matrix
+   for the roles. The matrix is fixed on purpose. Clustered icons would pack
+   tighter, but columns that line up let you read straight down the page for
+   everyone who suits one particular job, which is how a roster is planned. */
+/* No overflow wrapper here on purpose. overflow-x:auto would make this a
+   scroll container on both axes, and the sticky header and dividers would
+   then stick to a box with no height rather than to the viewport. The narrow
+   rig at the bottom of this file drops columns instead, so the chart always
+   fits the page and the header always follows you down it. */
+.tg-table{
+  --tg-grid: minmax(0,1fr) 62px 68px 46px 72px 170px;
+  border:1px solid var(--rule);
+  background:rgba(255,255,255,.14);
+}
+
+.tg-row{
+  display:grid; grid-template-columns:var(--tg-grid); align-items:center;
+  column-gap:0;
+  border-bottom:1px solid var(--rule);
+}
+.tg-body .tg-row:nth-child(even of .tg-row){ background:rgba(120,90,50,.08); }
+.tg-body .tg-row:hover{ background:rgba(176,46,36,.10); }
+.tg-body .tg-row:last-child{ border-bottom:0; }
+
+.tg-head{
+  position:sticky; top:0; z-index:3;
+  background:var(--pulp-2);
+  box-shadow:0 1px 0 var(--ink);
+}
+.tg-headrow{
+  border-bottom:2px solid var(--ink);
+  font:700 9.5px/1.25 var(--data); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--kraft-dk);
+}
+.tg-headrow > *{ padding:9px 6px; align-self:end; }
+.tg-headrow abbr{ text-decoration:none; border-bottom:1px dotted var(--kraft); cursor:help; }
+
+.tg-c-name{ padding:7px 10px; min-width:0; display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+.tg-name{
+  font:600 14.5px/1.25 var(--data); color:var(--ink);
+  letter-spacing:.005em;
+}
+.tg-real{
+  font:400 11px/1.2 var(--type); color:var(--ink-3);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:21ch;
+}
+
+.tg-c-grade, .tg-c-prep{ padding:6px 8px; text-align:center; }
+.tg-c-ceil{ background:rgba(120,90,50,.075); }
+.tg-head .tg-c-ceil{ background:transparent; color:var(--ink); }
+
+/* --------------------------------- grades ---------------------------------
+   The cover's own ramp: red for the top of the ladder, then cooling ink for
+   everything under it. The two hottest rungs are darkened a shade against
+   the cover's badge so pulp-on-red clears 4.5:1 at this size, where the
+   letter is small and there are nine hundred of them. */
+.tg-grade{
+  display:inline-block; min-width:30px; padding:3px 5px 2px;
+  font-family:var(--slab); font-size:12px; line-height:1.25;
+  letter-spacing:.04em; text-align:center; color:var(--pulp);
+  background:var(--ink-2); border:1.5px solid var(--ink);
+  font-variant-numeric:tabular-nums;
+}
+.tg-grade-lg{ min-width:36px; font-size:14px; padding:4px 6px 3px; border-width:2px; }
+
+.tg-grade[data-t="S+"]{ background:#a5281d; box-shadow:inset 0 0 0 1.5px rgba(231,221,194,.5); }
+.tg-grade[data-t="S"] { background:#8e2415; }
+.tg-grade[data-t="A"] { background:#6f4d2d; }
+.tg-grade[data-t="B"] { background:var(--ink); }
+.tg-grade[data-t="C"] { background:var(--ink-2); }
+.tg-grade[data-t="D"] { background:#5e5445; }
+.tg-grade[data-t="E"] { background:var(--pulp); color:var(--ink); border-style:dashed; }
+
+.tg-nofit{ color:var(--ink-3); font:400 14px/1 var(--data); }
+
+/* This started out in the grease pencil, which suited the world and could not
+   be read: Permanent Marker's nought and one are barely digits at table size,
+   and the prep rating is one of the four numbers the page exists to print.
+   Condensed tabular figures instead, which is what the rest of the guide sets
+   its numbers in anyway. The pencil keeps the colour. */
+.tg-prep{
+  font:700 15px/1 var(--data); font-variant-numeric:tabular-nums;
+  color:var(--red-dk);
+}
+/* Nought is a real reading, not an absence, so it stays legible and only
+   steps back in colour. Faded to a whisper it read as an empty cell. */
+.tg-prep[data-p="0"]{ color:var(--ink-3); }
+
+/* ------------------------------ the role matrix ---------------------------- */
+.tg-c-roles{ display:grid; grid-template-columns:repeat(5,1fr); align-items:center; }
+.tg-mark-cell{ display:grid; place-items:center; padding:6px 0; }
+
+.tg-head .tg-c-roles{ display:block; padding-left:0; padding-right:0; }
+.tg-roleheads{ display:grid; grid-template-columns:repeat(5,1fr); }
+.tg-rolehead{ display:grid; place-items:center; }
+.tg-rolehead svg{ width:17px; height:17px; fill:var(--kraft-dk); }
+
+/* Shape carries the meaning as well as colour: a filled disc for a fit, a
+   bar for a penalty, a hairline ring for neither. Colour alone would leave
+   the matrix unreadable to anyone who cannot separate the green from the red. */
+.tg-mark{ display:block; }
+.tg-mark-fit{
+  width:10px; height:10px; border-radius:50%;
+  background:var(--green-dk); box-shadow:0 0 0 1px rgba(23,20,15,.35);
+}
+.tg-mark-bad{
+  width:11px; height:3px; border-radius:1px;
+  background:var(--red-dk); box-shadow:0 0 0 1px rgba(23,20,15,.25);
+}
+.tg-mark-none{
+  width:5px; height:5px; border-radius:50%;
+  background:transparent; box-shadow:0 0 0 1px rgba(23,20,15,.22);
+}
+
+/* ------------------------------ divider tabs -------------------------------
+   The longbox's own dividers, stuck to the top of their section as you scroll
+   past. Manila card, typewritten, tucked to the left the way a tab sits proud
+   of the sleeves in front of it. */
+.tg-divider{
+  /* 38px is the header's measured height: the tab has to pin flush under it,
+     not three pixels behind it. */
+  display:block; position:sticky; top:38px; z-index:2;
+  background:var(--pulp-2);
+  border-bottom:1px solid var(--ink);
+  border-top:1px solid var(--rule);
+  padding:0;
+}
+.tg-divtab{
+  display:inline-flex; align-items:baseline; gap:9px;
+  margin:0 0 -1px 10px; padding:5px 14px 4px;
+  background:var(--manila);
+  border:1px solid var(--kraft-dk); border-bottom:0;
+  font:400 12px/1.3 var(--type); letter-spacing:.08em; text-transform:uppercase;
+  color:var(--kraft-dk);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45);
+}
+.tg-divn{ font:700 10.5px/1 var(--data); opacity:.7; font-variant-numeric:tabular-nums; }
+
+/* --------------------------------- empty ---------------------------------- */
+.tg-none{
+  margin:26px 0 0; padding:22px;
+  border:1px dashed var(--rule); text-align:center;
+  font:400 15px/1.5 var(--type); color:var(--ink-2);
+}
+.tg-clear{
+  margin-left:10px; padding:7px 16px; cursor:pointer;
+  background:rgba(255,255,255,.28); border:1.5px solid var(--ink);
+  color:var(--ink);
+  font:700 11px/1.3 var(--data); letter-spacing:.14em; text-transform:uppercase;
+  transition:background-color .14s, color .14s;
+}
+.tg-clear:hover{ background:var(--ink); color:var(--pulp); }
+
+/* ---------------------------------- key ----------------------------------- */
+.tg-key{ margin:34px 0 0; padding-top:18px; border-top:2px solid var(--ink); }
+.tg-keylist{ margin:12px 0 0; display:grid; gap:1px; background:var(--rule); border:1px solid var(--rule); }
+.tg-keyrow{
+  display:grid; grid-template-columns:minmax(0,190px) minmax(0,1fr); gap:0;
+  background:#eee6d0;                     /* opaque, same reason as .tg-steps li */
+}
+.tg-keyrow dt{
+  display:flex; align-items:center; gap:9px; padding:9px 12px;
+  font:700 11.5px/1.3 var(--data); letter-spacing:.1em; text-transform:uppercase;
+  color:var(--ink);
+}
+.tg-keyrow dd{
+  margin:0; padding:9px 12px;
+  font:400 13.5px/1.5 var(--data); color:var(--ink-2);
+}
+.tg-keyicon{ width:19px; height:19px; fill:var(--kraft-dk); flex:0 0 auto; }
+.tg-keyrow-marks dt .tg-mark{ margin-left:2px; margin-right:2px; flex:0 0 auto; }
+.tg-note{
+  margin:14px 0 0; max-width:68ch;
+  font:400 13px/1.55 var(--type); color:var(--ink-3);
+}
+
+/* --------------------------------- footer --------------------------------- */
+.tg-back{ margin-top:30px; text-align:center; }
+.tg-back a{
+  color:var(--ink-2); text-decoration:none;
+  border-bottom:1px solid var(--kraft);
+  padding-bottom:1px;
+}
+.tg-back a:hover{ color:var(--ink); border-bottom-color:var(--ink); }
+
+/* ------------------------------- narrow rig -------------------------------
+   Under 720px the five role slots would be four pixels each, so the matrix
+   comes off and the chain keeps the width. The roles are still one tap away
+   in the game itself, and the key above still explains them. */
+@media (max-width:819px){
+  .tg-table{ --tg-grid: minmax(0,1fr) 44px 44px 32px 54px; }
+  .tg-c-roles, .tg-head .tg-c-roles{ display:none; }
+  .tg-real{ display:none; }
+  .tg-headrow > *{ padding:8px 5px; font-size:9px; letter-spacing:.08em; }
+  .tg-c-grade, .tg-c-prep{ padding:6px 4px; }
+  .tg-name{ font-size:13.5px; }
+  .tg-c-name{ padding:7px 8px; }
+  .tg-grade{ min-width:26px; font-size:11px; }
+  .tg-grade-lg{ min-width:31px; font-size:12.5px; }
+  .tg-divider{ top:37px; }   /* the narrow header measures 37 */
+}

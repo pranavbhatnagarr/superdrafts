@@ -24,8 +24,11 @@
 // effTier's own clamp below is what actually enforces "no higher than the
 // top of the ladder" - extending LADDER with S+ at index 0 is the whole
 // change; nothing else here needs to know it's special.
-const LADDER = ["S+","S","A","B","C","D","E"];
-const POINTS = { "S+":32, S:16, A:8, B:4, C:2, D:1, E:0.5 };
+// The ladder and the points now live in rules.js, the one file game.js,
+// this engine and the public tier guide all read. They used to be written
+// out here as well, which is exactly the kind of second copy that goes
+// stale the first time a tier is retuned.
+import { LADDER, POINTS } from "./rules.js";
 
 /* Small deterministic PRNG. Math.random cannot be used anywhere in here:
    the two players would get different stories for the same fight. */
