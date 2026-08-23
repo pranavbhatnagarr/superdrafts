@@ -1,5 +1,4 @@
 import { createMatch } from "./fight.js";
-import { Backend } from "./backend.js";
 import { createBot, LEVELS, LEVEL_BLURB } from "./bot.js";
 
 // Hand written exchanges for pairs with real history. Loaded once with the
@@ -17,6 +16,8 @@ let RIVALRIES = [];
  *  loadStock() below, and starts empty until that resolves.
  * ------------------------------------------------------------------ */
 let STOCK = [];
+
+import { Backend } from "./backend.js";
 
 const SLOTS = 5, PURSE = 20;
 
@@ -201,6 +202,21 @@ const BID_URGENT_MS = 3000;
 let bidDeadlineLocal = 0;         // local clock: when the standing bid auto-sells
 let bidTimerShown = 0;            // last countdown digit painted, so repaints don't restart the pop
 
+// Same idea for the fight itself: 5 seconds to send a fighter each round,
+// with the same last-3-seconds countdown. This one is purely client-side -
+// nothing here is host-authoritative, sendPick() already knows how to reach
+// the host either way, so each browser can just clock its own player and
+// send a random pick from their own remaining hand if the clock runs out.
+
+// The two setup steps before a fight even starts - assigning roles, and
+// (for whoever kept the most money) choosing the encounter and starting it.
+// Neither is a live back-and-forth the way bidding or a fight-round pick is,
+// so the window is wider (21s, not 5-8) and the countdown only kicks in for
+// the last 5 seconds rather than the last 3. Both are purely client-side,
+// same reasoning as the pick timer above: lockRoles() and writeFight()
+// already know how to reach the host either way.
+
+
 // What is in the box. The host owns this and it travels to the joiner.
 let BOX = { u: ["MAR","DC"], tiers: false };
 
@@ -328,16 +344,6 @@ async function loadStock(){
 }
 
 const SAVE_KEY = "longbox.table";
-// Separate key for real multiplayer tables: pushState()'s own save (above)
-// only ever writes P/lot/deck straight from this browser's memory, which
-// is correct for SOLO (nothing else was ever the source of truth there)
-// but was never wired up for real games at all - a host reload had no
-// table_id to reconnect to, and reconstructed a completely local, stale
-// copy of state that had no connection to the real database. This key
-// holds only what's needed to reconnect properly: the real table_id, so
-// a reload just re-runs backend.connect() and lets the actual current
-// state arrive fresh, same as opening the page for the first time would.
-const MP_SAVE_KEY = "longbox.mp";
 // A browser keeps one id so that reconnecting returns you to your own seat
 // rather than handing you someone else's roster.
 const CID = (() => {
@@ -350,16 +356,13 @@ const CID = (() => {
   write(localStorage, v); write(sessionStorage, v);
   return v;
 })();
+let seatOf = {};                       // host only: client id to chair number
 let seatedAck = false;                 // guest: the host has given us a chair
 const knocks = new Map();              // host: who is at the door
 
 let heardBids = 0, heardFolds = 0;
 let sb, chan, ROOM = "", ME = 0, HOST = false, started = false, peerOn = false,
     fxSeq = 0, lastFx = 0, drawnLot = -1;
-// Stage B: backend is the real authority for bidding once a multiplayer
-// table exists in the database. null in solo mode, where there's nobody
-// else to cheat against and no reason to pay a network round trip.
-let backend = null, TABLE_ID = null;
 
 const code4 = () => Array.from({length:4}, () =>
   "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random()*32)]).join("");
@@ -410,20 +413,48 @@ const send = payload => chan && chan.send({ type: "broadcast", event: "msg", pay
 function handle(m){
   // Somebody following the link asks first. A cid we already seated is a
   // reconnect and walks straight back in, so a dropped phone is never stuck
-  // waiting on the host to notice. Checked against the real backend-sourced
-  // P array now, not the seatOf map - that map is never populated anymore
-  // (Stage B moved real seat assignment to join-table), so this check was
-  // silently dead: every reconnect used to sit through the full knock/admit
-  // wait again, even for a cid that already genuinely had a seat.
+  // waiting on the host to notice.
   if (m.t === "knock" && HOST){
-    const already = backend && backend.tableId ? P.findIndex(p => p.cid === m.cid) : -1;
-    if (already > 0){ send({ t: "seat", cid: m.cid, seat: already, np: NP, table_id: TABLE_ID }); return; }
+    if (seatOf[m.cid] !== undefined){ admit(m.cid, m.name); return; }
     knocks.set(m.cid, { name: (m.name || "Someone").slice(0, 14), at: Date.now() });
     paintPending();
     send({ t: "knocked", cid: m.cid });
     return;
   }
 
+  if (m.t === "join" && HOST){
+    let seat = seatOf[m.cid];
+    if (seat === undefined){
+      // Someone who reloaded comes back with a new id and their old chair
+      // still looks occupied. Only chairs whose occupant is still connected
+      // count as taken, so a refresh cannot eat a seat.
+      let live;
+      try { live = new Set(Object.keys(chan.presenceState() || {})); } catch { live = null; }
+      if (live){
+        live.add(m.cid);
+        for (const [cid, q] of Object.entries(seatOf))
+          if (!live.has(cid)) delete seatOf[cid];
+      }
+      const used = Object.values(seatOf);
+      seat = seats().find(q => q !== 0 && !used.includes(q));
+      if (seat === undefined){ send({ t: "full", cid: m.cid }); return; }
+      seatOf[m.cid] = seat;
+    }
+    P[seat].name = m.name || SEATS[seat].pencil;
+    send({ t: "seat", cid: m.cid, seat, np: NP });
+    // The sale opens only once every chair is taken. Until then the joiners
+     // are told to sit tight rather than being shown an auction with no lot.
+    if (!started && Object.keys(seatOf).length < NP - 1){
+      send({ t: "waiting", seated: Object.keys(seatOf).length + 1, need: NP });
+      return;
+    }
+    if (!started){ started = true; SFX.join(); dealDeck(); nextLot(); }
+    pushState();
+  }
+  if (m.t === "act" && HOST && started){
+    if (m.p === 0 || seatOf[m.cid] !== m.p) return;   // you may only move for your own chair
+    m.kind === "bid" ? bid(m.p, m.amount) : pass(m.p);
+  }
   if (m.t === "knocked" && !HOST && m.cid === CID){
     $("knockMsg").hidden = false;
     $("knockMsg").textContent = "Asked. Waiting for the host to let you in.";
@@ -433,15 +464,19 @@ function handle(m){
     $("knockMsg").textContent = "The host did not let you in.";
     $("knockAsk").hidden = false;
   }
-  if (m.t === "seat" && !HOST && m.cid === CID){ onSeated(m); }
+  if (m.t === "seat" && !HOST && m.cid === CID){ ME = m.seat; NP = m.np; seatedAck = true; }
   if (m.t === "full" && !HOST && m.cid === CID){
     nudge("That table is full. Three buyers is the limit.");
   }
-  // The old "roles" broadcast handler that used to live here is gone -
-  // lockRoles() now calls backend.lockRoles() directly for multiplayer
-  // (see that function's own comment), which validates and persists the
-  // real lock server-side instead of the host's browser blindly trusting
-  // whatever a guest broadcast. Nothing sends {t:"roles",...} anymore.
+  if (m.t === "waiting" && !HOST){
+    $("setupMsg").textContent =
+      `Seated. ${m.seated} of ${m.need} buyers are here, waiting for the rest.`;
+  }
+  if (m.t === "roles" && HOST && Array.isArray(m.roles) && seatOf[m.cid] === m.p){
+    m.roles.forEach((k, i) => { if (P[m.p].roster[i]) P[m.p].roster[i].role = k; });
+    if (rolesDone(m.p)) P[m.p].locked = true;
+    pushState();
+  }
   if (m.t === "state" && !HOST) applyState(m.s);
   // The story is written once, by the host, and every beat is shared, so all
   // of them read the same issue and see the same choices.
@@ -461,22 +496,15 @@ function handle(m){
       } ST = m.st; stPaint();
     }
   }
-  // Same dead-seatOf bug as the "roles" handler above: seatOf[m.cid]
-  // is never populated anymore, so these two checks always failed -
-  // a guest's fight-pick never reached the host (the fight would just
-  // hang forever waiting on a pick that never arrived), and if a GUEST
-  // happened to be whoever kept the most money, they could never
-  // actually start the fight at all. Both now validate against the
-  // seat the message itself claims (m.p), the same pattern as "roles".
-  if (m.t === "pick" && HOST && m.p > 0 && m.p < NP && typeof m.name === "string")
+  // A guest sending the character they want in this round.
+  if (m.t === "pick" && HOST && seatOf[m.cid] === m.p && typeof m.name === "string")
     takePick(P[m.p].name, m.name);
-  if (m.t === "startstory" && HOST && m.p === caller()
+  if (m.t === "startstory" && HOST && seatOf[m.cid] === caller()
       && (!ST || ST.end || ST.err) && modeLeft(m.mode)) startStory(m.mode);
   if (m.t === "closed" && !HOST){
     setWire(false, "table closed");
     $("setupMsg").textContent = "The host closed the table.";
     showScreen("setup");
-    try { localStorage.removeItem(MP_SAVE_KEY); } catch {}
   }
 }
 
@@ -495,80 +523,21 @@ function pushState(fx){
   if (SOLO) botTick();
 }
 
-// Client-driven timeout resolution, restoring the original instant feel.
-// The lazy-check inside place-bid only fires when someone actually takes
-// an action - if both players just watch the clock hit zero without
-// clicking anything, nothing triggers it, leaving cron's 1-minute
-// backstop as the only thing that would eventually close it. This
-// schedules a real setTimeout for the exact moment the CURRENT lot's own
-// deadline arrives (only rescheduling when the deadline actually
-// changes, not on every snapshot), and fires backend.closeLot() right
-// then - close-lot re-validates everything server-side itself, so this
-// is safe even though any connected client can trigger it.
-let __closeLotDeadline = 0;
-// Kept in sync with GRACE_MS in place-bid/close-lot's Edge Functions -
-// no point firing this before the server would even honor a resolution.
-// Also gives a bid clicked right at the visible "0" mark real time to
-// actually complete its round trip (Edge Function cold start, DB write,
-// response) before this client's own timer would otherwise race it.
-const CLIENT_GRACE_MS = 1600;
-function scheduleCloseLot(s){
-  if (!backend || !s.lot || s.lot.sold || !s.lot.bidDeadline) return;
-  if (s.lot.bidDeadline === __closeLotDeadline) return;   // already scheduled for this exact deadline
-  __closeLotDeadline = s.lot.bidDeadline;
-  clearTimeout(window.__closeLotTimer);
-  const wait = Math.max(0, s.lot.bidDeadline - Date.now()) + CLIENT_GRACE_MS;
-  window.__closeLotTimer = setTimeout(() => {
-    backend.closeLot().catch(() => {});   // harmless no-op if another client's own timer (or an action) already resolved it
-  }, wait);
-}
-
 function applyState(s, local){
   if (!s || !s.lot) return;          // nothing to draw before the sale opens
-  scheduleCloseLot(s);
   // Track what is actually on the cover. The host mutates lotNum before it
   // publishes, so comparing state-to-state would never see the change.
   const lotChanged = drawnLot !== s.lotNum;
-  // Roles are still local-only, unsynced state (never written to the
-  // database - Stage B deliberately left the whole roles/face-off system
-  // on the old broadcast/drag mechanism). But s.P itself now comes from
-  // the real backend, not a potentially-stale host broadcast the way it
-  // did pre-migration - so the roster's actual CONTENTS (which
-  // characters, purse) are always authoritative and should always be
-  // adopted. Discarding the whole incoming P[q] for any unlocked seat
-  // (the old version here) also silently discarded genuine roster
-  // updates along with it - e.g. the auction's very last lot resolving
-  // right as the screen transitioned to face-off left that purchase
-  // invisible on screen until the seat locked roles or the page was
-  // refreshed, even though the database had it correctly the whole time.
-  //
-  // incoming.locked has two genuinely different meanings depending on
-  // which system this snapshot came from, and there is no way to tell
-  // which one a given call is from here: the OLD broadcast system sets
-  // it correctly and authoritatively (a real "this seat just locked"
-  // signal, built from snapshot()'s own P). backend.js's own polling
-  // sets it from seats.locked, a completely unrelated database column
-  // that the roles system never touches at all - always false. A first
-  // attempt at this fix always adopted incoming.locked wholesale, which
-  // meant the very next 3-second poll (backend-sourced, locked always
-  // false) silently reverted anyone's just-set local lock back to
-  // false - "Lock the Roles" appeared to do nothing at all. When
-  // incoming genuinely says locked, trust it fully (that only ever
-  // happens for a real broadcast-sourced confirmation). Otherwise, merge
-  // in the real roster contents but keep local role assignments AND
-  // local locked status - a false from backend.js's irrelevant column
-  // must never be allowed to stomp a lock that already happened.
+  // Role drags are local only: nothing is sent to the host until a seat locks,
+  // so the host's own copy of an unlocked seat's roster is simply stale, not
+  // authoritative. This only matters once the auction is over and roles are
+  // being assigned: during the auction itself every seat is unlocked by
+  // definition, and a purchase has to sync in full on every push regardless.
+  // So past the auction, adopt the incoming roster for a seat once that seat
+  // is locked; while it is still unlocked, keep what is already sitting in
+  // local memory instead of overwriting it with the host's stale copy.
   P = (local || !P || !s.over) ? s.P
-    : s.P.map((incoming, q) => {
-        if (incoming.locked) return incoming;
-        const prevRoster = (P[q] && P[q].roster) || [];
-        const roster = (incoming.roster || []).map(r => {
-          const prev = prevRoster.find(pr => pr.char.name === r.char.name);
-          return prev && prev.role ? { ...r, role: prev.role } : r;
-        });
-        const locked = (P[q] && P[q].locked) || false;
-        return { ...incoming, roster, locked };
-      });
+    : s.P.map((incoming, q) => incoming.locked ? incoming : P[q]);
   lot = s.lot; lotNum = s.lotNum; over = s.over; deckLeft = s.deckLeft;
   if (s.box) BOX = s.box;
   if (s.np) NP = s.np;
@@ -578,23 +547,10 @@ function applyState(s, local){
   clearTimeout(window.__lockTimer);
   if (s.lockLeft) window.__lockTimer =
     setTimeout(() => { if (lot && !over) render(); }, s.lockLeft + 250);
-  // Uses the real, absolute deadline straight from the database now,
-  // not a recomputed Date.now()+bidLeft. That relative approach made
-  // sense in the old host-broadcast architecture (no shared, absolute
-  // timestamp existed to compare against), but now that backend.js
-  // provides lot.bidDeadline as a real timestamp, recomputing it fresh
-  // on every single snapshot - including every routine 3-second poll,
-  // whether or not the deadline actually changed - introduced exactly
-  // the kind of accumulating drift that caused several other bugs
-  // today: each recomputation combines a slightly-delayed bidLeft
-  // value with a freshly-read Date.now(), which can systematically
-  // shift the PERCEIVED deadline earlier or later depending on network
-  // timing, however small. Using the absolute value directly means the
-  // countdown is fixed and correct the moment a lot opens, and never
-  // drifts no matter how many redundant snapshots arrive in between -
-  // it only ever changes when the real deadline genuinely does (a bid
-  // extending it, or a new lot).
-  bidDeadlineLocal = (s.lot && s.lot.bidDeadline) || 0;
+  // Same idea as lockTill just above: a local clock the countdown UI reads
+  // from, rebuilt from the host's remaining time rather than trusting our
+  // own clock to agree with theirs.
+  bidDeadlineLocal = s.bidLeft ? Date.now() + s.bidLeft : 0;
   if (!local) started = true;
   if (over) return showFaceoff();
   // A fresh sale is starting: over just flipped back to false, which only
@@ -605,31 +561,7 @@ function applyState(s, local){
   // or a guest that reconnects mid-transition, so a repeated character name
   // in the new deal never reads as "already sent" from the old match.
   if (ST) resetMatchState();
-  // Same in-flight-poll race the host's own click handler guards against
-  // (see suppressMatchSnapshotUntil's declaration), applied here so the
-  // GUEST side is covered too: a guest never clicks "Run it again"
-  // themselves, they only learn a fresh sale started once a real
-  // snapshot shows over===false, right here. Their own poll can just as
-  // easily be in flight at that exact moment, carrying pre-restart
-  // matches data that would otherwise land right after this reset and
-  // briefly repopulate ST from the old, finished match on their screen too.
-  suppressMatchSnapshotUntil = Date.now() + 2000;
-  // The foSides/roleBox clearing that used to live here is gone now that
-  // restart-table writes everything in one atomic transaction (see its
-  // own migration comment) - there is no longer an intermediate, half-
-  // emptied server state for a client to ever observe in the first
-  // place, so clearing these here would have been the ONLY remaining
-  // source of a visible "nothing assigned" flash, not a fix for one.
-  // The real data now genuinely stays unchanged, right up until the
-  // whole restart commits together and this screen gets replaced by the
-  // new auction outright.
-  // Re-arm the face-off "finish" sound for the NEXT time we get there.
-  // This runs on every applyState() call while genuinely mid-auction, not
-  // just once - which is exactly what's needed, since it means the flag
-  // resets no matter how the new sale started (a fresh connect, or the
-  // restart-table flow), rather than only being reset at specific
-  // hand-picked call sites that are easy to miss or lose track of.
-  faceoffSoundPlayed = false;
+  showScreen("auction");
   if (peerOn) setWire(true, peerLabel());          // names arrive after presence
 
   // Sound is driven off state transitions rather than off clicks, so both
@@ -645,68 +577,19 @@ function applyState(s, local){
   heardFolds = lotChanged ? 0 : foldsNow;
 
   if (over) paintRoles();
-  // If this snapshot is swapping to a genuinely different lot WHILE an
-  // earlier stamp is still showing on screen, defer the entire visual
-  // repaint until that stamp actually finishes. #stampLayer is a
-  // separate overlay, not part of the card itself - renderLot() used to
-  // swap the card's content out from under a still-visible stamp with no
-  // coordination between them at all, so for whatever was left of its
-  // 1.1s, the "Passed"/"Sold" stamp ended up sitting on top of the
-  // BRAND NEW card instead of the one it was actually announcing. How
-  // often that happened depended purely on how fast the next lot arrived
-  // relative to the stamp's remaining display time - sometimes it
-  // finished first (looked fine), sometimes it didn't (looked like a bug
-  // on the wrong card, because it was).
-  const doVisualUpdate = () => {
-    if (lotChanged){ drawnLot = s.lotNum; renderLot(); }
-    render();
-    // Only reveal the screen once the card is actually fully painted above -
-    // showScreen used to run before renderLot()/render(), which meant the
-    // empty card shape (or, before that fix, leftover placeholder HTML) was
-    // visible for a frame before real data ever landed in it. Order this
-    // last, not first.
-    showScreen("auction");
-    // fitName() (inside renderLot(), called above) bails out early if the
-    // card isn't visible yet - clientWidth/clientHeight both read 0 on a
-    // hidden element - which is exactly the state renderLot() ran in a
-    // moment ago, now that showScreen() runs after it instead of before.
-    // One more pass, now that the screen is actually visible, catches any
-    // long name that needed shrinking to fit.
-    if (lotChanged) fitName();
-    if (s.fx && s.fx.id !== lastFx){
-      lastFx = s.fx.id;
-      stamp(s.fx.word, s.fx.line, s.fx.tone);
-      s.fx.word === "Sold" ? SFX.sold() : SFX.passedIn();
-    }
-  };
-  if (lotChanged && Date.now() < stampHideAt){
-    clearTimeout(window.__stampDeferredRender);
-    window.__stampDeferredRender = setTimeout(doVisualUpdate, stampHideAt - Date.now() + 20);
-  } else {
-    doVisualUpdate();
+  if (lotChanged){ drawnLot = s.lotNum; renderLot(); }
+  render();
+  if (s.fx && s.fx.id !== lastFx){
+    lastFx = s.fx.id;
+    stamp(s.fx.word, s.fx.line, s.fx.tone);
+    s.fx.word === "Sold" ? SFX.sold() : SFX.passedIn();
   }
 }
 
 /* An action either runs here (host) or travels to the referee (guest). */
-// Stage B fix: once backend exists, every browser - host or guest - has
-// its own Backend instance carrying its OWN cid, and place-bid checks
-// that cid against the seat being acted for. So each side now calls
-// bid()/pass() directly with its own ME, rather than a guest relaying
-// through the host (which would have sent the bid under the HOST's cid,
-// and place-bid would rightly reject it as someone acting for a seat
-// they don't own). The old broadcast-relay path only remains as a
-// fallback for the moment right after connect() but before backend has
-// finished attaching - in practice this shouldn't fire once Stage B's
-// flows above are in place, kept only so a slow connection doesn't throw
-// on nothing to call.
-// bid()/pass() already branch internally on SOLO/backend (see their own
-// definitions), so act() itself needs no branching of its own anymore -
-// this used to also fall back to a broadcast relay for guests without a
-// backend yet, but that path was never actually reachable: backend is
-// always set by the time the auction screen (the only place act() is
-// ever called from) becomes visible, in solo or multiplayer alike.
 function act(kind, amount){
-  return kind === "bid" ? bid(ME, amount) : pass(ME);
+  if (!HOST) return send({ t: "act", p: ME, cid: CID, kind, amount });
+  return kind === "bid" ? bid(0, amount) : pass(0);
 }
 
 function showScreen(which){
@@ -838,13 +721,7 @@ function refreshSetupBox(){
 function paintPending(){
   const box = $("pending"), list = $("pendingList");
   if (!HOST) return;
-  // seatOf itself is never populated anymore - Stage B moved real seat
-  // assignment to join-table, and nothing ever wrote back into this map
-  // afterward, so this always read as "1 chair open" regardless of how
-  // many seats were actually filled, and the Let In button could never
-  // grey out even on a genuinely full table. P is kept current by the
-  // real backend snapshot, so count real, named seats there instead.
-  const seated = P.filter(x => x.name && x.name !== "…").length;
+  const seated = Object.keys(seatOf).length + 1;         // the host holds one chair
   const room = NP - seated;
   list.innerHTML = "";
   for (const [cid, who] of knocks){
@@ -855,20 +732,8 @@ function paintPending(){
       <button type="button" class="ghost-btn deny">No</button>`;
     li.querySelector(".pending-name").textContent = who.name;
     const allow = li.querySelector(".allow");
-    // A full table doesn't always mean this specific request is a genuinely
-    // new person - it can just as easily be the SAME player reconnecting
-    // with a new cid (a different device, cleared storage), knocking again
-    // because the plain cid-match reconnect in join-table has no way to
-    // recognize them. Matching this knock's name against an existing
-    // seat's name catches exactly that case, so the host isn't blocked
-    // from re-admitting someone they clearly already recognize just
-    // because the room-count alone reads as full. join-table's own name-
-    // match fallback (see its comment) is what actually reclaims the seat
-    // once this button is clickable at all.
-    const reclaim = P.some(p => p.name && p.name.trim().toLowerCase() === who.name.trim().toLowerCase());
-    const canAdmit = room >= 1 || reclaim;
-    allow.disabled = !canAdmit;
-    allow.title = canAdmit ? "" : "Every chair is taken";
+    allow.disabled = room < 1;
+    allow.title = room < 1 ? "Every chair is taken" : "";
     allow.addEventListener("click", () => admit(cid, who.name));
     li.querySelector(".deny").addEventListener("click", () => {
       knocks.delete(cid); send({ t: "refused", cid }); paintPending();
@@ -898,67 +763,38 @@ function uniqueName(want, seat){
   return base.slice(0, 12) + " " + seat;
 }
 
-// Host clicks "Let In" for a pending knock. This is the real gate now:
-// join-table only ever gets called from HERE, once, at the moment of
-// actual human approval - not the instant a guest types their name. The
-// atomic-seat-assignment reasoning from before still holds (join-table
-// itself can't double-book a seat), it just now only runs on a real
-// approval click instead of on every knock.
-async function admit(cid, name){
+function admit(cid, name){
   if (!HOST) return;
-  knocks.delete(cid);
-  paintPending();
-  // uniqueName() existed correctly but was never actually wired into this
-  // flow - admit() sent the raw, unmodified name straight to join-table,
-  // and join-table itself has no uniqueness check either. Two players
-  // could join with identical names, which would silently corrupt the
-  // entire fight system: ST.used, ST.picks, and every team built with
-  // owner: P[q].name are all keyed by that string. -1 as the excluded
-  // seat is intentional: this guest isn't in any seat yet, so nothing
-  // should be excluded from the "already taken" check.
-  //
-  // Skipped entirely when this name already matches an existing seat
-  // exactly, though: that's the reclaim case (see join-table's own
-  // comment on this) - a returning player, admitted by a host who
-  // already recognized their name, reconnecting with a new cid. That
-  // case NEEDS the exact match to be recognized as a reclaim rather than
-  // a fresh seat; forcing it away from itself here would defeat the one
-  // situation uniqueName() actually needs to make room for. If nothing
-  // matches at all, uniqueName() is a safe no-op anyway - there's
-  // nothing for it to change.
-  const isReclaim = seats().some(q =>
-    P[q].name && P[q].name.trim().toLowerCase() === String(name).trim().toLowerCase());
-  const finalName = isReclaim ? name : uniqueName(name, -1);
-  try {
-    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
-    const res = await fetch("https://trtccsljexjplnuhnlkz.supabase.co/functions/v1/join-table", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + ART_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ room_code: ROOM, cid, name: finalName }),
-    });
-    const data = await res.json();
-    if (!res.ok){
-      send({ t: data.full ? "full" : "refused", cid });
-      return;
-    }
-    // Tell the guest their real seat - they don't have their own `backend`
-    // set up yet (they were only ever knocking, not seated), so this
-    // broadcast is what lets askForChair() finally build one.
-    send({ t: "seat", cid, seat: data.seat, np: data.np, table_id: data.table_id });
-  } catch {
-    send({ t: "refused", cid });
+  let seat = seatOf[cid];
+  if (seat === undefined){
+    let live;
+    try { live = new Set(Object.keys(chan.presenceState() || {})); } catch { live = null; }
+    if (live){ live.add(cid);
+      for (const [c, q] of Object.entries(seatOf)) if (!live.has(c)) delete seatOf[c]; }
+    const used = Object.values(seatOf);
+    seat = seats().find(q => q !== 0 && !used.includes(q));
+    if (seat === undefined){ send({ t: "full", cid }); return; }
+    seatOf[cid] = seat;
   }
+  knocks.delete(cid);
+  P[seat].name = uniqueName(name || SEATS[seat].pencil, seat);
+  send({ t: "seat", cid, seat, np: NP });
+  paintPending();
+  if (!started && Object.keys(seatOf).length < NP - 1){
+    send({ t: "waiting", seated: Object.keys(seatOf).length + 1, need: NP });
+    return;
+  }
+  if (!started){ started = true; SFX.join(); dealDeck(); nextLot(); }
+  pushState();
 }
 
 // Guest: an invite link lands here rather than on the host's control panel.
-// Knocks and waits for the host's approval - join-table only runs once
-// that approval actually happens, inside admit() above, not here.
 async function askForChair(){
   const n = ($("knockName").value || "").trim().slice(0, 14);
   if (!n){ $("knockMsg").hidden = false;
            $("knockMsg").textContent = "Put your name down first."; return; }
   try { localStorage.setItem("longbox.name", n); } catch {}
-  HOST = false;
+  HOST = false; ME = 1;
   $("knockAsk").hidden = true;
   $("knockMsg").hidden = false;
   $("knockMsg").textContent = "Knocking…";
@@ -975,65 +811,6 @@ async function askForChair(){
     if (seatedAck || !$("auction").hidden){ clearInterval(window.__knockT); return; }
     knock();                                  // the host may have only just opened the page
   }, 3000);
-}
-
-// The host's admit() sends { t: "seat", cid, seat, np, table_id } once a
-// knock is actually approved - this is where the guest, only now,
-// connects a real backend for the first time.
-async function onSeated(m){
-  clearInterval(window.__knockT);
-  seatedAck = true;
-  ME = m.seat; NP = m.np; TABLE_ID = m.table_id;
-  // The real bug behind the "blank card" flash: drawnLot/lastFx/heardBids/
-  // heardFolds are module-level and only ever reset by the post-game
-  // "play again" handler - never when connecting to a brand-new table.
-  // Every fresh table's first lot is ALSO lotNum 1, so if this browser
-  // tab has rendered any earlier test's Lot 1 this session, applyState's
-  // lotChanged check reads false and skips renderLot() entirely - the
-  // general fields (lot number, price, footer text) still populate via
-  // render(), but the character's own name/alias/note/art never do.
-  drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer); resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender);
-  try {
-    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
-    backend = new Backend(sb, TABLE_ID, CID);
-    backend.onSnapshot(s => applyState(s));
-    // Separate listener, not folded into applyState() above: applyState()
-    // early-returns via showFaceoff() once over===true and never reaches
-    // anything past that - exactly the screen this needs to keep updating
-    // through, since the fight itself happens entirely after the auction.
-    backend.onSnapshot(s => applyMatchSnapshot(s.matches));
-    // Wait for both together: the real table data AND the character art
-    // lookup table. Connecting alone isn't enough - the whole point is
-    // that the FIRST render (right after this) needs ART already
-    // populated, or the card's image lookup comes up empty and nothing
-    // ever re-triggers a repaint once it's ready.
-    // Sequential, not Promise.all: backend.connect() fires its FIRST
-    // snapshot internally, synchronously, as its own last step - which
-    // calls applyState() and paints the card immediately, before
-    // connect() has even formally "resolved" from here. Racing the two
-    // in parallel meant that first paint could still land before
-    // stockReady finished, even though we were "waiting for both" -
-    // exactly the split-second no-image flash. Awaiting stockReady FIRST
-    // guarantees ART is already populated before connect()'s internal
-    // render ever fires.
-    await stockReady;
-    await backend.connect();
-    try { localStorage.setItem(MP_SAVE_KEY, JSON.stringify({ tableId: TABLE_ID, room: ROOM, host: false, me: ME })); } catch {}
-  } catch (e) {
-    $("knockMsg").hidden = false;
-    $("knockMsg").textContent = "Could not reach the table service. Check your connection.";
-    return;
-  }
-  $("knockMsg").textContent = "";
-  // Deliberately NOT calling showScreen("auction") here. connect()'s first
-  // snapshot can legitimately arrive before real lot data exists yet (a
-  // race against the host's own start-table call finishing), and
-  // applyState() correctly does nothing in that case. An explicit call
-  // here doesn't know that, and reveals an empty, unpainted card
-  // regardless - exactly the "blank box, then the real game" flash.
-  // applyState() already calls showScreen("auction") itself, but only
-  // once real lot data is genuinely there to paint - that's the only
-  // place this screen should ever be revealed from.
 }
 
 /* ---------------------------- tables ---------------------------- */
@@ -1064,49 +841,9 @@ async function openTable(){
   HOST = true; ME = 0; started = false;
   ROOM = code4();
   P = seats().map(q => ({ name: q === 0 ? n : "…", purse: PURSE, roster: [], locked: false }));
+  seatOf = {};
   $("setupMsg").textContent = "Opening the table…";
   try { await connect(); } catch { return nudge("Could not reach the table service. Check your connection and try again."); }
-  // Stage B: the real database row. Everything the lobby UI does above
-  // (ROOM, P, the broadcast channel) is unchanged - this just gives
-  // place-bid something real to check bids against once the sale starts.
-  try {
-    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
-    const res = await fetch("https://trtccsljexjplnuhnlkz.supabase.co/functions/v1/create-table", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + ART_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ room_code: ROOM, host_cid: CID, host_name: n, np: NP, box: BOX }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "create-table failed");
-    TABLE_ID = data.table_id;
-    // Same reset as the guest path in onSeated() - a reused tab can
-    // otherwise carry a previous test table's rendering state into this
-    // brand-new one and cause renderLot() to be silently skipped.
-    drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer); resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender);
-    backend = new Backend(sb, TABLE_ID, CID);
-    backend.onSnapshot(s => {
-      applyState(s);
-      // Auto-start once every chair is filled - replaces the old
-      // "!started" check inside handle()'s "join" case, which used to
-      // fire the moment the host's own local seatOf map filled up.
-      // guardStart avoids calling start-table twice if two snapshots
-      // land in quick succession before `started` flips.
-      if (!started && !window.__startingTable &&
-          s.P.filter(x => x.name && x.name !== "…").length >= NP){
-        window.__startingTable = true;
-        backend.startTable(BOX, NP)
-          .then(() => { window.__startingTable = false; })
-          .catch(() => { window.__startingTable = false; });
-      }
-    });
-    // Separate listener, same reasoning as the guest-side registration -
-    // applyState() never reaches the fight screen's own update path.
-    backend.onSnapshot(s => applyMatchSnapshot(s.matches));
-    await backend.connect();
-    try { localStorage.setItem(MP_SAVE_KEY, JSON.stringify({ tableId: TABLE_ID, room: ROOM, host: true, me: 0 })); } catch {}
-  } catch (e) {
-    return nudge("Could not open the table (" + e.message + "). Try again.");
-  }
   $("setupMsg").textContent = "";
   $("lobbyCode").textContent = ROOM;
   knocks.clear(); paintPending();
@@ -1128,6 +865,7 @@ function openSolo(){
     name: q === 0 ? n : face[q - 1] + " (" + BOT_LEVEL + ")",
     purse: PURSE, roster: [], locked: false
   }));
+  seatOf = {};
   BOTS = {};
   const helpers = { POINTS, effTier, roleShift, slots: SLOTS, purse: PURSE };
   seats().forEach(q => {
@@ -1281,91 +1019,7 @@ async function joinTable(){
 
 function nudge(msg){ $("setupMsg").textContent = msg; showScreen("setup"); }
 
-// In-game equivalent of nudge() - a rejected bid/pass shouldn't navigate
-// the player anywhere. nudge() was built for lobby-flow errors (can't
-// open/join a table), where the player genuinely IS on that screen
-// already; reusing it inside bid()/pass()'s error handling was the bug -
-// it yanked players back to the homepage on every rejected action, even
-// perfectly normal ones (someone else's action or the auto-timeout
-// resolved the lot a moment before this click landed). Most of these
-// rejections are self-correcting the instant the next real snapshot
-// arrives anyway, so this only needs to be a brief, non-navigating note,
-// not a full-screen error.
-function gameNudge(msg){
-  // The auction screen's own status line was the only target here, which
-  // is invisible once past the auction - an error from startMatch()/
-  // submitPick() on the face-off/fight screen had nowhere to show at
-  // all, so it failed completely silently. Target whichever of the two
-  // status lines is actually on screen right now.
-  const auctionVisible = !$("auction").hidden;
-  const el = auctionVisible ? $("call") : $("writeHint");
-  if (!el) return;
-  el.textContent = msg;
-  clearTimeout(window.__gameNudgeTimer);
-  window.__gameNudgeTimer = setTimeout(() => {
-    if (auctionVisible){ if (lot) render(); }
-    else if (ST) stPaint();
-  }, 1800);
-}
-
 function resumeTable(){
-  // Real multiplayer: reconnect via the actual backend, the same way any
-  // fresh connect works - a reload loses nothing, because the real state
-  // was never sitting in this browser to begin with, it's in the
-  // database. No local reconstruction needed at all; just point a fresh
-  // Backend at the saved table_id and let the current state arrive.
-  let mp;
-  try { mp = JSON.parse(localStorage.getItem(MP_SAVE_KEY) || "null"); } catch {}
-  if (mp && mp.tableId){
-    HOST = mp.host; ME = mp.me; ROOM = mp.room; TABLE_ID = mp.tableId;
-    resetMatchState();
-    drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer);
-    (async () => {
-      try {
-        await connect();   // re-establish chan too: presence, roles, and the knock/admit flow still run on it
-        sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
-        backend = new Backend(sb, TABLE_ID, CID);
-        backend.onSnapshot(s => applyState(s));
-        backend.onSnapshot(s => applyMatchSnapshot(s.matches));
-        if (HOST){
-          // applyState() itself early-returns whenever no lot exists yet
-          // (a table still waiting on more players to join) - meaning it
-          // NEVER shows the lobby screen at all on its own. The original
-          // openTable() flow only ever reached the lobby through its own
-          // direct showScreen("lobby") call right after creating the
-          // table; resuming skipped that entirely, reconnecting chan and
-          // backend correctly in the background while the host's own
-          // screen just sat on setup with no way to see or accept a
-          // guest's knock. Runs once (the flag guards against every
-          // later poll re-firing this and wiping out real pending
-          // knocks that arrived over chan in the meantime).
-          let lobbyShown = false;
-          backend.onSnapshot(s => {
-            if (lobbyShown || s.lot) return;
-            lobbyShown = true;
-            BOX = s.box; NP = s.np;
-            $("setupMsg").textContent = "";
-            $("lobbyCode").textContent = ROOM;
-            knocks.clear(); paintPending();
-            $("lobbyBox").textContent = boxSummary();
-            $("shareLink").value = location.origin + location.pathname + "?r=" + ROOM;
-            showScreen("lobby");
-          });
-        }
-        await stockReady;
-        await backend.connect();
-      } catch {
-        nudge("Could not reopen that table. Check your connection.");
-      }
-    })();
-    return;
-  }
-
-  // SOLO only from here down: no backend ever existed for it, so this
-  // browser genuinely was the only place the state lived, and rebuilding
-  // it from localStorage is correct here - unlike the multiplayer branch
-  // above, where doing the same thing used to reconstruct a stale,
-  // database-disconnected copy of a game that had actually moved on.
   let sv;
   try { sv = JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); } catch {}
   if (!sv) return;
@@ -1475,62 +1129,43 @@ function scheduleBidTimer(){
 }
 
 /* ---------------------------- actions ---------------------------- */
-// Stage B: bid()/pass() no longer decide anything - they just ask
-// place-bid to. Every rule that used to live here (min bid, ceiling, the
-// ACK_MS lockout, who's obliged to buy) is enforced server-side now,
-// against the real database, not against this browser's own copy of
-// `lot`/`P` - see place-bid/index.ts. The local checks below are only a
-// fast "don't even bother sending an obviously-illegal request" filter;
-// place-bid re-checks everything regardless; SOLO mode (bots, no
-// backend) keeps its old local behaviour untouched, since there's nobody
-// to cheat against there.
 function bid(p, amount){
-  if (SOLO || !backend) return bidLocalSolo(p, amount);
-  if (over || !lot || lot.sold || !inPlay(p)) return;
-  const min = (lot.high === p) ? lot.price + 1 : askPrice();
-  if (!(Math.floor(amount) >= min)) return;
-  seats().forEach(q => { const el = $("other" + q); if (el) el.value = ""; });
-  backend.bid(p, Math.floor(amount), lotNum).catch(err => gameNudge(err.message));
-}
-
-function pass(p){
-  if (SOLO || !backend) return passLocalSolo(p);
-  if (!canPass(p)) return;
-  backend.pass(p, lotNum).catch(err => gameNudge(err.message));
-}
-
-// The exact original bid()/pass() bodies, kept only for SOLO mode (vs.
-// bots, entirely local, nothing to protect against). Renamed so the
-// networked bid()/pass() above can delegate to them without recursing.
-function bidLocalSolo(p, amount){
   if (over || lot.sold || !inPlay(p)) return;
   const min = (lot.high === p) ? lot.price + 1 : askPrice();
   const amt = Math.floor(amount);
   if (!(amt >= min) || amt > ceiling(p)) return;
-  if (Date.now() < (lot.lockUntil || 0)) return;
+  if (Date.now() < (lot.lockUntil || 0)) return;   // the last bid is still showing
   lot.price = amt;
   lot.high = p;
   lot.history = (lot.history || []).concat({ p, amt });
   lot.lockUntil = Date.now() + ACK_MS;
   seats().forEach(q => { const el = $("other" + q); if (el) el.value = ""; });
+  // Nobody left who could answer: it is theirs. Folding is final, so a rival
+  // who has already passed can never come back to contest this.
   if (!rivals(p).some(q => inPlay(q) && !lot.passed[q])) return award(p, amt);
   lot.bidDeadline = Date.now() + BID_TIMER_MS;
   scheduleBidTimer();
   pushState();
 }
 
-function passLocalSolo(p){
+/* Pass does the two things it does in a real saleroom: drop out of the bidding
+   and let the standing bid take it, or, if nobody has bid at all, decline the
+   lot entirely so it passes in unsold. */
+function pass(p){
   if (!canPass(p)) return;
   const cost = passCost(p);
   if (cost) P[p].purse -= cost;
   lot.passed[p] = true;
 
   if (lot.high !== null){
+    // A lot only sells when EVERY rival has folded. With three buyers, one
+    // person dropping out must not hand it over while the third still wants it.
     const contenders = rivals(lot.high).filter(q => inPlay(q) && !lot.passed[q]);
     if (!contenders.length) return award(lot.high, lot.price);
     return pushState();
   }
 
+  // Nobody has bid at all: once everyone has declined, it passes in unsold.
   const stillIn = seats().filter(q => inPlay(q) && !lot.passed[q]);
   if (!stillIn.length) return passIn(cost);
   pushState();
@@ -1563,11 +1198,6 @@ function award(p, price){
 }
 
 /* ---------------------------- stamp ---------------------------- */
-// Tracked so applyState() can tell whether a stamp announcing the
-// PREVIOUS lot is still visible when a new lot's data arrives - see the
-// comment at its one call site in applyState() for the actual bug this
-// closes (the stamp ending up on top of the wrong card).
-let stampHideAt = 0;
 function stamp(word, line, tone){
   const layer = $("stampLayer"), mark = $("stampMark");
   $("smWord").textContent = word;
@@ -1578,15 +1208,7 @@ function stamp(word, line, tone){
   void mark.offsetWidth;
   mark.style.animation = "";
   mark.classList.add("hit");
-  stampHideAt = Date.now() + 1100;
-  // Cancel any earlier stamp's own pending hide first: two stamps firing
-  // close together (two lots resolving quickly back to back) used to
-  // leave the FIRST call's hide-timer still armed when the second stamp
-  // showed - that old timer would fire on its own schedule and hide the
-  // SECOND stamp early, cutting it short before its own 1.1s had passed.
-  // Only the latest stamp's own timer should ever be the one that hides it.
-  clearTimeout(window.__stampHideTimer);
-  window.__stampHideTimer = setTimeout(() => { layer.hidden = true; mark.classList.remove("hit"); }, 1100);
+  setTimeout(() => { layer.hidden = true; mark.classList.remove("hit"); }, 1100);
 }
 
 
@@ -2048,41 +1670,13 @@ function fitName(){
   // and push the footer off the card. So the name gets a height budget too,
   // smaller when a picture is sharing the cover with it.
   const hasArt = !$("cvArt").hidden;
-  const maxH = cover.clientHeight * (hasArt ? 0.19 : 0.36);
-  // Cap and multiplier both lowered from 52/0.163: a short name like
-  // "Hulk" never needed to shrink at all under the old numbers, so it
-  // rendered at the full starting size while a longer name like
-  // "Red Hood" had to shrink down just to fit the available width -
-  // making short names inconsistently BIGGER than longer ones instead of
-  // every name sharing one comfortable default. This lowers the ceiling
-  // itself so short names stop at roughly the same size longer ones
-  // settle at anyway, rather than only long names ever being constrained.
-  let s = Math.min(38, Math.max(18, cover.clientWidth * 0.13));
+  const maxH = cover.clientHeight * (hasArt ? 0.155 : 0.32);
+  let s = Math.min(52, Math.max(18, cover.clientWidth * 0.163));
   el.style.fontSize = s + "px";
-  // A name that CAN read as one line always should. -webkit-line-clamp:2
-  // in the CSS exists purely as the backstop for a name that genuinely
-  // cannot fit even at the size floor (a long single word, or three
-  // words) - it was never meant to be a first-choice layout.
-  //
-  // fitsOneLine measures this directly rather than calculating an
-  // expected line height mathematically (fontSize * line-height): a
-  // first attempt at that math was subtly stricter than this font's real
-  // rendered line box, so even a genuinely single-line name never
-  // satisfied it and got shrunk all the way to the floor regardless - a
-  // short, easy single word like "Ultron" ended up tiny for no reason.
-  // Forcing white-space:nowrap for the measurement gets the name's TRUE
-  // natural width at this size regardless of what the container would
-  // otherwise wrap it to; scrollWidth alone (without nowrap) can't tell
-  // "fits on one line" from "wrapped to two lines that both happen to
-  // fit," since wrapped lines never exceed the container's width either.
-  const fitsOneLine = () => {
-    el.style.whiteSpace = "nowrap";
-    const natural = el.scrollWidth;
-    el.style.whiteSpace = "";
-    return natural <= el.clientWidth + 1;
-  };
-  const fitsHeight = () => el.getBoundingClientRect().height <= maxH;
-  while (s > 10 && (!fitsOneLine() || !fitsHeight())){ s -= 1; el.style.fontSize = s + "px"; }
+  const fits = () =>
+    el.scrollWidth <= el.clientWidth + 1 &&
+    el.getBoundingClientRect().height <= maxH;
+  while (s > 10 && !fits()){ s -= 1; el.style.fontSize = s + "px"; }
 }
 
 
@@ -2253,6 +1847,12 @@ function driveBidTimer(){
 }
 setInterval(driveBidTimer, 100);
 
+// Bidding is the ONLY thing on a clock. The roles board, the encounter call
+// and the round picker used to run 21s/21s/5s countdowns that auto-filled
+// and locked for you. They're deliberately gone: those steps are the part of
+// the game people want to think about, and a clock that picks for you turns
+// a decision into a forfeit. Nothing after the auction is timed.
+
 function renderPanels(){
   const solo = soloRun();
   for (const p of seats()){
@@ -2313,6 +1913,13 @@ function renderPanels(){
       continue;
     }
 
+    if (locked()){
+      state.textContent = "Hold. Everyone is seeing that bid.";
+      other.disabled = true; passBtn.disabled = true;
+      const go = panel.querySelector(".pn-go"); if (go) go.disabled = true;
+      continue;
+    }
+
     for (const v of [ask, ask + 1, ask + 2]){
       if (v > cap) continue;
       const b = document.createElement("button");
@@ -2344,18 +1951,8 @@ function finish(){
   pushState();
 }
 
-let faceoffSoundPlayed = false;
 function showFaceoff(){
-  // showFaceoff() gets called every time applyState() sees over===true -
-  // which includes the 3-second polling safety net that keeps running
-  // for as long as backend stays connected (indefinitely, even on this
-  // screen). Nothing used to stop SFX.finish() from firing on every
-  // single one of those repeated calls - this guard makes it play once
-  // per transition into the screen, not once per poll. Re-armed inside
-  // applyState() itself (see "Re-arm the face-off finish sound" above)
-  // rather than at scattered connect-time call sites, so it can't be
-  // silently lost again the way it was the first time this was fixed.
-  if (!faceoffSoundPlayed){ faceoffSoundPlayed = true; SFX.finish(); }
+  SFX.finish();
   $("foTitle").textContent = NP === 3 ? "Five Against Five Against Five" : "Five Against Five";
   paintRoles();
   showScreen("faceoff");
@@ -2413,31 +2010,23 @@ function setRole(p, i, key){
 // the 21-second role timer running out. Plain Math.random, not the seeded
 // fight RNG: this happens before the match/seed exist at all, purely local
 // setup, same as any other UI randomness in this file.
+function autoAssignRoles(p){
+  const openIdx = P[p].roster.map((r, i) => ({ r, i })).filter(({ r }) => !r.role).map(({ i }) => i);
+  const freeRoles = ROLES.map(x => x.k).filter(k => !P[p].roster.some(r => r.role === k));
+  for (let i = freeRoles.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [freeRoles[i], freeRoles[j]] = [freeRoles[j], freeRoles[i]];
+  }
+  openIdx.forEach((idx, n) => { if (freeRoles[n]) setRole(p, idx, freeRoles[n]); });
+}
+
 function lockRoles(p){
   if (!rolesDone(p) || P[p].locked) return;
-  if (SOLO || !backend){
-    P[p].locked = true;
-    SFX.sold();
-    paintRoles();
-    return;
-  }
-  // Optimistic: locks immediately on this browser, same instant feel as
-  // before - the real, validated lock (see lock-roles' own comment on
-  // exactly what it checks and why) arrives moments later via the
-  // normal backend snapshot, the same path as every other server-
-  // confirmed change now. Rolled back if the server actually rejects it -
-  // unlikely, since the client-side rolesDone() check just above already
-  // agrees this is a legal assignment, but the server is still the one
-  // that actually decides, not this browser.
   P[p].locked = true;
+  if (p === ME){ }
   SFX.sold();
+  if (HOST) pushState(); else send({ t: "roles", p, cid: CID, roles: P[p].roster.map(r => r.role) });
   paintRoles();
-  const roles = P[p].roster.map(r => ({ name: r.char.name, role: r.role }));
-  backend.lockRoles(p, roles).catch(err => {
-    P[p].locked = false;
-    gameNudge(err.message);
-    paintRoles();
-  });
 }
 
 /* -------------------- drag & drop between bench and slots -------------------- */
@@ -2537,16 +2126,8 @@ function onRolePointerCancel(){ roleDragCleanup(); }
 
 function paintRoles(){
   const box = $("roleBox"); if (!box) return;
-  // Skip the repaint entirely while a drag is in progress, rather than
-  // cancelling the drag (the old behavior here). paintRoles() now fires
-  // on every routine 3-second backend poll, not just when a peer's move
-  // genuinely arrives - the poll carries no new information about MY OWN
-  // roles at all (those only ever change via my own actions), so there
-  // is nothing here worth interrupting a drag for. The longer a drag is
-  // held, the more likely it overlaps a poll; cancelling on every one of
-  // them made anything slower than ~3 seconds effectively impossible to
-  // complete - "snaps back if you hold it too long" was this, precisely.
-  if (roleDrag) return;
+  roleDragCleanup();                // a repaint mid-drag (e.g. a peer's move
+                                     // arriving over the network) cancels it
   box.innerHTML = "";
   for (const p of seats()){
     const mine = p === ME, locked = P[p].locked;
@@ -2712,17 +2293,6 @@ const escTxt = s => String(s == null ? "" : s)
 // (a resize, an unrelated repaint) shows the cards already face up, no
 // second flip.
 let revealedRound = "";
-// True while a flip animation is actually mid-flight. stPaint() can be
-// re-invoked (the 3-second backend poll, an unrelated Realtime event) in
-// the exact window between a flip being queued and its requestAnimationFrame
-// callbacks actually firing - that second call used to rebuild storyBody's
-// entire innerHTML, destroying the pending animation's DOM element before
-// it ever got to flip. The card just appeared already face-up, and whether
-// that happened depended purely on exact timing - sometimes a poll landed
-// in that window, sometimes it didn't. This flag makes stPaint() skip
-// rebuilding storyBody while a flip it already started is still playing,
-// rather than letting a second call race the first one's animation.
-let flipInFlight = false;
 
 // Builds the two (or three) face-down cards that flip to reveal who actually
 // fought this round, with a stamped VS between each pair. Pulls the art and
@@ -3009,39 +2579,23 @@ function stPaint(){
     plain.push(shownStandings.map(x => `${x.owner} ${x.points}`).join("  ·  "));
   }
   if (ST.err) html += `<p class="story-err">${escTxt(ST.err)}</p>`;
-  // Only rebuild storyBody if nothing is still mid-flip. Everything else
-  // in stPaint() (encounter picker, write button, score) still runs
-  // normally either way - this guard is scoped to just this one DOM
-  // mutation, the one a racing second call could destroy an in-flight
-  // animation by replacing.
-  if (!flipInFlight){
-    $("storyBody").innerHTML = html;
-    window.__story = plain.join("\n\n");
+  $("storyBody").innerHTML = html;
+  window.__story = plain.join("\n\n");
 
-    // The reveal is inserted face down (see .is-fresh in the CSS); flipping it
-    // here, one frame after it first paints, is what makes it read as a
-    // reveal rather than the cards just appearing already face up. Only for a
-    // freshly-built one: an already-seen round painted again (a resize, an
-    // unrelated repaint) rendered face up from the start and has nothing to
-    // flip. Selected by class, not id: with every past round now rendered
-    // alongside the current one, .round-reveal is no longer a single element,
-    // and at most one of them ever carries .is-fresh at a time anyway.
-    const fresh = $("storyBody").querySelector(".round-reveal.is-fresh");
-    if (fresh){
-      flipInFlight = true;
-      const clearFlight = () => { flipInFlight = false; };
-      // transitionend is the real signal the flip actually finished; the
-      // timeout is only a safety net in case that event never fires for
-      // some reason (element removed mid-transition, etc.) - without it,
-      // a missed event would leave storyBody frozen, never rebuilding
-      // again for the rest of the match.
-      fresh.addEventListener("transitionend", clearFlight, { once: true });
-      setTimeout(clearFlight, 1200);
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        fresh.classList.add("is-flipping");
-        SFX.pull();
-      }));
-    }
+  // The reveal is inserted face down (see .is-fresh in the CSS); flipping it
+  // here, one frame after it first paints, is what makes it read as a
+  // reveal rather than the cards just appearing already face up. Only for a
+  // freshly-built one: an already-seen round painted again (a resize, an
+  // unrelated repaint) rendered face up from the start and has nothing to
+  // flip. Selected by class, not id: with every past round now rendered
+  // alongside the current one, .round-reveal is no longer a single element,
+  // and at most one of them ever carries .is-fresh at a time anyway.
+  const fresh = $("storyBody").querySelector(".round-reveal.is-fresh");
+  if (fresh){
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      fresh.classList.add("is-flipping");
+      SFX.pull();
+    }));
   }
 
   // The round counter stays on the left exactly as before. The right side is
@@ -3107,7 +2661,10 @@ function stPaint(){
       if (!sent) b.addEventListener("click", () => sendPick(c.name));
       opts.appendChild(b);
     });
-    if (!mine.length) $("scWho").textContent = "Nobody left to send.";
+    if (!mine.length){ $("scWho").textContent = "Nobody left to send."; pickRoundKey = null; }
+  } else {
+    // Not a live picking moment (round over, busy resolving, waiting on
+    // effects): no clock should be ticking.
   }
 
   // Only the person who called the encounter can start it, and only once.
@@ -3149,133 +2706,14 @@ let MATCH = null;
 // and the previous game's win/lose glow or scoreboard can flash for a
 // moment before the new match's own effects arrive.
 function resetMatchState(){
-  ST = null; MATCH = null; matchRuns = []; lastSeenSeed = null;
+  ST = null; MATCH = null;
   pendingEffects = null; shownSig = ""; shownStandings = null; shownWinner = null;
-  shownRoundWinners = []; revealedRound = ""; flipInFlight = false;
+  shownRoundWinners = []; revealedRound = "";
   clearTimeout(window.__effectDelayTimer);
 }
 
-// runs isn't part of the backend's matches.state at all - it's a
-// per-face-off-session concept ("has random and/or prep been fought
-// yet"), not something a single match row tracks. Kept module-level
-// rather than inside ST, so it survives ST being rebuilt fresh on every
-// snapshot; only resetMatchState() (a genuinely new draft) clears it.
-let matchRuns = [];
-let lastSeenSeed = null;
-
-// Stage 3: builds ST from the real matches row instead of from a locally
-// resolved MATCH.resolve() call. Called from a dedicated backend.onSnapshot
-// listener (see openTable()/onSeated()) whenever match data changes -
-// separate from applyState()'s own listener, since applyState() early-
-// returns via showFaceoff() once over===true and never reaches anything
-// past that, which is exactly the screen this needs to keep updating.
-//
-// MATCH itself is still rebuilt locally via createMatch(), same as
-// before Stage 3 - that was never the trust problem. createMatch() is a
-// pure function: given the same seed/teams/mode, every browser produces
-// the identical match, so a host lying about it is caught the instant a
-// guest's own copy disagrees. What actually needed to move server-side
-// was WHERE the seed comes from (so a host can't grind many privately
-// before ever broadcasting one) and WHO combines two hidden picks (so a
-// host can't read a guest's pick before "submitting" their own) - both
-// now live entirely in start-match/submit-pick. MATCH here is rebuilt
-// purely for display (the headline, roundLabel-adjacent helpers) from
-// data that was never secret in the first place.
-//
-// Takes the WHOLE matches object now (keyed by mode: "random"/"prep"),
-// not a single row - a table can hold one finished/active row per
-// encounter type at once, see start-match's own comment for why. A
-// guest never calls startStory() themselves (only the host does,
-// whether acting directly or via the "startstory" broadcast relay), so
-// there's no message telling a guest which mode is "the current one" -
-// this picks it from the data itself instead: whichever match exists
-// and isn't done yet, or the most recently-touched one if both are
-// finished (or neither has started). Works identically for host and
-// guest without needing any extra coordination.
-// Set right when "Run it again" is clicked - see that handler for why.
-// A poll can already be in flight (fetching pre-restart data) at the
-// exact moment the click happens, completely independent of when the
-// click itself occurs; if that poll's result arrives AFTER the local
-// reset already ran, it would silently repopulate ST from the OLD,
-// still-finished match for one render - exactly what made the flip
-// animation briefly replay before the real new auction took over.
-// Reordering the server-side deletes never touched this, because the
-// race was never about the order server-side writes happened in - it
-// was between an unrelated, independently-timed poll and the click.
-let suppressMatchSnapshotUntil = 0;
-
-function applyMatchSnapshot(matches){
-  if (SOLO || !backend) return;   // SOLO never reads from the matches table at all
-  if (Date.now() < suppressMatchSnapshotUntil) return;
-  const modes = Object.keys(matches || {});
-  const activeMode = modes.find(m => matches[m] && !matches[m].state.done) || modes[modes.length - 1] || null;
-  const match = activeMode ? matches[activeMode] : null;
-  if (!match){ if (ST) resetMatchState(); return; }
-
-  const state = match.state;
-  const teams = seats().map(q => ({
-    owner: P[q].name, purse: P[q].purse,
-    fighters: P[q].roster.map(r => ({ ...r.char, role: r.role, price: r.price })),
-  }));
-  MATCH = createMatch({ teams, mode: state.mode, seed: Number(match.seed), roleShift, rivalries: RIVALRIES });
-
-  // A genuinely new match (different seed than the last one we built ST
-  // from) means this encounter mode just got fought - record it once,
-  // not on every repeated snapshot for the SAME still-running match.
-  if (match.seed !== lastSeenSeed){
-    lastSeenSeed = match.seed;
-    matchRuns = matchRuns.concat(state.mode);
-  }
-
-  const standings = seats().map((q, i) => ({ owner: P[q].name, points: (state.points || [])[i] || 0 }));
-  const lastRound = state.beats.length ? state.beats[state.beats.length - 1].ranked : null;
-  const roundWinners = state.beats.map(b => {
-    const top = b.ranked.filter(x => x.place === 1);
-    return top.length === 1 ? top[0].owner : null;
-  });
-
-  // My own pick is local-only knowledge - the server never reveals what
-  // anyone sent, only who's locked in. Carry my own optimistic entry
-  // forward across repeated snapshots (a re-render, the 3-second poll)
-  // as long as the round hasn't actually moved on; a genuinely new round
-  // clears it, same as the server's own ST.picks reset used to.
-  const samRound = ST && ST.round === state.round && ST.overtime === state.overtime;
-  const picks = samRound ? ST.picks : {};
-
-  ST = {
-    mode: state.mode, v: verdict(state.mode), seed: Number(match.seed),
-    beats: state.beats, turn: 0, runs: matchRuns,
-    awaiting: null, options: null, busy: false, err: "",
-    end: state.done ? { winner: state.champion, standings } : null,
-    picks, locked: state.locked || [],
-    standings, lastRound, round: state.round,
-    used: state.used || {}, drawnOut: state.drawnOut || {},
-    overtime: state.overtime, roundWinners,
-    title: MATCH.title(),
-  };
-  stPaint();
-}
-
-// Stage 3: real multiplayer now goes through start-match/submit-pick,
-// closing the two things this local version could never fully close -
-// a host free to grind seeds against known rosters before ever
-// broadcasting one, and a host who could read a guest's pick the instant
-// it arrived, before "submitting" their own. SOLO (vs bots, one human,
-// nobody to cheat against) keeps the exact original local flow below.
 function startStory(mode){
-  if (!allLocked() || !modeLeft(mode)) return;
-  if (SOLO || !backend){
-    if (!HOST) return;
-    startStoryLocalSolo(mode);
-    return;
-  }
-  if (!HOST) return;
-  backend.startMatch(mode).catch(err => gameNudge(err.message));
-  // No local ST/MATCH built here at all - applyMatchSnapshot() builds it
-  // once the real matches row (with the server-committed seed) arrives.
-}
-
-function startStoryLocalSolo(mode){
+  if (!HOST || !allLocked() || !modeLeft(mode)) return;
   const runs = runsDone();
   const nextST = { mode, v: verdict(mode), beats: [], turn: 0, runs: runs.concat(mode),
          awaiting: null, options: null, busy: false, err: "", end: null,
@@ -3353,23 +2791,8 @@ function myRemaining(){
 function sendPick(name){
   if (!ST || ST.end || ST.picks[P[ME].name]) return;
   SFX.bid();
-  if (SOLO || !backend){
-    if (HOST) takePick(P[ME].name, name);
-    else send({ t: "pick", cid: CID, p: ME, name });
-    return;
-  }
-  // Optimistic: shows "X is in, waiting on the others" immediately on
-  // THIS browser, same instant feel as before. The server never reveals
-  // what was picked to anyone but the seat that sent it - this is purely
-  // local memory of my own choice, not something read back from the
-  // snapshot. Rolled back if the actual submit-pick call fails.
-  ST.picks[P[ME].name] = name;
-  stPaint();
-  backend.submitPick(ME, name, ST.mode).catch(err => {
-    delete ST.picks[P[ME].name];
-    gameNudge(err.message);
-    stPaint();
-  });
+  if (HOST) takePick(P[ME].name, name);
+  else send({ t: "pick", cid: CID, p: ME, name });
 }
 
 // Host only. Holds each pick until every side is in, then resolves once.
@@ -3433,7 +2856,7 @@ function writeFight(){
   if (ME !== caller()) return;
   const mode = chosenMode();
   if (!modeLeft(mode) || runsDone().length >= 2) return;
-  if (!HOST){ send({ t: "startstory", cid: CID, p: ME, mode }); return; }
+  if (!HOST){ send({ t: "startstory", cid: CID, mode }); return; }
   startStory(mode);
 }
 
@@ -3453,12 +2876,7 @@ Write the ${seats().map(() => 5).join(" v ")} as a comic-book scenario.`;
 }
 
 /* ---------------------------- wiring ---------------------------- */
-// Stage B: kept as a real promise (not fire-and-forget) so askForChair()
-// can await it - a guest reaching the auction screen before this finishes
-// is exactly what caused the card to render with no picture: the image
-// lookup (ART.get(c.name)) depends entirely on this having populated
-// ART first, and nothing re-renders once it finishes late.
-const stockReady = loadStock();
+loadStock();
 $("sfxToggle").addEventListener("click", () => setSfx(!sfxOn));
 $("musicToggle").addEventListener("click", () => {
   setMusic(!musicOn);
@@ -3489,9 +2907,7 @@ $("shareBtn").addEventListener("click", async () => {
 $("cancelBtn").addEventListener("click", () => {
   send({ t: "closed" });
   if (chan) sb.removeChannel(chan);
-  if (backend) backend.disconnect();
   try { localStorage.removeItem(SAVE_KEY); } catch {}
-  try { localStorage.removeItem(MP_SAVE_KEY); } catch {}
   started = false;
   showScreen("setup");
 });
@@ -3514,17 +2930,10 @@ if (invited){
   });
 }
 
-// Offer to reopen a table this browser was hosting or seated at (a
-// refresh loses nothing - multiplayer reconnects to the real backend,
-// solo rebuilds its own local state same as always).
+// Offer to reopen a table this browser was hosting (a refresh loses nothing).
 try {
-  const mp = JSON.parse(localStorage.getItem(MP_SAVE_KEY) || "null");
   const sv = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
-  if (mp && mp.tableId && !invited){
-    $("resumeBtn").hidden = false;
-    $("resumeBtn").textContent = "Reopen table " + mp.room;
-    $("resumeBtn").addEventListener("click", resumeTable);
-  } else if (sv && sv.ROOM && !sv.over && !invited){
+  if (sv && sv.ROOM && !sv.over && !invited){
     $("resumeBtn").hidden = false;
     $("resumeBtn").textContent = "Reopen table " + sv.ROOM;
     $("resumeBtn").addEventListener("click", resumeTable);
@@ -3577,22 +2986,6 @@ $("againBtn").addEventListener("click", () => {
   if (!HOST) return;
   document.querySelectorAll(".fallback-ta").forEach(n => n.remove());
   $("copyHint").textContent = "";
-  // No foSides/roleBox clearing here anymore - restart-table now writes
-  // everything in one atomic Postgres transaction (see its migration's
-  // own comment), so there is no intermediate, half-emptied server state
-  // for any client to observe at all. The old game's results genuinely
-  // stay on screen, unchanged, until the whole restart lands together
-  // and this screen gets replaced outright by the new auction - clearing
-  // anything here would only re-introduce a flash the fix above removed
-  // at the source.
-  // A poll can already be in flight, independent of this click, carrying
-  // pre-restart matches data that would otherwise arrive AFTER the reset
-  // below and briefly repopulate ST from the old, finished match - see
-  // applyMatchSnapshot()'s own comment for the full race this closes.
-  // 2s comfortably covers the whole restart round-trip; nothing
-  // legitimate should be arriving about matches during it anyway, since
-  // a fresh game's first fight is still screens away at this point.
-  suppressMatchSnapshotUntil = Date.now() + 2000;
   // Wipe the finished match everywhere, not just here: without the send()
   // below, only the host's own ST clears, and a guest's browser keeps the
   // last game's ST (including which characters were already sent to a
@@ -3606,33 +2999,8 @@ $("againBtn").addEventListener("click", () => {
   $("writeBtn").disabled = false;
   $("writeHint").textContent = "One issue, fought by the ten characters above.";
   if (boxCount() < MIN_BOX()) return;
-  // The real fix: this used to reset P locally and call the old local
-  // dealDeck()/nextLot() - never touching the database, so backend's
-  // still-active polling would pull the OLD finished game right back
-  // over whatever was just reset on screen (a stale "all five assigned"
-  // role board next to a freshly-reset "$0 spent" purse line - two
-  // sources of truth fighting over one screen). Now the actual reset
-  // happens server-side in one call, and the client just waits for the
-  // real snapshot to arrive and paint it - same as every other backend
-  // action today.
-  if (backend){
-    $("writeHint").textContent = "Opening a fresh box…";
-    backend.restartTable(BOX).catch(err => {
-      $("writeHint").textContent = "Could not restart the table (" + err.message + "). Try again.";
-    });
-    return;
-  }
-  // SOLO mode has no backend at all - the original local reset is still
-  // correct and necessary here.
   P = seats().map(q => ({ name: P[q].name, purse: PURSE, roster: [], locked: false }));
   lot = null; lastFx = 0; drawnLot = -1;
   dealDeck();
   nextLot();
 });
-
-// Debug-only: module-scoped variables aren't visible from the console
-// directly (ES modules don't attach top-level bindings to window). This
-// gives console access to the current values without changing anything -
-// call DEBUG() in DevTools to see live values. Safe to leave in; it does
-// nothing unless explicitly called.
-window.DEBUG = () => ({ TABLE_ID, backend, ROOM, HOST, ME, NP, started, over, lot, P, ST, matchRuns, lastSeenSeed, MATCH, knocks });

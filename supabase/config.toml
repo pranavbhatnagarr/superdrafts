@@ -1,0 +1,25 @@
+project_id = "trtccsljexjplnuhnlkz"
+
+[functions.start-table]
+verify_jwt = false
+
+[functions.place-bid]
+verify_jwt = false
+
+[functions.close-lot]
+verify_jwt = false
+
+[functions.start-match]
+verify_jwt = false
+
+[functions.submit-pick]
+verify_jwt = false
+
+[functions.create-table]
+verify_jwt = false
+
+[functions.join-table]
+verify_jwt = false
+
+[functions.restart-table]
+verify_jwt = false

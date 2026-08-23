@@ -305,7 +305,7 @@ body{
    this element's 16px left offset from .cover's own padding, plus ~20px
    of clearance - .cover's padding has to be counted here too, or the
    overlap comes right back at the card's actual edge. */
-.cover.has-art .cv-name{ margin-top:4px; max-width:calc(100% - 108px); }
+.cover.has-art .cv-name{ margin-top:4px; max-width:calc(100% - 50px); }
 .cover.has-art .cv-note{
   flex:0 0 auto;            /* only the art flexes; this line must not be clipped */
 }
@@ -422,7 +422,7 @@ body{
 .cv-art[hidden]{ display:none; }
 .cv-art img{
   display:block; width:100%; height:100%;
-  object-fit:cover; object-position:center 12%;
+  object-fit:cover; object-position:center 5%;
   /* pulled toward the newsprint palette so it sits on the page rather than on top of it */
   filter:saturate(.72) contrast(1.06) sepia(.16);
   mix-blend-mode:multiply;
@@ -453,19 +453,18 @@ body{
   /* narrower card padding here (12px vs desktop's 16px) but the sticker is
      still full size until the 620px breakpoint below shrinks it, so this
      zone actually needs MORE reserved width than desktop, not less. */
-  .cover.has-art .cv-name{ max-width:calc(100% - 112px); }
+  .cover.has-art .cv-name{ max-width:calc(100% - 55px); }
 }
 
 /* ---------- the door ---------- */
 .knock-tab{ margin-top:22px; }
-.knock-box{
-  margin:14px 0 0; font-family:var(--type);
-  font-size:13px; color:var(--ink-3);
-}
 .pending{
-  width:min(520px,100%); margin:0 auto 18px; padding:14px 16px 12px;
+  position:fixed; z-index:50; top:12px; left:50%; transform:translateX(-50%);
+  width:min(520px,92vw); max-height:min(60vh,420px); overflow-y:auto;
+  margin:0; padding:14px 16px 12px;
   background:linear-gradient(180deg, rgba(255,255,255,.20), rgba(120,90,50,.13)), var(--pulp-3);
   border:1px solid rgba(70,52,28,.5); text-align:left;
+  box-shadow:0 14px 34px -10px rgba(0,0,0,.65);
 }
 .pending[hidden]{ display:none; }
 .pending .fm-head{ margin-bottom:10px; }
@@ -518,11 +517,12 @@ body{
   margin:0 0 18px; min-height:1.4em; text-align:center;
   font-family:var(--type); font-size:13.5px; color:var(--red-dk);
 }
-.resume-btn{
+.ghost-btn.resume-btn{
   display:block; margin:0 auto;
-  border-color:rgba(70,52,28,.45); color:var(--ink-2);
+  background:var(--ink); color:var(--pulp); border-color:var(--ink);
+  box-shadow:0 6px 16px -6px rgba(0,0,0,.5);
 }
-.resume-btn:hover{ background:var(--ink); color:var(--pulp); border-color:var(--ink); }
+.ghost-btn.resume-btn:hover{ background:var(--red-dk); border-color:var(--red-dk); color:var(--pulp); }
 
 .lobby-cover{ text-align:center; }
 .lobby-title{
@@ -831,7 +831,7 @@ body{
 .sticker{
   position:absolute; z-index:4;
   right:-16px; top:-20px;
-  width:120px; padding:9px 8px 8px;
+  width:112px; padding:6px 8px 5px;
   display:flex; flex-direction:column; align-items:center; gap:1px;
   background:#f3efe2;
   border:1px solid rgba(70,52,28,.45);
@@ -841,18 +841,18 @@ body{
   transition:transform .2s cubic-bezier(.2,.9,.25,1);
 }
 .st-label{
-  font-size:9px; font-weight:700; letter-spacing:.16em;
+  font-size:8.5px; font-weight:700; letter-spacing:.15em;
   text-transform:uppercase; color:var(--ink-3);
 }
 .st-price{
-  font-family:var(--wax); font-size:38px; line-height:1.05;
+  font-family:var(--wax); font-size:26px; line-height:1.05;
   color:var(--ink-2); transform:rotate(-3deg);
 }
 .sticker.tone-red  .st-price{ color:var(--red); }
 .sticker.tone-blue .st-price{ color:var(--blue); }
 .st-who{
-  font-family:var(--type); font-size:10.5px; color:var(--ink-3);
-  text-align:center; line-height:1.25; overflow-wrap:break-word;
+  font-family:var(--type); font-size:10px; color:var(--ink-3);
+  text-align:center; line-height:1.2; overflow-wrap:break-word;
 }
 
 /* the 3-2-1 countdown in a bidder's last 3 seconds to answer. Sits above
@@ -1477,7 +1477,7 @@ svg.rs-icon{
   .pn-other span{ display:none; }
   .sticker{ width:96px; right:-10px; top:-14px; }
   .st-price{ font-size:31px; }
-  .cover.has-art .cv-name{ max-width:calc(100% - 92px); }
+  .cover.has-art .cv-name{ max-width:calc(100% - 45px); }
   .slot{ font-size:12.5px; }
   .purse-figure{ font-size:32px; }
   .pn-state{ min-height:0; }
@@ -1623,7 +1623,7 @@ svg.rs-icon{
 }
 .sc-card-img{
   position:absolute; inset:0; width:100%; height:100%;
-  object-fit:cover; object-position:center 22%;
+  object-fit:cover; object-position:center 10%;
   transition:transform .15s ease;
 }
 .sc-card:hover:not(:disabled) .sc-card-img{ transform:scale(1.04); }
@@ -1762,7 +1762,7 @@ svg.rs-icon{
 }
 .reveal-front-img{
   position:absolute; inset:0; width:100%; height:100%;
-  object-fit:cover; object-position:center 22%;
+  object-fit:cover; object-position:center 10%;
 }
 .reveal-front-blank{
   position:absolute; inset:0; display:grid; place-items:center;

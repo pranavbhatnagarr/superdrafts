@@ -30,6 +30,19 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
 <div class="lamp" aria-hidden="true"></div>
 
+<!-- Global, not nested inside any <main class="screen"> - see paintPending()
+     in game.js. A knock can genuinely arrive while the host is already deep
+     into the auction or face-off (reconnecting after "Reopen table" is the
+     most common way this happens), and this needs to be visible and
+     actionable regardless of which screen is currently showing, not just
+     during the pre-game lobby wait. showScreen() only ever toggles the
+     .screen containers themselves; living outside all of them means this
+     is never hidden by that. -->
+<div class="pending" id="pending" hidden>
+  <h3 class="fm-head">Asking to join</h3>
+  <ul class="pending-list" id="pendingList"></ul>
+</div>
+
 <!-- ============================ SETUP ============================ -->
 <main id="setup" class="screen setup-screen">
   <div class="guide-cover">
@@ -136,7 +149,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     </div>
 
     <p class="netmsg lobby-wait" id="knockMsg" role="status" hidden></p>
-    <p class="knock-box" id="knockBox"></p>
   </div>
 </main>
 
@@ -156,11 +168,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     </div>
 
 
-    <div class="pending" id="pending" hidden>
-      <h3 class="fm-head">Asking to join</h3>
-      <ul class="pending-list" id="pendingList"></ul>
-    </div>
-
     <p class="netmsg lobby-wait" id="lobbyMsg" role="status">Waiting for the other buyers…</p>
     <button id="cancelBtn" class="ghost-btn" type="button">Close the table</button>
   </div>
@@ -173,7 +180,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <h2 class="gh-title">Super Drafts</h2>
     <div class="gh-rule" aria-hidden="true"></div>
     <p class="gh-meta">
-      <span id="lotNo">Lot 1</span><i></i><span id="stockLeft">20 of 20 left</span><i></i><span id="passLeft">10 passes</span><i></i>
+      <span id="lotNo"></span><i></i><span id="stockLeft"></span><i></i><span id="passLeft"></span><i></i>
       <span class="wire" id="wire"><b class="wire-dot"></b><span id="wireText">connected</span></span><i></i>
       <button type="button" class="sfx-toggle" id="sfxToggle" aria-pressed="true">sound on</button><i></i>
       <button type="button" class="sfx-toggle" id="musicToggle" aria-pressed="true">music on</button>
@@ -195,25 +202,25 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <article class="cover" id="cover">
           <div class="cover-grain" aria-hidden="true"></div>
           <header class="cv-top">
-            <span class="cv-pub" id="cvPub">Marvel</span>
-            <span class="cv-no" id="cvNo">No. 121</span>
+            <span class="cv-pub" id="cvPub"></span>
+            <span class="cv-no" id="cvNo"></span>
           </header>
-          <div class="cv-box" id="cvBox"><span id="cvInit">SM</span><i class="cv-tier" id="cvTier" data-t="B">B</i></div>
-          <h3 class="cv-name" id="cvName">Spider-Man</h3>
-          <p class="cv-alias" id="cvAlias">Peter Parker</p>
+          <div class="cv-box" id="cvBox"><span id="cvInit"></span><i class="cv-tier" id="cvTier" data-t=""></i></div>
+          <h3 class="cv-name" id="cvName"></h3>
+          <p class="cv-alias" id="cvAlias"></p>
           <div class="cv-hr" aria-hidden="true"></div>
-          <p class="cv-note" id="cvNote">Everybody&rsquo;s first back issue.</p>
+          <p class="cv-note" id="cvNote"></p>
           <figure class="cv-art" id="cvArt" hidden><img id="cvImage" alt="" decoding="async"></figure>
           <footer class="cv-bot">
-            <span class="cv-cond" id="cvPubFoot">Marvel Comics Group</span>
-            <span class="cv-cond cv-lot">Lot <b id="cvLot">01</b></span>
+            <span class="cv-cond" id="cvPubFoot"></span>
+            <span class="cv-cond cv-lot">Lot <b id="cvLot"></b></span>
           </footer>
         </article>
 
         <div class="sticker" id="sticker">
-          <span class="st-label" id="stLabel">Opening</span>
-          <span class="st-price" id="stPrice">$1</span>
-          <span class="st-who" id="stWho">no bids yet</span>
+          <span class="st-label" id="stLabel"></span>
+          <span class="st-price" id="stPrice"></span>
+          <span class="st-who" id="stWho"></span>
         </div>
 
         <div class="bid-timer" id="bidTimer" hidden aria-hidden="true">
@@ -222,7 +229,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       </div>
       </div>
 
-      <p class="call" id="call">Either buyer may open the lot.</p>
+      <p class="call" id="call"></p>
     </section>
 
     <!-- RIGHT LEDGER -->
