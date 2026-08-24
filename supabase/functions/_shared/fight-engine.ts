@@ -146,23 +146,44 @@ function eligible(side: any, isOT: boolean) {
 
 // The decision-only twin of createMatch().resolve() - same logic, minus
 // the `text: clashText(...)` line, since narration doesn't belong here.
+//
+// `contenders` is new: null/undefined means every side is still in the
+// running (always true in a 2-player game, and true for the whole
+// regular five rounds of a 3-player game too). Once regular rounds end
+// with a PARTIAL tie in a 3+ player game - two sides tied for first,
+// one clearly behind - only the genuinely tied sides should go to
+// overtime. Before this, overtimeNow was just a boolean with nothing
+// tracking WHICH sides it actually applied to, so a clearly-eliminated
+// third side kept being asked to pick and kept being ranked and scored
+// in every sudden-death round after it, indefinitely - the exact bug
+// this closes. Once set, contenders is the list of owners still
+// fighting for the win; anyone else's earlier finish is locked in as
+// final and they take no further part.
 export function resolveRound(
   sides: any[],
   picks: { owner: string; name: string }[],
   points: number[],
   overtime: boolean,
   seed: number,
+  contenders: string[] | null = null,
 ) {
   const r = rng(seed);
   const wasOvertime = overtime;
 
+  // A filtered VIEW for "who's still deciding this round" - iteration
+  // and ranking use this, but any lookup by numeric index (sides[x])
+  // still has to use the original, full `sides` array below, since
+  // activeSides' own array positions no longer line up with the side
+  // indices baked into each fighter once this is filtered.
+  const activeSides = contenders ? sides.filter((s) => contenders.includes(s.owner)) : sides;
+
   const chosen = picks.map((p) => {
-    const side = sides.find((x) => x.owner === p.owner);
+    const side = activeSides.find((x) => x.owner === p.owner);
     if (!side) return null;
     const legal = eligible(side, wasOvertime);
     return legal.find((f: any) => f.name === p.name) || null;
   }).filter(Boolean);
-  if (chosen.length !== sides.length) return null;
+  if (chosen.length !== activeSides.length) return null;
   if (!wasOvertime) chosen.forEach((f: any) => { f.used = true; });
 
   const { order: ranked, groups, tied, fullDraw } = rankFighters(chosen, wasOvertime);
@@ -173,23 +194,25 @@ export function resolveRound(
 
   let pointsMap: Map<any, number> | null = null;
   if (!wasOvertime) {
-    pointsMap = pointsForGroups(groups, sides.length);
+    pointsMap = pointsForGroups(groups, activeSides.length);
     pointsMap.forEach((pts, f) => { points[f.side] += pts; });
   }
 
   let done = false, championOwner: string | null = null;
   let overtimeNow = overtime;
+  let newContenders = contenders;
 
   if (wasOvertime) {
     if (soleLeader) {
       done = true; championOwner = sides[roundWinnerSide!].owner;
       points[roundWinnerSide!] += 1;
-    } else if (sides.every((x) => x.fighters.every((f: any) => x.drawnOut.has(f.name)))) {
+    } else if (activeSides.every((x: any) => x.fighters.every((f: any) => x.drawnOut.has(f.name)))) {
       done = true;
-      const best = Math.max(...points);
-      const live = sides.filter((_x, i) => points[i] === best);
-      const top = Math.max(...live.map((x) => x.rawScore));
-      const front = live.filter((x) => x.rawScore === top);
+      const activePoints = activeSides.map((x: any) => points[x.ix]);
+      const best = Math.max(...activePoints);
+      const live = activeSides.filter((_x: any, i: number) => activePoints[i] === best);
+      const top = Math.max(...live.map((x: any) => x.rawScore));
+      const front = live.filter((x: any) => x.rawScore === top);
       const champ = front.length === 1 ? front[0] : pick(r, front);
       championOwner = champ.owner;
       points[champ.ix] += 1;
@@ -200,7 +223,7 @@ export function resolveRound(
       const best = Math.max(...points);
       const tiedSides = sides.filter((_s, i) => points[i] === best);
       if (tiedSides.length === 1) { done = true; championOwner = tiedSides[0].owner; }
-      else overtimeNow = true;
+      else { overtimeNow = true; newContenders = tiedSides.map((s) => s.owner); }
     }
   }
 
@@ -219,5 +242,6 @@ export function resolveRound(
     standings: sides.map((s, i) => ({ owner: s.owner, points: points[i] })),
     done, champion: done ? championOwner : null,
     points, overtime: overtimeNow,
+    contenders: newContenders,
   };
 }

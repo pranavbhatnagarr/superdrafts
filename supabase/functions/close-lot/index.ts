@@ -66,6 +66,16 @@ Deno.serve(async (req) => {
     const inPlay = (p: number) => slotsLeft(p) > 0;
     const bought = () => seats.reduce((n, s) => n + (s.roster?.length || 0), 0);
     const perSale = () => (NP === 3 ? 25 : 15);
+    // The exact gap this file didn't have until now: soloRun/passCost
+    // exist in place-bid (an explicit pass click correctly charges $1
+    // when you're the only seat still buying, so a lone remaining buyer
+    // can't just wait out every lot for free with nobody left to
+    // compete against them) but this file's own timeout path had no
+    // concept of the rule at all - letting the SAME clock run out
+    // instead of clicking Pass yourself resolved as a free pass, every
+    // time, regardless of whether the $1 rule was actually in effect.
+    const soloRun = () => allSeats.filter(inPlay).length === 1;
+    const passCost = (p: number) => (soloRun() && inPlay(p) ? 1 : 0);
 
     const obliged = (): number | null => {
       const buysOwed = SLOTS * NP - bought();
@@ -95,25 +105,12 @@ Deno.serve(async (req) => {
 
       // Atomic append via the same award_seat Postgres function place-bid
       // uses - see that migration's own comment for the exact race this
-      // closes. This function's own award() had the OLD, unsafe plain
-      // read-modify-write here until now: read the winner's roster once
-      // from the seats array fetched at the top of the request, then
-      // blindly write a brand-new array back. A timeout resolution (this
-      // path) racing against a DIFFERENT lot's award for the SAME seat -
-      // entirely possible, since this can fire from cron, from place-
-      // bid's own lazy-check, or from any connected client's scheduled
-      // timer, all independently - could silently overwrite that other
-      // award's roster addition. The exact same bug place-bid had,
-      // simply never actually fixed here despite being identical code.
+      // closes.
       const { error: awardErr } = await sb.rpc("award_seat", {
         p_table_id: table_id, p_seat: p, p_price: price, p_card: lot.card,
       });
       if (awardErr) throw awardErr;
 
-      // Re-fetch the real total fresh, not from the in-memory `seats`
-      // snapshot from the top of this request - that snapshot is exactly
-      // what caused the bug above, so "is everyone actually full" needs
-      // the CURRENT database state.
       const { data: freshSeats, error: fsErr } = await sb.from("seats").select("roster").eq("table_id", table_id);
       if (fsErr) throw fsErr;
       const totalBought = (freshSeats || []).reduce((n, s) => n + (s.roster?.length || 0), 0);
@@ -124,8 +121,17 @@ Deno.serve(async (req) => {
       await advanceLot();
     }
 
-    async function passIn() {
-      const fx = { id: Date.now(), word: "Passed", line: `${lot.card.name}, nobody wanted it`, tone: "grey" };
+    // Now takes the seat that's actually passing and charges the same
+    // solo-run cost place-bid's explicit pass already did, via the same
+    // atomic decrement_purse RPC - a plain read-then-write here would
+    // reintroduce the exact race that function exists to close, just for
+    // a new call site.
+    async function passIn(p: number, cost: number) {
+      const fx = {
+        id: Date.now(), word: "Passed",
+        line: `${lot.card.name}, nobody wanted it` + (cost ? `, $${cost} to walk away` : ""),
+        tone: "grey",
+      };
       const { data: claimed, error: claimErr } = await sb
         .from("lots")
         .update({ sold: true, passed_in: true, fx })
@@ -133,6 +139,13 @@ Deno.serve(async (req) => {
         .select();
       if (claimErr) throw claimErr;
       if (!claimed || claimed.length === 0) return;
+
+      if (cost) {
+        const { error: chargeErr } = await sb.rpc("decrement_purse", {
+          p_table_id: table_id, p_seat: p, p_amount: cost,
+        });
+        if (chargeErr) throw chargeErr;
+      }
       await advanceLot();
     }
 
@@ -158,7 +171,17 @@ Deno.serve(async (req) => {
 
     if (lot.high_seat === null) {
       const ob = obliged();
-      if (ob === null) await passIn(); else await award(ob, 1);
+      if (ob === null) {
+        // Nobody's obliged to buy - this is the timeout-pass-in case
+        // that was missing the solo charge. Whichever seat is still
+        // in play (soloRun only ever applies with exactly one) is the
+        // one this cost, if any, applies to.
+        const soloSeat = allSeats.find(inPlay);
+        const cost = soloSeat !== undefined ? passCost(soloSeat) : 0;
+        await passIn(soloSeat ?? -1, cost);
+      } else {
+        await award(ob, 1);
+      }
       return json({ ok: true, action: ob === null ? "passed_in" : "awarded_obliged" });
     }
     await award(lot.high_seat, lot.high_amount);

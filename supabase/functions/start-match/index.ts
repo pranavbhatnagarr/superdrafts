@@ -59,12 +59,17 @@ Deno.serve(async (req) => {
     // close, the same way every other action here doesn't trust the
     // client's own gating. Every seat has to exist AND be locked before
     // a match can start at all.
-    const { data: table, error: tErr } = await sb
-      .from("tables").select("np").eq("id", table_id).single();
+    //
+    // table.np and seats are both plain reads with no dependency on each
+    // other - fetched in parallel rather than two sequential round
+    // trips, since there's no risk in doing that for reads the way there
+    // would be for two independent WRITES (nothing here creates a state
+    // any other client could observe half-done).
+    const [{ data: table, error: tErr }, { data: seats, error: sErr }] = await Promise.all([
+      sb.from("tables").select("np").eq("id", table_id).single(),
+      sb.from("seats").select("locked").eq("table_id", table_id),
+    ]);
     if (tErr) return json({ error: tErr.message }, 400);
-
-    const { data: seats, error: sErr } = await sb
-      .from("seats").select("locked").eq("table_id", table_id);
     if (sErr) return json({ error: sErr.message }, 400);
 
     if (!seats || seats.length < table.np || !seats.every((s: any) => s.locked)) {

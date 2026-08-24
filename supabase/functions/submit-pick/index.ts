@@ -57,6 +57,21 @@ Deno.serve(async (req) => {
 
     const state = match.state as any;
     const round = state.round;
+    const contenders: string[] | null = state.contenders || null;
+
+    // In a 3+ player match, once regular rounds end in a PARTIAL tie
+    // (two sides tied for first, one clearly behind), only the tied
+    // sides go to overtime - see fight-engine.ts's own comment on
+    // resolveRound() for the full reasoning. A pick from someone whose
+    // side already finished (not a contender anymore) is rejected
+    // outright here, the same way a pick for a fighter that isn't
+    // legally theirs already was - not that this should ever actually
+    // happen from the real client, since it stops offering a picker to
+    // an eliminated seat at all, but the server is still the one that
+    // decides, not the client's own UI state.
+    if (contenders && !contenders.includes(owner)) {
+      return json({ error: "your side is no longer contending in this match" }, 403);
+    }
 
     const { data: already } = await sb
       .from("picks").select("owner")
@@ -94,8 +109,13 @@ Deno.serve(async (req) => {
       .eq("table_id", table_id).eq("mode", mode).eq("round_num", round);
     if (cpErr) return json({ error: cpErr.message }, 400);
 
-    const allSeatOwners = seats.map((s: any) => s.name);
-    if (currentPicks!.length < allSeatOwners.length) {
+    // How many picks a round needs to resolve is normally every seat -
+    // but once contenders narrows the field, only THOSE seats' picks
+    // matter. Waiting on all original seats here would mean an
+    // eliminated player's round simply never resolves at all, since
+    // nothing ever asks them to submit anything again once they're out.
+    const requiredOwners = contenders || seats.map((s: any) => s.name);
+    if (currentPicks!.length < requiredOwners.length) {
       const newLocked = currentPicks!.map((p: any) => p.owner);
       await sb.from("matches").update({ state: { ...state, locked: newLocked } })
         .eq("table_id", table_id).eq("mode", mode);
@@ -103,15 +123,15 @@ Deno.serve(async (req) => {
     }
 
     // Everyone's in. resolveRound() is a pure, deterministic function of
-    // (sides, picks, points, overtime, seed) - if both concurrent calls
-    // reach this point, they compute the exact same result and write the
-    // exact same newState. A redundant second write isn't corruption
-    // (unlike the seats-roster race fixed earlier), just a harmless
-    // duplicate of identical data.
+    // (sides, picks, points, overtime, seed, contenders) - if both
+    // concurrent calls reach this point, they compute the exact same
+    // result and write the exact same newState. A redundant second
+    // write isn't corruption, just a harmless duplicate of identical
+    // data.
     const allPicks = currentPicks!;
 
     const points = state.points.length ? state.points : sides.map(() => 0);
-    const result = resolveRound(sides, allPicks, points, state.overtime, Number(match.seed));
+    const result = resolveRound(sides, allPicks, points, state.overtime, Number(match.seed), contenders);
     if (!result) return json({ error: "round could not be resolved" }, 409);
 
     const newUsed: Record<string, string[]> = { ...state.used };
@@ -132,6 +152,7 @@ Deno.serve(async (req) => {
       beats: [...state.beats, { ranked: result.ranked }],
       done: result.done,
       champion: result.champion,
+      contenders: result.contenders,
     };
     await sb.from("matches").update({ state: newState }).eq("table_id", table_id).eq("mode", mode);
 

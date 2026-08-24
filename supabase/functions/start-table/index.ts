@@ -84,31 +84,20 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "no characters match this box" }), { status: 400, headers: CORS });
     }
 
-    // The missing piece: dealing the deck alone isn't enough. The old
-    // client always called dealDeck() AND nextLot() together - nextLot()
-    // is what actually shifts the first card off the deck into a real,
-    // biddable lot. Without this, `started` flips true but there's
-    // nothing in `lots` for either client to ever render - exactly the
-    // bug that had every host stuck staring at an empty lobby no matter
-    // what else was fixed.
     const firstCard = deck[0];
     const remainingDeck = deck.slice(1);
 
-    const { error: updateErr } = await sb
-      .from("tables")
-      .update({ deck: remainingDeck, box, started: true, current_lot: 1 })
-      .eq("id", table_id);
-    if (updateErr) return new Response(JSON.stringify({ error: updateErr.message }), { status: 400, headers: CORS });
-
-    const { error: lotErr } = await sb.from("lots").insert({
-      table_id, lot_num: 1, card: firstCard,
-      high_seat: null, high_amount: 0,
-      opener: 0,
-      passed_by: Array.from({ length: np }, () => false),
-      bid_deadline: new Date(Date.now() + 8000).toISOString(),
-      sold: false,
+    // Both the tables update (deck/box/started/current_lot) and the
+    // lot-1 insert now happen inside ONE atomic transaction via this RPC,
+    // not as two separate sequential writes. See that migration's own
+    // comment: this was never just a speed concern - two independent
+    // writes meant a real, if narrow, window where a client could
+    // observe started=true before lot 1 actually existed, the same
+    // class of gap restart_table's own atomic rewrite closed earlier.
+    const { error: rpcErr } = await sb.rpc("start_table_deal", {
+      p_table_id: table_id, p_np: np, p_box: box, p_deck: remainingDeck, p_first_card: firstCard,
     });
-    if (lotErr) return new Response(JSON.stringify({ error: lotErr.message }), { status: 400, headers: CORS });
+    if (rpcErr) return new Response(JSON.stringify({ error: rpcErr.message }), { status: 400, headers: CORS });
 
     return new Response(JSON.stringify({ ok: true, dealt: deck.length }), { headers: CORS });
   } catch (e) {

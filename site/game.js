@@ -1,13 +1,6 @@
 import { createMatch } from "./fight.js";
 import { Backend } from "./backend.js";
 import { createBot, LEVELS, LEVEL_BLURB } from "./bot.js";
-// The ladder, the points, the five jobs and the tier maths. Shared with
-// fight.js and with the public tier guide so a retune lands everywhere at
-// once instead of in whichever file someone remembered.
-import {
-  ROLES, ROLE, ROLE_ICON_PATH, roleIconHtml, roleShift,
-  LADDER, POINTS, effTier, UNIVERSES, DB_URL, DB_KEY
-} from "./rules.js";
 
 // Hand written exchanges for pairs with real history. Loaded once with the
 // roster; the match falls back to generic lines for anyone not in here.
@@ -29,7 +22,44 @@ const SLOTS = 5, PURSE = 20;
 
 // Two or three buyers. Everything below counts seats rather than assuming a
 // pair, so the third chair is a number, not a special case.
+// The five jobs on a team. One character each, all five always filled.
+const ROLES = [
+  { k:"S", name:"Strategist",  blurb:"Reads the fight before it starts. Comes alive with a week of prep." },
+  { k:"W", name:"Wildcard",    blurb:"Magic, cosmic, rules that do not apply. Deadliest when nobody saw it coming." },
+  { k:"P", name:"Powerhouse",  blurb:"Hits hardest, takes the most. Worth the same either way." },
+  { k:"A", name:"Anchor",      blurb:"Keeps the other four standing. Worth the same either way." },
+  { k:"E", name:"Executioner", blurb:"Ends people. Villains, and heroes willing to kill." }
+];
+const ROLE = Object.fromEntries(ROLES.map(r => [r.k, r]));
 
+// One small badge icon per role, shown on the right of each row in the drag
+// and drop board. Real vector icons (Game-icons.net, via react-icons' "gi"
+// set), not emoji: emoji render as full-color OS glyphs and would clash with
+// the hand-inked, single-color look everywhere else on the card and ledger.
+const ROLE_ICON_PATH = {
+  S: "M60.81 476.91h300v-60h-300v60zm233.79-347.3l13.94 7.39c31.88-43.62 61.34-31.85 61.34-31.85l-21.62 53 35.64 19 2.87 33 64.42 108.75-43.55 29.37s-26.82-36.39-39.65-43.66c-10.66-6-41.22-10.25-56.17-12l-67.54-76.91-12 10.56 37.15 42.31c-.13.18-.25.37-.38.57-35.78 58.17 23 105.69 68.49 131.78H84.14C93 85 294.6 129.61 294.6 129.61z",
+  W: "M436.406 29.625l-18.094 42.22-48.562 5.905 42.156 25.656 1.375 13.47C367.938 90.74 302.435 75.36 214.78 82.31l-20.186-3.343-24.125-38.407.5 39.78-49.22 16.438 55.063 4.564 7.843 33.78 17.094-37.78 17.906-2.75c203.993 22.03 277.475 204.75 77.875 207.625l5.22-37.595 36.75-43.72-51.344-24.968-30.22-48.468-39.623 41.124-4.125 1.03C-8.4 163.078-31.708 304.485 98.844 376.125l-11.938 12.688L39.844 374.5l33.03 39.406-15.124 42.53 36.375-31.155 47.03 18.095-30.374-43.875 4.69-15.03c62.43 28.648 153.852 42.16 270.5 20.717-241.042 33.38-364.142-137.94-219.283-195.687l23.032 43.25-4 56.97 56.218-9.97 19.25 7.813c218.255 102.608 297.46-83.917 171.843-177.75l14.376-22.22 46.47-16.5-41.907-14.812-15.564-46.655zM34.53 79.03l4.845 26.095-19.47 22 27.22-3.25 17.563 23.344.687-29.47 24.78-17.906-33.218-1.72-22.406-19.093zm358.564 298.5l14.25 51.658-31.375 41.062 49.592-12.688 33.688 34.282-2.53-51.406 35.217-30.375-51.593 1.562-47.25-34.094z",
+  P: "M198.844 64.75c-.985 0-1.974.03-2.97.094-15.915 1.015-32.046 11.534-37.78 26.937-34.072 91.532-51.085 128.865-61.5 222.876 14.633 13.49 31.63 26.45 50.25 38.125l66.406-196.467 17.688 5.968L163.28 362.5c19.51 10.877 40.43 20.234 62 27.28l75.407-201.53 17.5 6.53-74.937 200.282c19.454 5.096 39.205 8.2 58.78 8.875L381.345 225.5l17.094 7.594-75.875 170.656c21.82-1.237 43.205-5.768 63.437-14.28 43.317-53.844 72.633-109.784 84.5-172.69 5.092-26.992-14.762-53.124-54.22-54.81l-6.155-.282-2.188-5.75c-8.45-22.388-19.75-30.093-31.5-32.47-11.75-2.376-25.267 1.535-35.468 7.376l-13.064 7.47-.906-15c-.99-16.396-10.343-29.597-24.313-35.626-13.97-6.03-33.064-5.232-54.812 9.906l-10.438 7.25-3.812-12.125c-6.517-20.766-20.007-27.985-34.78-27.97zM103.28 188.344C71.143 233.448 47.728 299.56 51.407 359.656c27.54 21.84 54.61 33.693 80.063 35.438 14.155.97 27.94-1.085 41.405-6.438-35.445-17.235-67.36-39.533-92.594-63.53l-3.343-3.157.5-4.595c5.794-54.638 13.946-91.5 25.844-129.03z",
+  A: "M90.53 23c-18.345 0-36.688 7.002-50.686 21-27.996 27.996-27.994 73.38 0 101.375 21.776 21.776 54.08 26.603 80.53 14.5l53.69 53.688c-21.425 19.696-44 38.257-67.44 55.937l30.126 30.125c18.734-22.545 37.953-44.474 57.844-65.53l169.594 169.593c-51.845 40.444-120.866 53.838-192.813 42.562L173 424.906 72.47 404.47l95.405 88.405 1.97-26c86.593 36.97 177.603 34.61 241.343-11.75l63.062 21.313-21.47-63.594c44.61-63.62 46.408-153.412 9.908-238.875l26.03-1.97-88.406-95.375 20.438 100.53 21.344-1.624c11.278 71.983-2.168 141.017-42.656 192.876l-169.782-169.75c21.075-20.34 42.93-39.665 65.78-57.72l-30.123-30.124c-17.015 24.154-35.673 46.66-55.688 67.813l-53.97-53.97C167.834 98.183 163.032 65.814 141.22 44c-14-13.998-32.343-21-50.69-21zm0 27.03c11.434.002 22.872 4.34 31.595 13.064 17.447 17.447 17.446 45.742 0 63.187-17.446 17.447-45.71 17.447-63.156 0-17.447-17.444-17.448-45.74 0-63.186C67.69 54.37 79.097 50.03 90.53 50.03z",
+  E: "M326.1 32.71C225.6 59.65 191.7 102.6 180.2 136.3l-18.9 189c-33.4 27.9-75.14 45.3-122.16 60.9l18.31 37.3 38.59-13.8 22.06 21.4-17.3 27.6 36.2 19.1 20.5-29.9 36.8 7.2-10.9 30.4 41.8 9.9 12.6-37.5 42 .4 23 32.7 42.4-3.6-15.1-32.4 35.9-9.6 23.7 28.6 47.9-19.2-35.3-27.5 25.2-17.2 30.8 9.6 15.7-33c-42.9-18.7-87-37.1-114.8-59.9l-15.8-197.4c.6-19.4-43.1-50.58-17.3-96.69zM198.5 208c6 28.1 28.7 33.1 57.5 40.9-26.5.9-43.2 15.6-57.5 0-10.7-11.5-6.3-27.8 0-40.9zm131 0c6.3 13.1 10.7 29.4 0 40.9-14.3 15.6-31 .9-57.5 0 28.8-7.8 51.5-12.8 57.5-40.9z"
+};
+const roleIconHtml = k => `<svg class="rs-icon" viewBox="0 0 512 512" aria-hidden="true">`
+  + `<path d="${ROLE_ICON_PATH[k]}"/></svg>`;
+
+// A fitting role is worth a tier, an absurd one costs a tier, and the encounter
+// decides whether the Strategist or the Wildcard is the one that matters.
+function roleShift(ch, role, mode){
+  if (!role) return 0;
+  const suits = !!(ch.fit && ch.fit.includes(role));
+  let d = 0;
+  if (suits) d += 1;
+  if (ch.bad && ch.bad.includes(role)) d -= 1;
+  // No encounter bonus. Strategist used to gain a rung in prep and Wildcard
+  // one in a random encounter, which stacked with the prep climb and the role
+  // fit and put too many characters on S. A role is worth one rung either way
+  // now, and the encounter only decides whether the prep climb applies.
+  return d;
+}
 
 const SEATS = [
   { key: "red",   pencil: "Red pencil"   },
@@ -41,6 +71,32 @@ const seats  = () => Array.from({ length: NP }, (_, i) => i);
 const rivals = p => seats().filter(q => q !== p);
 const nameList = ps => ps.map(q => P[q].name).join(" and ");
 
+const UNIVERSES = {
+  MAR: { name: "Marvel",         group: "Comics" },
+  DC:  { name: "DC",             group: "Comics" },
+  BOYS:{ name: "The Boys",       group: "Comics" },
+  INV: { name: "Invincible",     group: "Comics" },
+  NAR: { name: "Naruto",         group: "Anime"  },
+  JJK: { name: "Jujutsu Kaisen", group: "Anime"  },
+  DS:  { name: "Demon Slayer",   group: "Anime"  },
+  BC:  { name: "Black Clover",   group: "Anime"  },
+  SL:  { name: "Solo Leveling",  group: "Anime"  },
+  HXH: { name: "Hunter x Hunter",group: "Anime"  },
+  HP:  { name: "Harry Potter",   group: "Other"  },
+  RE:  { name: "Resident Evil",  group: "Other"  },
+  INF: { name: "Infamous",       group: "Other"  },
+  MK:  { name: "Mortal Kombat",  group: "Other"  }
+};
+
+// Tiers are scaled honestly across universes, never rebalanced. A weaker world
+// simply sits lower: Demon Slayer tops out at B, Harry Potter at B, while Gojo,
+// Sukuna and Sung Jinwoo genuinely earn S alongside Superman and Thor.
+// Tier points are deliberately steep. One S has to outweigh a handful of Cs,
+// otherwise a tier is just a label and the draft is decided by volume.
+// S+ sits one rung above S and no character is ever printed at it - see the
+// comment on effTier just below for how a character actually gets there.
+const LADDER = ["S+","S","A","B","C","D","E"];
+const POINTS = { "S+": 32, S: 16, A: 8, B: 4, C: 2, D: 1, E: 0.5 };
 
 // One material per tier for the round reveal, in place of the plain "Tier A"
 // text it used to print: a struck medallion, the tier letter engraved in
@@ -92,6 +148,20 @@ const tierIconHtml = tier => {
 };
 
 
+// A week of prep moves a character along the ladder by its own prep rating.
+// Batman climbs three steps. The Hulk does not move. Superman slides down one,
+// because a week is long enough for the other side to find kryptonite.
+// The climb is never capped below S+ specifically: it is capped at index 0,
+// same as it always was, and S+ simply became the new index 0 once LADDER
+// grew a rung. A base-S character with a fitting role, prep, or both is the
+// only way there - nothing below S has enough climb in it to reach past S
+// itself, let alone past that.
+function effTier(ch, mode, role){
+  let i = LADDER.indexOf(ch.tier);
+  if (mode === "prep") i -= (ch.prep || 0);
+  i -= roleShift(ch, role, mode);
+  return LADDER[Math.max(0, Math.min(LADDER.length - 1, i))];
+}
 const teamScore = (roster, mode) =>
   roster.reduce((n, r) => n + (POINTS[effTier(r.char, mode, r.role)] || 0), 0);
 
@@ -183,7 +253,8 @@ let P, deck, lot, lotNum, over, deckLeft = 0;
 // dashboard (Project Settings → Realtime, or Database → Replication,
 // depending on plan/version) or connect() below will fail to open a
 // channel even though the REST reads keep working fine.
-const ART_URL = DB_URL, ART_KEY = DB_KEY;
+const ART_URL = "https://trtccsljexjplnuhnlkz.supabase.co";
+const ART_KEY = "sb_publishable_3Yt4Gih8Ta_co31EDqy7Jw_-R5sBxMK";
 const ART = new Map();
 
 // Anything here wins over the database. Arul's importer pulls from Comic Vine,
@@ -921,7 +992,7 @@ async function onSeated(m){
   // lotChanged check reads false and skips renderLot() entirely - the
   // general fields (lot number, price, footer text) still populate via
   // render(), but the character's own name/alias/note/art never do.
-  drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer); resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender);
+  drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer); resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender); lastPanelBidKey = {};
   try {
     sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
     backend = new Backend(sb, TABLE_ID, CID);
@@ -1011,7 +1082,7 @@ async function openTable(){
     // Same reset as the guest path in onSeated() - a reused tab can
     // otherwise carry a previous test table's rendering state into this
     // brand-new one and cause renderLot() to be silently skipped.
-    drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer); resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender);
+    drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer); resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender); lastPanelBidKey = {};
     backend = new Backend(sb, TABLE_ID, CID);
     backend.onSnapshot(s => {
       applyState(s);
@@ -2015,6 +2086,7 @@ function fitName(){
 }
 
 
+
 function renderLot(){
   const c = lot.char;
   const cover = $("cover"), issue = $("issue");
@@ -2181,13 +2253,30 @@ function driveBidTimer(){
 }
 setInterval(driveBidTimer, 100);
 
+// Tracks the last set of bid-amount values shown per seat, so
+// renderPanels() only rebuilds those buttons when they've actually
+// changed - see the guard inside for the exact bug this closes.
+let lastPanelBidKey = {};
+
 function renderPanels(){
   const solo = soloRun();
   for (const p of seats()){
     const panel = $("panel" + p), bids = $("bids" + p), state = $("state" + p),
           other = $("other" + p), passBtn = panel.querySelector(".pn-pass"),
           passBtn2 = null;
-    bids.innerHTML = "";
+    // No unconditional bids.innerHTML="" here anymore - see the guarded
+    // clear-and-rebuild right before the actual button loop below for
+    // why. The early-return branches below each clear it themselves
+    // when transitioning OUT of "showing buttons" (a real, meaningful,
+    // low-frequency change) - what this specifically avoids is
+    // destroying and recreating the SAME buttons on every routine
+    // re-render where nothing about the bid situation changed at all,
+    // which is the overwhelming majority of calls to this function
+    // (every 3-second background poll runs it, whether or not anything
+    // actually changed). If a click landed on a button in the exact
+    // instant one of those redundant rebuilds tore it out of the DOM,
+    // the click was simply lost - "press it again and it works" was
+    // this, not a real responsiveness problem.
     panel.classList.toggle("out", !inPlay(p));
     panel.classList.toggle("standing", lot.high === p);
     // Their panel is a window, not a control surface.
@@ -2201,12 +2290,14 @@ function renderPanels(){
     $("ledger" + p).classList.toggle("idle", !(inPlay(p) && !lot.sold && lot.high !== p && !lot.passed[p]));
 
     if (lot.sold){
+      if (bids.innerHTML) bids.innerHTML = "";
       state.textContent = lot.passedIn ? "Passed in." : (lot.high === p ? "Sold to you." : "Gone.");
       other.disabled = true; passBtn.disabled = true; setGo(panel, true);
       continue;
     }
 
     if (p !== ME){
+      if (bids.innerHTML) bids.innerHTML = "";
       state.textContent =
         !inPlay(p)      ? "Roster full. Done buying." :
         lot.passed[p]   ? "Out on this one." :
@@ -2218,16 +2309,19 @@ function renderPanels(){
     }
 
     if (!inPlay(p)){
+      if (bids.innerHTML) bids.innerHTML = "";
       state.textContent = "Roster full. Done buying.";
       other.disabled = true; passBtn.disabled = true; setGo(panel, true);
       continue;
     }
     if (lot.passed[p]){
+      if (bids.innerHTML) bids.innerHTML = "";
       state.textContent = "You are out on this one.";
       other.disabled = true; passBtn.disabled = true; setGo(panel, true);
       continue;
     }
     if (lot.high === p){
+      if (bids.innerHTML) bids.innerHTML = "";
       state.textContent = `Standing bid ${money(lot.price)}. Waiting on the other side.`;
       other.disabled = true; passBtn.disabled = true; setGo(panel, true);
       continue;
@@ -2236,19 +2330,47 @@ function renderPanels(){
     const ask = askPrice(), cap = ceiling(p);
 
     if (ask > cap){
+      if (bids.innerHTML) bids.innerHTML = "";
       state.textContent = `Tapped out. ${money(cap)} is your ceiling with ${slotsLeft(p)} slots to fill.`;
       other.disabled = true; passBtn.disabled = !canPass(p);
       continue;
     }
 
-    for (const v of [ask, ask + 1, ask + 2]){
-      if (v > cap) continue;
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "bid-btn";
-      b.textContent = money(v);
-      b.addEventListener("click", () => act("bid", v));
-      bids.appendChild(b);
+    // Only rebuild the bid-amount buttons if the actual set of values
+    // has genuinely changed since the last time this panel rendered -
+    // this is the specific fix for the "press it twice" report. Before,
+    // this loop ran unconditionally on every call to renderPanels(),
+    // including the routine 3-second background poll firing while
+    // nothing about YOUR bidding options had changed at all - if a
+    // click landed on one of these buttons in the exact instant a
+    // redundant rebuild tore it out of the DOM and put a brand new one
+    // in its place, the click simply never reached anything. Same root
+    // cause, same fix shape, as the drag-and-drop and stamp bugs fixed
+    // earlier today - a routine re-render destroying an element a user
+    // was actively interacting with.
+    const values = [ask, ask + 1, ask + 2].filter((v) => v <= cap);
+    const key = values.join(",");
+    // Also checks bids.innerHTML directly, not just the tracked key -
+    // several of the early-return branches above clear bids.innerHTML
+    // themselves (a genuinely empty state) but never touched
+    // lastPanelBidKey, so it kept saying whatever value set was last
+    // built. The very next lot needing that SAME set (extremely common
+    // - "1,2,3" is the ordinary opening range) read as "unchanged,
+    // skip it" even though the container was actually empty - the
+    // buttons just silently never came back. Checking the real DOM
+    // state here closes that gap without needing every early-return
+    // branch to also remember to reset the tracked key correctly.
+    if (lastPanelBidKey[p] !== key || !bids.innerHTML){
+      lastPanelBidKey[p] = key;
+      bids.innerHTML = "";
+      for (const v of values){
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "bid-btn";
+        b.textContent = money(v);
+        b.addEventListener("click", () => act("bid", v));
+        bids.appendChild(b);
+      }
     }
     other.disabled = false; setGo(panel, false);
     other.min = ask; other.max = cap;
@@ -2474,7 +2596,13 @@ function paintRoles(){
   // held, the more likely it overlaps a poll; cancelling on every one of
   // them made anything slower than ~3 seconds effectively impossible to
   // complete - "snaps back if you hold it too long" was this, precisely.
-  if (roleDrag) return;
+  // Same protection extended to tap-to-select, not just drag: tapping a
+  // bench chip once (setting roleSelected, waiting for a second tap to
+  // place it) never touches roleDrag at all, so it was still exposed to
+  // exactly the same bug - a routine poll landing between the two taps
+  // could destroy the very chip just tapped before the second tap ever
+  // registered on it.
+  if (roleDrag || roleSelected) return;
   box.innerHTML = "";
   for (const p of seats()){
     const mine = p === ME, locked = P[p].locked;
@@ -2992,11 +3120,20 @@ function stPaint(){
   // player could send round 2's pick, and even see round 2 begin, before
   // round 1's win/lose treatment and scoreboard had actually shown up.
   const effectsShown = !ST.lastRound || revealSig(ST.lastRound) === shownSig;
-  const picking = !ST.end && !ST.busy && MATCH && effectsShown;
+  const eliminated = ST.contenders && !ST.contenders.includes(P[ME].name);
+  const picking = !ST.end && !ST.busy && MATCH && effectsShown && !eliminated;
   cw.hidden = ST.end || ST.busy || !MATCH;
-  if (!ST.end && !ST.busy && MATCH && !effectsShown){
+  if (eliminated && !ST.end && !ST.busy && MATCH){
+    // A partial tie sent only the genuinely tied sides to overtime -
+    // this seat's own finish is already locked in, nothing left for
+    // them to send. Showing a clear reason here instead of just an
+    // empty or disabled picker, which would otherwise look like a bug
+    // rather than the actual, correct outcome of how the tie broke.
+    $("scWho").textContent = "Your side didn't make the tiebreak. Watching to see who does.";
+    $("scOpts").innerHTML = ""; lastPickOptionsKey = null;
+  } else if (!ST.end && !ST.busy && MATCH && !effectsShown){
     $("scWho").textContent = "Reading the last round…";
-    $("scOpts").innerHTML = "";
+    $("scOpts").innerHTML = ""; lastPickOptionsKey = null;
   } else if (picking){
     const mine = myRemaining();
     const sent = ST.picks && ST.picks[P[ME].name];
@@ -3015,26 +3152,49 @@ function stPaint(){
         ? `${roundLabel(ST.round || 1)}. Sudden death — send anyone but a card that already drew. They will not see who until it lands.`
         : `${roundLabel(ST.round || 1)}. Send one of yours. They will not see who until it lands.`;
     const opts = $("scOpts");
-    opts.innerHTML = "";
-    mine.forEach(c => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "sc-opt sc-send sc-card";
-      b.disabled = !!sent;
-      const artUrl = ART.get(c.name);
-      b.innerHTML = `
-        ${artUrl ? `<img class="sc-card-img" src="${artUrl}" alt="" loading="lazy">`
-                  : `<span class="sc-card-blank">?</span>`}
-        <span class="sc-card-scrim"></span>
-        <span class="sc-card-info">
-          <span class="sc-card-pub"></span>
-          <span class="sc-card-name"></span>
-        </span>`;
-      b.querySelector(".sc-card-pub").textContent = (UNIVERSES[c.pub] || {}).name || c.pub;
-      b.querySelector(".sc-card-name").textContent = c.name;
-      if (!sent) b.addEventListener("click", () => sendPick(c.name));
-      opts.appendChild(b);
-    });
+    // Same fix, same reasoning, as the bid buttons in renderPanels():
+    // this used to rebuild every fight-pick card unconditionally on
+    // every call, including the routine 3-second poll firing while a
+    // pick was simply sitting there unmade - if a tap landed in the
+    // instant one of those redundant rebuilds tore a card out of the
+    // DOM, the tap was lost. This arguably matters MORE than the bid
+    // buttons: every single round of every fight needs exactly one of
+    // these taps to register the first time. Key includes `sent` too,
+    // not just the card list, so the one legitimate rebuild that SHOULD
+    // happen (disabling the cards the instant you actually pick) still
+    // does - that transition is driven by your own click, not an
+    // incidental background poll, so there's no reason to guard it.
+    const optKey = mine.map(c => c.name).join(",") + "|" + (sent || "");
+    // Also checks opts.innerHTML directly, not just the tracked key -
+    // same defensive reasoning as the bid-button guard's identical
+    // check: this already resets lastPickOptionsKey correctly in both
+    // branches that clear opts.innerHTML above, so it isn't currently
+    // exposed to that exact bug, but checking the real DOM state here
+    // too means it can't regress the same way even if a future branch
+    // ever clears the container without remembering to reset the key.
+    if (lastPickOptionsKey !== optKey || !opts.innerHTML){
+      lastPickOptionsKey = optKey;
+      opts.innerHTML = "";
+      mine.forEach(c => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "sc-opt sc-send sc-card";
+        b.disabled = !!sent;
+        const artUrl = ART.get(c.name);
+        b.innerHTML = `
+          ${artUrl ? `<img class="sc-card-img" src="${artUrl}" alt="" loading="lazy">`
+                    : `<span class="sc-card-blank">?</span>`}
+          <span class="sc-card-scrim"></span>
+          <span class="sc-card-info">
+            <span class="sc-card-pub"></span>
+            <span class="sc-card-name"></span>
+          </span>`;
+        b.querySelector(".sc-card-pub").textContent = (UNIVERSES[c.pub] || {}).name || c.pub;
+        b.querySelector(".sc-card-name").textContent = c.name;
+        if (!sent) b.addEventListener("click", () => sendPick(c.name));
+        opts.appendChild(b);
+      });
+    }
     if (!mine.length) $("scWho").textContent = "Nobody left to send.";
   }
 
@@ -3076,10 +3236,16 @@ let MATCH = null;
 // next deal reads as "already sent" from a fight that finished games ago,
 // and the previous game's win/lose glow or scoreboard can flash for a
 // moment before the new match's own effects arrive.
+// Tracks the last set of fight-pick card options shown (plus whether a
+// pick has been sent), so the picker only rebuilds when that actually
+// changes - see the guard inside stPaint() for the exact bug this closes.
+let lastPickOptionsKey = null;
+
 function resetMatchState(){
   ST = null; MATCH = null; matchRuns = []; lastSeenSeed = null;
   pendingEffects = null; shownSig = ""; shownStandings = null; shownWinner = null;
   shownRoundWinners = []; revealedRound = ""; flipInFlight = false;
+  lastPickOptionsKey = null;
   clearTimeout(window.__effectDelayTimer);
 }
 
@@ -3138,7 +3304,20 @@ function applyMatchSnapshot(matches){
   const modes = Object.keys(matches || {});
   const activeMode = modes.find(m => matches[m] && !matches[m].state.done) || modes[modes.length - 1] || null;
   const match = activeMode ? matches[activeMode] : null;
-  if (!match){ if (ST) resetMatchState(); return; }
+  if (!match){
+    // resetMatchState() only ever clears the underlying JS variables -
+    // it never touches the DOM at all. Without an explicit stPaint()
+    // here, the actual HTML from the PREVIOUS match's last real render
+    // (the story text, the scoreboard, the "who won" banner) just sat
+    // there untouched, visually unchanged, for as long as no match
+    // existed - which is the entire second auction after "Run it
+    // again," right up until a genuinely new match's first real
+    // stPaint() call finally overwrote it. stPaint() already handles a
+    // null ST correctly (hides the story/storyChoice containers) - it
+    // just was never actually being invoked in this specific path.
+    if (ST){ resetMatchState(); stPaint(); }
+    return;
+  }
 
   const state = match.state;
   const teams = seats().map(q => ({
@@ -3179,6 +3358,15 @@ function applyMatchSnapshot(matches){
     standings, lastRound, round: state.round,
     used: state.used || {}, drawnOut: state.drawnOut || {},
     overtime: state.overtime, roundWinners,
+    // null/absent means everyone's still contending - always true in a
+    // 2-player game, and true for the whole regular five rounds even in
+    // a 3-player one. Only set once regular rounds end in a PARTIAL tie
+    // (two sides tied for first, one clearly behind): from that point
+    // on, only these owners are still fighting for the win. sendPick()
+    // uses this to stop offering a picker to a seat that's already out,
+    // instead of relying on the server to just reject a pick that
+    // should never have been possible to attempt in the first place.
+    contenders: state.contenders || null,
     title: MATCH.title(),
   };
   stPaint();
@@ -3280,6 +3468,12 @@ function myRemaining(){
 
 function sendPick(name){
   if (!ST || ST.end || ST.picks[P[ME].name]) return;
+  // Once contenders narrows the field (a partial tie in a 3+ player
+  // game sent the tied sides to overtime, leaving someone out), a seat
+  // that isn't in that list has nothing left to send - guard here so
+  // the UI can't even attempt it, not just rely on submit-pick's own
+  // server-side rejection of the same case.
+  if (SOLO !== true && ST.contenders && !ST.contenders.includes(P[ME].name)) return;
   SFX.bid();
   if (SOLO || !backend){
     if (HOST) takePick(P[ME].name, name);

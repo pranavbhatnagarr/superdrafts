@@ -21,6 +21,14 @@
 //   verify it lines up with the real roster instead of trusting
 //   position alone.
 // Output: { ok: true, roster } or { error }
+//
+// This used to also pre-fetch the seat's own cid/locked status here
+// before ever calling the RPC - a second, redundant round trip, since
+// lock_role's own row lock (see that migration) needs to read the exact
+// same row anyway to validate the roster. cid now goes straight into
+// the RPC call, which does the ownership/already-locked check itself as
+// part of the same lock it was already taking - one round trip instead
+// of two, with no change in what's actually validated or how safely.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -46,25 +54,16 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Only the seat's own owner may lock their own roles - the exact
-    // same rule every other action in this game already enforces (bid,
-    // pass, submit-pick). Nobody, host included, can lock roles on
-    // someone else's behalf.
-    const { data: mySeat, error: sErr } = await sb
-      .from("seats").select("cid, locked").eq("table_id", table_id).eq("seat", seat).maybeSingle();
-    if (sErr) return json({ error: sErr.message }, 400);
-    if (!mySeat || mySeat.cid !== cid) return json({ error: "you may only lock your own roles" }, 403);
-    if (mySeat.locked) return json({ error: "roles already locked" }, 409);
-
-    // All the real validation - legal role keys, all 5 used exactly
-    // once, roles lined up against the real roster by name - lives in
-    // this one atomic database function, not here. See its own comment
-    // for why: a row lock for the duration of the check-and-write means
-    // no read-modify-write gap for a second call to land in, the same
-    // class of race the seats-roster award bug taught us to close
-    // properly rather than patch around.
+    // Every check - this is your own seat, it isn't already locked, the
+    // roles are legal, all 5 used exactly once, lined up against the
+    // real roster by name - now lives in this one atomic database call.
+    // The client only ever reads err.message on failure (see
+    // sendPick()/lockRoles() in game.js), not the HTTP status code, so
+    // collapsing every failure case into one status here changes nothing
+    // about what the player actually sees - the specific reason is still
+    // the exact message the database raised.
     const { data: newRoster, error: lockErr } = await sb.rpc("lock_role", {
-      p_table_id: table_id, p_seat: seat, p_roles: roles,
+      p_table_id: table_id, p_seat: seat, p_cid: cid, p_roles: roles,
     });
     if (lockErr) return json({ error: lockErr.message }, 400);
 
