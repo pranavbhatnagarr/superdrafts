@@ -243,7 +243,7 @@ body{
 .lb-name{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; }
 .lb-name b{ font-size:13px; font-weight:700; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .lb-name i{ font-style:normal; font-size:10px; color:var(--ink-3); }
-.lb-record, .lb-rate, .lb-bought, .lb-price{
+.lb-record, .lb-rate, .lb-price{
   flex:0 0 auto; width:56px; text-align:right;
   font-family:var(--data); font-size:11px; color:var(--ink-2);
 }

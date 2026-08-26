@@ -876,7 +876,6 @@ function paintLeaderboard(){
     .sort((a, b) => {
       if (lbSort === "wins") return b.wins - a.wins;
       if (lbSort === "rate") return b.rate - a.rate || b.rounds - a.rounds;
-      if (lbSort === "bought") return b.times_bought - a.times_bought;
       if (lbSort === "price") return b.avgPrice - a.avgPrice;
       return 0;
     });
@@ -895,13 +894,11 @@ function paintLeaderboard(){
       </span>
       <span class="lb-record"></span>
       <span class="lb-rate"></span>
-      <span class="lb-bought"></span>
       <span class="lb-price"></span>`;
     row.querySelector(".lb-name b").textContent = r.name;
     row.querySelector(".lb-name i").textContent = (UNIVERSES[r.pub] || {}).name || r.pub || "";
     row.querySelector(".lb-record").textContent = `${r.wins}-${r.losses}-${r.draws}`;
     row.querySelector(".lb-rate").textContent = r.rounds ? Math.round(r.rate * 100) + "%" : "—";
-    row.querySelector(".lb-bought").textContent = r.times_bought + "x";
     row.querySelector(".lb-price").textContent = r.times_bought ? "$" + r.avgPrice.toFixed(1) : "—";
     list.appendChild(row);
   }
@@ -1619,7 +1616,20 @@ function scheduleBidTimer(){
     if (lot !== ref || lot.sold) return;
     if (high === null){
       const ob = obliged();
-      return ob === null ? passIn(0) : award(ob, 1);
+      if (ob !== null) return award(ob, 1);
+      // Same gap close-lot's server-side twin had until earlier today:
+      // letting the clock run out instead of clicking Pass yourself was
+      // hardcoded straight to passIn(0), skipping the solo-run $1 charge
+      // entirely regardless of whether one was actually owed - unlike
+      // passLocalSolo() (an explicit click), which already deducts this
+      // correctly via passCost() before ever calling passIn(). The
+      // deduction has to happen HERE, not inside passIn() itself - that
+      // function only ever builds the display text, it was never the
+      // one responsible for touching a purse.
+      const soloSeat = seats().find(inPlay);
+      const cost = soloSeat !== undefined ? passCost(soloSeat) : 0;
+      if (cost) P[soloSeat].purse -= cost;
+      return passIn(cost);
     }
     if (lot.high === high && lot.price === price) award(high, price);
   }, wait);
@@ -1704,6 +1714,16 @@ function award(p, price){
   lot.high = p; lot.price = price;
   P[p].purse -= price;
   P[p].roster.push({ char: lot.char, price });
+  // Character purchase-price tracking, same reasoning and same guard as
+  // the round-result tracking in takePick(): solo auctions never touch
+  // award_seat (the multiplayer path) at all, so without this hook
+  // nothing here ever recorded a sale price for the leaderboard,
+  // regardless of how many solo games got played.
+  if (SOLO){
+    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+    sb.rpc("record_character_purchase", { p_name: lot.char.name, p_price: price })
+      .then(({ error }) => { if (error) console.error("record_character_purchase failed:", error); });
+  }
   pushState({ id: ++fxSeq, word: "Sold",
     line: `${lot.char.name} to ${P[p].name} for ${money(price)}`,
     tone: p === 0 ? "red" : "blue" });
