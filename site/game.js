@@ -575,7 +575,7 @@ function applyState(s, local){
         const locked = (P[q] && P[q].locked) || false;
         return { ...incoming, roster, locked };
       });
-  lot = s.lot; lotNum = s.lotNum; over = s.over; deckLeft = s.deckLeft;
+  lot = resolveLotForDisplay(s.lot); lotNum = s.lotNum; over = s.over; deckLeft = s.deckLeft;
   if (s.box) BOX = s.box;
   if (s.np) NP = s.np;
   // Held a little longer than the host, so our buttons never unlock early and
@@ -1090,7 +1090,7 @@ async function connectToTable(seat, np, tableId){
   // lotChanged check reads false and skips renderLot() entirely - the
   // general fields (lot number, price, footer text) still populate via
   // render(), but the character's own name/alias/note/art never do.
-  drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer); resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender); lastPanelBidKey = {};
+  drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer); resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender); lastPanelBidKey = {}; pendingAction = null;
   sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
   backend = new Backend(sb, TABLE_ID, CID);
   backend.onSnapshot(s => applyState(s));
@@ -1230,7 +1230,7 @@ async function openTable(){
     // Same reset as the guest path in onSeated() - a reused tab can
     // otherwise carry a previous test table's rendering state into this
     // brand-new one and cause renderLot() to be silently skipped.
-    drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer); resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender); lastPanelBidKey = {};
+    drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer); resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender); lastPanelBidKey = {}; pendingAction = null;
     backend = new Backend(sb, TABLE_ID, CID);
     backend.onSnapshot(s => {
       applyState(s);
@@ -1645,19 +1645,100 @@ function scheduleBidTimer(){
 // place-bid re-checks everything regardless; SOLO mode (bots, no
 // backend) keeps its old local behaviour untouched, since there's nobody
 // to cheat against there.
+// Tracks a bid/pass this client just sent but hasn't heard confirmed
+// back yet - see resolveLotForDisplay() for how applyState() uses this
+// to avoid a routine snapshot (one that simply hasn't caught up to this
+// action yet) flashing the display back to the stale pre-action state
+// for a moment before the real confirmation arrives a beat later.
+let pendingAction = null;
+
 function bid(p, amount){
   if (SOLO || !backend) return bidLocalSolo(p, amount);
   if (over || !lot || lot.sold || !inPlay(p)) return;
   const min = (lot.high === p) ? lot.price + 1 : askPrice();
-  if (!(Math.floor(amount) >= min)) return;
+  amount = Math.floor(amount);
+  if (!(amount >= min)) return;
   seats().forEach(q => { const el = $("other" + q); if (el) el.value = ""; });
-  backend.bid(p, Math.floor(amount), lotNum).catch(err => gameNudge(err.message));
+  // Optimistic: show the bid registering the instant it's clicked, the
+  // same way solo mode already does, rather than waiting for a full
+  // round trip to the server and back before anything visibly changes -
+  // that round trip is real and necessary (nothing here can be trusted
+  // to resolve itself locally the way solo mode's bots can), but the
+  // WAIT for it doesn't have to be visible for the common, successful
+  // case. Mutates the same `lot` object render() already reads from, so
+  // this is a genuine preview of the real result, not a separate,
+  // parallel display.
+  pendingAction = { lotNum, type: "bid", seat: p, amount };
+  lot.high = p; lot.price = amount;
+  lot.bidDeadline = Date.now() + BID_TIMER_MS;
+  render();
+  backend.bid(p, amount, lotNum).catch(err => {
+    // A real rejection, not just a slow response - the guess was wrong,
+    // so clear it immediately rather than leaving something on screen
+    // the server never actually agreed to. The very next routine
+    // snapshot corrects the display to whatever's really true.
+    if (pendingAction && pendingAction.type === "bid" && pendingAction.seat === p && pendingAction.amount === amount) {
+      pendingAction = null;
+    }
+    gameNudge(err.message);
+  });
 }
 
 function pass(p){
   if (SOLO || !backend) return passLocalSolo(p);
   if (!canPass(p)) return;
-  backend.pass(p, lotNum).catch(err => gameNudge(err.message));
+  // Same optimistic reasoning as bid() above.
+  pendingAction = { lotNum, type: "pass", seat: p };
+  if (!lot.passed) lot.passed = [];
+  lot.passed[p] = true;
+  render();
+  backend.pass(p, lotNum).catch(err => {
+    if (pendingAction && pendingAction.type === "pass" && pendingAction.seat === p) pendingAction = null;
+    gameNudge(err.message);
+  });
+}
+
+// Reconciles an incoming, authoritative snapshot's lot against whatever
+// this client is still waiting to hear confirmed, if anything. Three
+// outcomes: the pending action is now genuinely confirmed (adopt the
+// real data, clear the guess - they agree exactly, so there's nothing
+// to keep guessing about); it's been superseded by something else that
+// actually happened first (someone else's bid landing before this one
+// did, or the lot resolving some other way entirely - adopt the real
+// data, clear the guess, since the guess is now simply wrong); or the
+// snapshot just hasn't caught up yet (a routine poll that started
+// before the server finished processing this action) - keep showing
+// the optimistic guess rather than flashing back to the stale
+// pre-action state for one frame before the real confirmation arrives.
+function resolveLotForDisplay(incoming){
+  if (!pendingAction || !incoming) return incoming;
+  if (incoming.lotNum !== pendingAction.lotNum) { pendingAction = null; return incoming; }
+
+  if (pendingAction.type === "bid"){
+    if (incoming.high === pendingAction.seat && incoming.price === pendingAction.amount){
+      pendingAction = null;
+      return incoming;
+    }
+    if (incoming.high !== null && incoming.high !== pendingAction.seat && incoming.price >= pendingAction.amount){
+      pendingAction = null;
+      return incoming;
+    }
+    if (incoming.sold){ pendingAction = null; return incoming; }
+    return { ...incoming, high: pendingAction.seat, price: pendingAction.amount, bidDeadline: lot.bidDeadline };
+  }
+
+  if (pendingAction.type === "pass"){
+    if (incoming.passed && incoming.passed[pendingAction.seat]){
+      pendingAction = null;
+      return incoming;
+    }
+    if (incoming.sold){ pendingAction = null; return incoming; }
+    const passed = incoming.passed ? incoming.passed.slice() : [];
+    passed[pendingAction.seat] = true;
+    return { ...incoming, passed };
+  }
+
+  return incoming;
 }
 
 // The exact original bid()/pass() bodies, kept only for SOLO mode (vs.
@@ -4427,6 +4508,13 @@ $("copyBtn").addEventListener("click", async () => {
 });
 
 // Host only, a fresh sale at the same table, so nobody has to swap links again.
+// Simple navigation, no side effects on the table itself - the game
+// keeps running in the background exactly as "Continue to Homepage" on
+// the profile screen does; this just lets a player glance at the home
+// screen (check the leaderboard, say) without needing to leave the
+// table to do it.
+$("faceoffHomeBtn")?.addEventListener("click", () => { showScreen("setup"); });
+
 $("againBtn").addEventListener("click", () => {
   if (!HOST) return;
   document.querySelectorAll(".fallback-ta").forEach(n => n.remove());

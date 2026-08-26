@@ -65,12 +65,14 @@ Deno.serve(async (req) => {
     // trips, since there's no risk in doing that for reads the way there
     // would be for two independent WRITES (nothing here creates a state
     // any other client could observe half-done).
-    const [{ data: table, error: tErr }, { data: seats, error: sErr }] = await Promise.all([
+    const [{ data: table, error: tErr }, { data: seats, error: sErr }, { data: otherMatches, error: omErr }] = await Promise.all([
       sb.from("tables").select("np").eq("id", table_id).single(),
       sb.from("seats").select("locked").eq("table_id", table_id),
+      sb.from("matches").select("mode").eq("table_id", table_id),
     ]);
     if (tErr) return json({ error: tErr.message }, 400);
     if (sErr) return json({ error: sErr.message }, 400);
+    if (omErr) return json({ error: omErr.message }, 400);
 
     if (!seats || seats.length < table.np || !seats.every((s: any) => s.locked)) {
       return json({ error: "every seat must lock their roles before the fight can start" }, 409);
@@ -91,8 +93,18 @@ Deno.serve(async (req) => {
       beats: [],        // resolved round history, for the scoreboard
     };
 
+    // Whichever mode gets played FIRST for a given roster set is the
+    // real, counting result - random and prep are both legitimate fights
+    // by the game's own rules, but playing the second one afterward with
+    // the exact same rosters is a non-canon rematch for exploring "what
+    // if", not a second real outcome. otherMatches already existing for
+    // this table_id (any mode, from the query above) means this is that
+    // second one - submit-pick reads is_canon later to decide whether
+    // this match's results are allowed to touch anyone's actual stats.
+    const isCanon = !otherMatches || otherMatches.length === 0;
+
     const { error: insErr } = await sb.from("matches").insert({
-      table_id, mode, seed: String(seed), state: initialState,
+      table_id, mode, seed: String(seed), state: initialState, is_canon: isCanon,
     });
     if (insErr) return json({ error: insErr.message }, 400);
 

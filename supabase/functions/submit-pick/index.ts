@@ -162,16 +162,18 @@ Deno.serve(async (req) => {
     };
     await sb.from("matches").update({ state: newState }).eq("table_id", table_id).eq("mode", mode);
 
-    // Character-level stats - genuinely per ROUND, not per match, since
-    // a round can end in a real draw (two fighters tied within the same
-    // rank group) even though the MATCH as a whole never can (sudden
-    // death always eventually produces exactly one champion). result.ranked
-    // already carries everything needed per fighter that took part this
-    // round: place===1 with no tie is a win, a tie is a draw, anything
-    // else is a loss. Runs every round regardless of whether the match
-    // itself just finished - wrapped the same way the match-level stats
-    // below are, so a hiccup here can never block the round's real
-    // result from reaching the players.
+    // Character-level stats run unconditionally, canon or not - a
+    // character's own record reflects every real fight it was actually
+    // sent into, regardless of whether that particular match counts
+    // toward any PLAYER's win/loss record. Genuinely per ROUND, not per
+    // match, since a round can end in a real draw (two fighters tied
+    // within the same rank group) even though the MATCH as a whole
+    // never can (sudden death always eventually produces exactly one
+    // champion). result.ranked already carries everything needed per
+    // fighter that took part this round: place===1 with no tie is a
+    // win, a tie is a draw, anything else is a loss. Wrapped so a stats
+    // hiccup can never block the round's real result from reaching the
+    // players.
     try {
       await Promise.all(
         result.ranked.map((f: any) =>
@@ -182,6 +184,14 @@ Deno.serve(async (req) => {
       console.error("record_character_round failed:", statsErr);
     }
 
+    // Player-level match stats are the ONLY thing gated on is_canon -
+    // whichever mode was started FIRST for this table's rosters is the
+    // real result (is_canon, set once at start-match and never changed
+    // after); a second mode played afterward with the same rosters is a
+    // rematch for exploring "what if", and shouldn't pad or dent anyone's
+    // actual competitive record even though the fight itself was
+    // completely real and its characters' own stats count normally.
+    //
     // Stats only ever get recorded here, at the exact round that flips
     // done from false to true - the guard at the top of this function
     // (state.done -> early return) is what guarantees this block can
@@ -193,7 +203,7 @@ Deno.serve(async (req) => {
     // simply skipped, not an error. Wrapped so a stats hiccup can never
     // block the actual fight result from reaching the players - whoever
     // won still finds out even if this part fails for some reason.
-    if (result.done && result.champion) {
+    if (match.is_canon && result.done && result.champion) {
       try {
         await Promise.all(
           seats
