@@ -27,11 +27,10 @@ const json = (body: unknown, status = 200) =>
 
 const SLOTS = 5;
 const BID_TIMER_MS = 8000;
-// Same grace buffer as place-bid's lazy-check, for the same reason - see
-// the comment there. Both files need to agree on what "expired" means,
-// or a bid could pass one check and fail the other depending on which
-// path resolves it first.
-const GRACE_MS = 1500;
+// Settle as soon as the recorded deadline is reached. The browser adds a
+// tiny 25 ms scheduling cushion, so this remains strict without leaving a
+// visible pause after the 3-2-1 countdown.
+const GRACE_MS = 0;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });

@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   try {
-    const { room_code, cid, name, user_id } = await req.json();
+    const { room_code, cid, name, user_id, reconnect_only } = await req.json();
     if (!room_code || !cid) return json({ error: "room_code and cid are required" }, 400);
 
     const sb = createClient(
@@ -80,6 +80,11 @@ Deno.serve(async (req) => {
         return json({ ok: true, table_id: table.id, seat: byUserId.seat, np: table.np });
       }
     }
+
+    // A manual room-code entry first uses this safe probe. Existing seats
+    // reconnect immediately; genuinely new players still go through the
+    // host-controlled knock/admit flow and are never seated by the probe.
+    if (reconnect_only) return json({ error: "not already seated", reconnect: false }, 404);
 
     const taken = new Set(seats.map((s: any) => s.seat));
     let freeSeat: number | null = null;

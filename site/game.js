@@ -512,12 +512,10 @@ function pushState(fx){
 // then - close-lot re-validates everything server-side itself, so this
 // is safe even though any connected client can trigger it.
 let __closeLotDeadline = 0;
-// Kept in sync with GRACE_MS in place-bid/close-lot's Edge Functions -
-// no point firing this before the server would even honor a resolution.
-// Also gives a bid clicked right at the visible "0" mark real time to
-// actually complete its round trip (Edge Function cold start, DB write,
-// response) before this client's own timer would otherwise race it.
-const CLIENT_GRACE_MS = 1600;
+let timeoutResultPreview = null;
+// A tiny scheduling cushion prevents the request landing a few milliseconds
+// before the recorded deadline while keeping settlement visually immediate.
+const CLIENT_GRACE_MS = 25;
 function scheduleCloseLot(s){
   if (!backend || !s.lot || s.lot.sold || !s.lot.bidDeadline) return;
   if (s.lot.bidDeadline === __closeLotDeadline) return;   // already scheduled for this exact deadline
@@ -525,10 +523,43 @@ function scheduleCloseLot(s){
   clearTimeout(window.__closeLotTimer);
   const wait = Math.max(0, s.lot.bidDeadline - Date.now()) + CLIENT_GRACE_MS;
   window.__closeLotTimer = setTimeout(() => {
-    backend.closeLot().catch(() => {});   // harmless no-op if another client's own timer (or an action) already resolved it
+    previewTimeoutResult(s.lotNum);
+    backend.closeLot()
+      .then(result => {
+        if (result && result.action !== "none" && timeoutResultPreview?.lotNum === s.lotNum)
+          releaseStamp(250);
+      })
+      .catch(() => {});
   }, wait);
 }
 
+// Show the result implied by the last confirmed lot at the exact visual
+// deadline. The server remains authoritative and corrects any rare mismatch.
+function previewTimeoutResult(expectedLotNum){
+  if (!lot || lot.sold || lotNum !== expectedLotNum) return;
+  let word, line, tone;
+  if (lot.high !== null){
+    word = "Sold";
+    line = `${lot.char.name} to seat ${lot.high} for ${money(lot.price)}`;
+    tone = lot.high === 0 ? "red" : "blue";
+  } else {
+    const ob = obliged();
+    if (ob !== null){
+      word = "Sold";
+      line = `${lot.char.name} to seat ${ob} for $1`;
+      tone = ob === 0 ? "red" : "blue";
+    } else {
+      const soloSeat = seats().find(inPlay);
+      const cost = soloSeat !== undefined ? passCost(soloSeat) : 0;
+      word = "Passed";
+      line = `${lot.char.name}, nobody wanted it` + (cost ? `, ${money(cost)} to walk away` : "");
+      tone = "grey";
+    }
+  }
+  timeoutResultPreview = { lotNum, word, line };
+  stamp(word, line, tone, true);
+  word === "Sold" ? SFX.sold() : SFX.passedIn();
+}
 function applyState(s, local){
   if (!s || !s.lot) return;          // nothing to draw before the sale opens
   scheduleCloseLot(s);
@@ -681,8 +712,16 @@ function applyState(s, local){
     if (lotChanged) fitName();
     if (s.fx && s.fx.id !== lastFx){
       lastFx = s.fx.id;
-      stamp(s.fx.word, s.fx.line, s.fx.tone);
-      s.fx.word === "Sold" ? SFX.sold() : SFX.passedIn();
+      const alreadyPreviewed = timeoutResultPreview &&
+        timeoutResultPreview.lotNum === s.lotNum &&
+        timeoutResultPreview.word === s.fx.word &&
+        timeoutResultPreview.line === s.fx.line;
+      timeoutResultPreview = null;
+      if (alreadyPreviewed) releaseStamp(250);
+      else {
+        stamp(s.fx.word, s.fx.line, s.fx.tone);
+        s.fx.word === "Sold" ? SFX.sold() : SFX.passedIn();
+      }
     }
   };
   if (lotChanged && Date.now() < stampHideAt){
@@ -1099,6 +1138,16 @@ async function connectToTable(seat, np, tableId){
   // anything past that - exactly the screen this needs to keep updating
   // through, since the fight itself happens entirely after the auction.
   backend.onSnapshot(s => applyMatchSnapshot(s.matches));
+  // A reclaimed host may return while the table is still in its lobby.
+  // Preserve the original auto-start behavior once every chair is filled.
+  if (HOST) backend.onSnapshot(s => {
+    if (!s.lot && !s.over && !window.__startingTable &&
+        s.P.filter(x => x.name && x.name !== "…").length >= NP){
+      window.__startingTable = true;
+      backend.startTable(s.box || BOX, NP)
+        .finally(() => { window.__startingTable = false; });
+    }
+  });
   // Wait for both together: the real table data AND the character art
   // lookup table. Connecting alone isn't enough - the whole point is
   // that the FIRST render (right after this) needs ART already
@@ -1395,8 +1444,41 @@ function botTick(){
 async function joinTable(){
   const c = ($("joinCode").value || "").trim().toUpperCase();
   if (c.length !== 4) return nudge("A table code is four letters.");
-  // Typing a code by hand lands in the same place as following a link, so a
-  // guest never sees the host's controls and never thinks they own them.
+
+  // First ask only whether this browser/account ALREADY owns a seat. This
+  // lets the table's host reclaim seat 0 directly without accidentally
+  // admitting a genuinely new player who still needs host approval.
+  try {
+    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+    const savedName = (() => { try { return localStorage.getItem("longbox.name") || ""; } catch { return ""; } })();
+    const res = await fetch("https://trtccsljexjplnuhnlkz.supabase.co/functions/v1/join-table", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + ART_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        room_code: c, cid: CID,
+        name: currentUser?.name || savedName || myName(),
+        user_id: currentUser?.id || null,
+        reconnect_only: true,
+      }),
+    });
+    if (res.ok){
+      const data = await res.json();
+      ROOM = c; HOST = data.seat === 0; ME = data.seat; NP = data.np; started = false;
+      chan = null;
+      await connect();
+      if (HOST){
+        $("lobbyCode").textContent = ROOM;
+        $("shareLink").value = location.origin + location.pathname + "?r=" + ROOM;
+        showScreen("lobby");
+      }
+      await connectToTable(data.seat, data.np, data.table_id);
+      try { localStorage.setItem(MP_SAVE_KEY, JSON.stringify({ tableId: TABLE_ID, room: ROOM, host: HOST, me: ME })); } catch {}
+      return;
+    }
+  } catch {
+    // A failed reconnect probe falls through to the normal knock flow.
+  }
+
   ROOM = c;
   $("knockCode").textContent = c;
   try { $("knockName").value = localStorage.getItem("longbox.name") || myName() || ""; } catch {}
@@ -1406,27 +1488,7 @@ async function joinTable(){
     $("knockMsg").hidden = false;
     $("knockMsg").textContent = "Could not reach that table.";
   });
-  return;
-  HOST = false; ME = 1; ROOM = c;
-  $("setupMsg").textContent = "Looking for table " + c + "…";
-  try { await connect(); } catch { return nudge("Could not reach the table service. Check your connection and try again."); }
-  // Keep the code in the URL so a refresh or a dropped connection can rejoin.
-  try { history.replaceState(null, "", location.pathname + "?r=" + c); } catch {}
-  send({ t: "join", name: n, cid: CID });
-  seatedAck = false;
-  let waited = 0;
-  const poke = setInterval(() => {
-    // Once the host has seated us we stop chasing. With three buyers the first
-    // joiner can wait a long time for the last chair, and that is not a failure.
-    if (!$("auction").hidden || seatedAck){ clearInterval(poke); return; }
-    if ((waited += 1500) > 9000){
-      clearInterval(poke);
-      nudge("No table " + c + " answered. Check the code, and make sure the host still has their page open.");
-      chan && sb.removeChannel(chan);
-    } else send({ t: "join", name: n, cid: CID });
-  }, 1500);
 }
-
 function nudge(msg){ $("setupMsg").textContent = msg; showScreen("setup"); }
 
 // In-game equivalent of nudge() - a rejected bid/pass shouldn't navigate
@@ -1820,7 +1882,17 @@ function award(p, price){
 // comment at its one call site in applyState() for the actual bug this
 // closes (the stamp ending up on top of the wrong card).
 let stampHideAt = 0;
-function stamp(word, line, tone){
+function releaseStamp(delay = 250){
+  const layer = $("stampLayer"), mark = $("stampMark");
+  stampHideAt = Date.now() + delay;
+  clearTimeout(window.__stampHideTimer);
+  window.__stampHideTimer = setTimeout(() => {
+    layer.hidden = true;
+    mark.classList.remove("hit");
+  }, delay);
+}
+
+function stamp(word, line, tone, persist = false){
   const layer = $("stampLayer"), mark = $("stampMark");
   $("smWord").textContent = word;
   $("smLine").textContent = line;
@@ -1830,15 +1902,15 @@ function stamp(word, line, tone){
   void mark.offsetWidth;
   mark.style.animation = "";
   mark.classList.add("hit");
-  stampHideAt = Date.now() + 1100;
-  // Cancel any earlier stamp's own pending hide first: two stamps firing
-  // close together (two lots resolving quickly back to back) used to
-  // leave the FIRST call's hide-timer still armed when the second stamp
-  // showed - that old timer would fire on its own schedule and hide the
-  // SECOND stamp early, cutting it short before its own 1.1s had passed.
-  // Only the latest stamp's own timer should ever be the one that hides it.
   clearTimeout(window.__stampHideTimer);
-  window.__stampHideTimer = setTimeout(() => { layer.hidden = true; mark.classList.remove("hit"); }, 1100);
+  if (persist){
+    // Keep the preview over the current card until the Edge Function or the
+    // matching Realtime result confirms that the lot really settled.
+    stampHideAt = Date.now() + 30000;
+    window.__stampHideTimer = setTimeout(() => releaseStamp(0), 30000);
+  } else {
+    releaseStamp(1100);
+  }
 }
 
 

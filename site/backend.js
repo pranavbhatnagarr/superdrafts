@@ -64,12 +64,28 @@ export class Backend {
     this._seats = [];
     this._lot = null;
     this._matches = {};  // keyed by mode: {random: row|undefined, prep: row|undefined}
+    this._lastSnapshotSignature = "";
+    this._emitTimer = null;
+    this._realtimeRevision = 0;
   }
 
   onSnapshot(fn){ this._listeners.push(fn); }
+  _snapshotSignature(){
+    return JSON.stringify([this._table, this._seats, this._lot, this._matches]);
+  }
   _emit(){
+    const signature = this._snapshotSignature();
+    if (signature === this._lastSnapshotSignature) return;
+    this._lastSnapshotSignature = signature;
     const snap = this._buildSnapshot();
     if (snap) this._listeners.forEach(fn => fn(snap));
+  }
+  _queueEmit(){
+    if (this._emitTimer !== null) return;
+    this._emitTimer = requestAnimationFrame(() => {
+      this._emitTimer = null;
+      this._emit();
+    });
   }
 
   // Re-shapes whatever's currently cached into the exact object shape
@@ -141,6 +157,7 @@ export class Backend {
   // fallen behind the server's real state and nothing ever forced it
   // back in sync.
   async _resync(){
+    const revisionAtStart = this._realtimeRevision;
     const [{ data: table }, { data: seats }, { data: lots }, { data: matches }] = await Promise.all([
       this.sb.from("tables").select("*").eq("id", this.tableId).single(),
       this.sb.from("seats").select("*").eq("table_id", this.tableId).order("seat"),
@@ -150,6 +167,7 @@ export class Backend {
       // would throw the moment a second row actually exists.
       this.sb.from("matches").select("*").eq("table_id", this.tableId),
     ]);
+    if (this._realtimeRevision !== revisionAtStart) return;
     this._table = table;
     this._seats = seats || [];
     this._lot = (lots && lots[0]) || null;
@@ -164,17 +182,19 @@ export class Backend {
       .channel(`db-${this.tableId}`)
       .on("postgres_changes",
         { event: "*", schema: "public", table: "tables", filter: `id=eq.${this.tableId}` },
-        (payload) => { this._table = payload.new; this._emit(); })
+        (payload) => { this._realtimeRevision++; this._table = payload.new; this._queueEmit(); })
       .on("postgres_changes",
         { event: "*", schema: "public", table: "seats", filter: `table_id=eq.${this.tableId}` },
         (payload) => {
+          this._realtimeRevision++;
           const i = this._seats.findIndex(s => s.seat === payload.new.seat);
           if (i === -1) this._seats.push(payload.new); else this._seats[i] = payload.new;
-          this._emit();
+          this._queueEmit();
         })
       .on("postgres_changes",
         { event: "*", schema: "public", table: "lots", filter: `table_id=eq.${this.tableId}` },
         (payload) => {
+          this._realtimeRevision++;
           // A DELETE needs its own branch, same reasoning as the matches
           // handler's DELETE case below. Without it, a restart broke a
           // silent assumption baked into the >= guard: that lot_num only
@@ -192,11 +212,16 @@ export class Backend {
           } else if (!this._lot || payload.new.lot_num >= this._lot.lot_num) {
             this._lot = payload.new;
           }
-          this._emit();
+          // A sold/pass result carries the stamp effect. Emit it immediately:
+          // batching it with the following lot INSERT can replace this row
+          // before the UI ever sees the result, skipping the stamp entirely.
+          if (payload.eventType !== "DELETE" && payload.new.sold) this._emit();
+          else this._queueEmit();
         })
       .on("postgres_changes",
         { event: "*", schema: "public", table: "matches", filter: `table_id=eq.${this.tableId}` },
         (payload) => {
+          this._realtimeRevision++;
           // A DELETE's payload.new is empty - without handling that
           // specifically, the old mode's key would just sit there
           // unchanged until the next 3-second poll's full _resync()
@@ -212,7 +237,7 @@ export class Backend {
           } else {
             this._matches[payload.new.mode] = payload.new;
           }
-          this._emit();
+          this._queueEmit();
         })
       .subscribe();
 
@@ -247,11 +272,24 @@ export class Backend {
     if (this._onVisible) document.removeEventListener("visibilitychange", this._onVisible);
     if (this._onOnline) window.removeEventListener("online", this._onOnline);
     clearInterval(this._pollTimer);
+    if (this._emitTimer !== null) cancelAnimationFrame(this._emitTimer);
+    this._emitTimer = null;
+  }
+
+  async _act(name, body){
+    const before = this._snapshotSignature();
+    const result = await callFunction(name, body);
+    // Give Realtime one frame to deliver the commit. If it does not, pull
+    // immediately rather than waiting for the three-second safety poll.
+    setTimeout(() => {
+      if (this._snapshotSignature() === before) this._resync().catch(() => {});
+    }, 120);
+    return result;
   }
 
   // ---- actions: thin wrappers, all the real logic lives server-side ----
   startTable(box, np){
-    return callFunction("start-table", { table_id: this.tableId, box, np });
+    return this._act("start-table", { table_id: this.tableId, box, np });
   }
   // "Run it again" used to just reset the host's own local P array and
   // call the old local dealDeck()/nextLot() - never touching the
@@ -261,7 +299,7 @@ export class Backend {
   // one call, matching the original UX of restarting immediately rather
   // than returning to a waiting lobby.
   restartTable(box){
-    return callFunction("restart-table", { table_id: this.tableId, host_cid: this.cid, box });
+    return this._act("restart-table", { table_id: this.tableId, host_cid: this.cid, box });
   }
   // lotNum is the lot THIS CLIENT believes is current, captured at the
   // moment of the click - not trusted blindly, but given to the server
@@ -272,13 +310,13 @@ export class Backend {
   // be - the exact bug where a late bid appeared to land on the next
   // card instead of failing outright.
   bid(seat, amount, lotNum){
-    return callFunction("place-bid", { table_id: this.tableId, seat, cid: this.cid, kind: "bid", amount, lotNum });
+    return this._act("place-bid", { table_id: this.tableId, seat, cid: this.cid, kind: "bid", amount, lotNum });
   }
   pass(seat, lotNum){
-    return callFunction("place-bid", { table_id: this.tableId, seat, cid: this.cid, kind: "pass", lotNum });
+    return this._act("place-bid", { table_id: this.tableId, seat, cid: this.cid, kind: "pass", lotNum });
   }
   startMatch(mode){
-    return callFunction("start-match", { table_id: this.tableId, mode });
+    return this._act("start-match", { table_id: this.tableId, mode });
   }
   // Called once, at the moment a seat actually locks in - not per
   // individual drag. roles must list all 5 of this seat's characters,
@@ -289,10 +327,10 @@ export class Backend {
   // lock_role Postgres function - this is a thin wrapper, same as every
   // other action here.
   lockRoles(seat, roles){
-    return callFunction("lock-roles", { table_id: this.tableId, seat, cid: this.cid, roles });
+    return this._act("lock-roles", { table_id: this.tableId, seat, cid: this.cid, roles });
   }
   submitPick(seat, name, mode){
-    return callFunction("submit-pick", { table_id: this.tableId, seat, cid: this.cid, name, mode });
+    return this._act("submit-pick", { table_id: this.tableId, seat, cid: this.cid, name, mode });
   }
   // Client-driven timeout resolution: close-lot re-validates everything
   // server-side (it re-checks bid_deadline itself, doesn't trust the
@@ -303,6 +341,6 @@ export class Backend {
   // waiting on either another player's next action or cron's 1-minute
   // backstop.
   closeLot(){
-    return callFunction("close-lot", { table_id: this.tableId });
+    return this._act("close-lot", { table_id: this.tableId });
   }
 }
