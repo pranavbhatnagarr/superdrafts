@@ -203,6 +203,12 @@ let bidTimerShown = 0;            // last countdown digit painted, so repaints d
 
 // What is in the box. The host owns this and it travels to the joiner.
 let BOX = { u: ["MAR","DC"], tiers: false };
+// Set the moment a player actually clicks a universe chip themselves -
+// see paintBox()'s click handler. Checked before ever applying a signed-
+// in player's saved favorite_universes, so a real choice they've already
+// made (even accidentally, even before the profile fetch resolves) is
+// never silently overwritten by a preference set in some earlier session.
+let boxTouchedByUser = false;
 
 /* ---------------------------- solo play ---------------------------- */
 // A game against the computer is the same game with nobody on the other end
@@ -418,7 +424,7 @@ function handle(m){
   if (m.t === "knock" && HOST){
     const already = backend && backend.tableId ? P.findIndex(p => p.cid === m.cid) : -1;
     if (already > 0){ send({ t: "seat", cid: m.cid, seat: already, np: NP, table_id: TABLE_ID }); return; }
-    knocks.set(m.cid, { name: (m.name || "Someone").slice(0, 14), at: Date.now() });
+    knocks.set(m.cid, { name: (m.name || "Someone").slice(0, 14), at: Date.now(), userId: m.user_id || null });
     paintPending();
     send({ t: "knocked", cid: m.cid });
     return;
@@ -710,7 +716,7 @@ function act(kind, amount){
 }
 
 function showScreen(which){
-  for (const id of ["setup","knock","lobby","auction","faceoff"]) $(id).hidden = (id !== which);
+  for (const id of ["gate","profile","leaderboard","setup","knock","lobby","auction","faceoff"]) $(id).hidden = (id !== which);
 }
 
 /* ------------------------- the box picker ------------------------- */
@@ -742,6 +748,7 @@ function paintBox(chipsEl, countEl, onChange){
     b.querySelector(".chip-n").textContent =
       STOCK.filter(c => c[1] === code).length;
     b.addEventListener("click", () => {
+      boxTouchedByUser = true;
       BOX.u = on ? BOX.u.filter(x => x !== code) : BOX.u.concat(code);
       if (!BOX.u.length) BOX.u = [code];              // never empty the box
       onChange();
@@ -824,6 +831,98 @@ function paintBotRow(){
   row.appendChild(note);
 }
 
+/* --------------------- character leaderboard --------------------- */
+// character_stats is publicly readable (see its own RLS policy), so
+// this queries it directly with the anon key, same as profiles' public
+// stats - no Edge Function needed, there's nothing here that needs
+// server-side validation the way a bid or a fight pick does.
+let lbRows = [];      // last fetch, enriched with universe/tier from STOCK
+let lbSort = "wins";
+
+async function openLeaderboard(){
+  showScreen("leaderboard");
+  $("lbMsg").textContent = "Loading…";
+  $("lbList").innerHTML = "";
+  try {
+    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+    const { data, error } = await sb.from("character_stats").select("*");
+    if (error) throw error;
+    // STOCK is already loaded client-side for card rendering - reusing
+    // it here for universe/tier avoids a second, redundant query for
+    // data this page already has sitting in memory. STOCK's own shape
+    // is a plain tuple, not an object - see loadStock()'s own comment
+    // for why (index 0 name, 1 universe, 4 tier).
+    const byName = new Map(STOCK.map(c => [c[0], { pub: c[1], tier: c[4] }]));
+    lbRows = (data || []).map(r => ({
+      ...r,
+      pub: byName.get(r.name)?.pub || null,
+      tier: byName.get(r.name)?.tier || null,
+      rounds: r.wins + r.losses + r.draws,
+      rate: (r.wins + r.losses + r.draws) ? r.wins / (r.wins + r.losses + r.draws) : 0,
+      avgPrice: r.times_bought ? r.total_spent / r.times_bought : 0,
+    }));
+    $("lbMsg").textContent = lbRows.length ? "" : "Nobody's fought or bought anything yet.";
+    paintLeaderboard();
+  } catch (e) {
+    $("lbMsg").textContent = "Could not load the leaderboard: " + (e?.message || String(e));
+  }
+}
+
+function paintLeaderboard(){
+  const q = ($("lbSearch").value || "").trim().toLowerCase();
+  const rows = lbRows
+    .filter(r => !q || r.name.toLowerCase().includes(q))
+    .slice()
+    .sort((a, b) => {
+      if (lbSort === "wins") return b.wins - a.wins;
+      if (lbSort === "rate") return b.rate - a.rate || b.rounds - a.rounds;
+      if (lbSort === "bought") return b.times_bought - a.times_bought;
+      if (lbSort === "price") return b.avgPrice - a.avgPrice;
+      return 0;
+    });
+
+  const list = $("lbList");
+  list.innerHTML = "";
+  for (const r of rows){
+    const row = document.createElement("div");
+    row.className = "lb-row";
+    const artUrl = ART.get(r.name);
+    row.innerHTML = `
+      ${artUrl ? `<img class="lb-thumb" src="${artUrl}" alt="" loading="lazy">` : `<span class="lb-thumb lb-thumb-blank">?</span>`}
+      <span class="lb-name">
+        <b></b>
+        <i></i>
+      </span>
+      <span class="lb-record"></span>
+      <span class="lb-rate"></span>
+      <span class="lb-bought"></span>
+      <span class="lb-price"></span>`;
+    row.querySelector(".lb-name b").textContent = r.name;
+    row.querySelector(".lb-name i").textContent = (UNIVERSES[r.pub] || {}).name || r.pub || "";
+    row.querySelector(".lb-record").textContent = `${r.wins}-${r.losses}-${r.draws}`;
+    row.querySelector(".lb-rate").textContent = r.rounds ? Math.round(r.rate * 100) + "%" : "—";
+    row.querySelector(".lb-bought").textContent = r.times_bought + "x";
+    row.querySelector(".lb-price").textContent = r.times_bought ? "$" + r.avgPrice.toFixed(1) : "—";
+    list.appendChild(row);
+  }
+  if (!rows.length && lbRows.length) $("lbMsg").textContent = "No character matches that search.";
+  else if (rows.length) $("lbMsg").textContent = "";
+}
+
+$("leaderboardOpenBtn")?.addEventListener("click", openLeaderboard);
+$("lbBackBtn")?.addEventListener("click", () => { showScreen("setup"); });
+$("lbSearch")?.addEventListener("input", paintLeaderboard);
+$("lbSortChips")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-sort]");
+  if (!btn) return;
+  lbSort = btn.dataset.sort;
+  $("lbSortChips").querySelectorAll("[data-sort]").forEach(b => {
+    b.classList.toggle("on", b === btn);
+    b.setAttribute("aria-pressed", b === btn ? "true" : "false");
+  });
+  paintLeaderboard();
+});
+
 function refreshSetupBox(){
   paintNP();
   $("coverEdition").textContent =
@@ -869,7 +968,7 @@ function paintPending(){
     const canAdmit = room >= 1 || reclaim;
     allow.disabled = !canAdmit;
     allow.title = canAdmit ? "" : "Every chair is taken";
-    allow.addEventListener("click", () => admit(cid, who.name));
+    allow.addEventListener("click", () => admit(cid, who.name, who.userId));
     li.querySelector(".deny").addEventListener("click", () => {
       knocks.delete(cid); send({ t: "refused", cid }); paintPending();
     });
@@ -904,7 +1003,7 @@ function uniqueName(want, seat){
 // atomic-seat-assignment reasoning from before still holds (join-table
 // itself can't double-book a seat), it just now only runs on a real
 // approval click instead of on every knock.
-async function admit(cid, name){
+async function admit(cid, name, userId){
   if (!HOST) return;
   knocks.delete(cid);
   paintPending();
@@ -934,7 +1033,7 @@ async function admit(cid, name){
     const res = await fetch("https://trtccsljexjplnuhnlkz.supabase.co/functions/v1/join-table", {
       method: "POST",
       headers: { Authorization: "Bearer " + ART_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ room_code: ROOM, cid, name: finalName }),
+      body: JSON.stringify({ room_code: ROOM, cid, name: finalName, user_id: userId || null }),
     });
     const data = await res.json();
     if (!res.ok){
@@ -968,7 +1067,7 @@ async function askForChair(){
             $("knockAsk").hidden = false; return; }
   }
   seatedAck = false;
-  const knock = () => send({ t: "knock", name: n, cid: CID });
+  const knock = () => send({ t: "knock", name: n, cid: CID, user_id: currentUser ? currentUser.id : null });
   knock();
   clearInterval(window.__knockT);
   window.__knockT = setInterval(() => {
@@ -977,13 +1076,15 @@ async function askForChair(){
   }, 3000);
 }
 
-// The host's admit() sends { t: "seat", cid, seat, np, table_id } once a
-// knock is actually approved - this is where the guest, only now,
-// connects a real backend for the first time.
-async function onSeated(m){
-  clearInterval(window.__knockT);
-  seatedAck = true;
-  ME = m.seat; NP = m.np; TABLE_ID = m.table_id;
+// The actual "become this seat and start talking to the backend" work,
+// shared by every path that seats this browser at a real table - the
+// knock/admit flow below, and reconnectByAccount() further down. Throws
+// on failure rather than showing any message itself, since each caller
+// has its own place to display one (knockMsg here, a different element
+// for the account-reconnect flow) - this only ever does the connecting,
+// never the UI around it.
+async function connectToTable(seat, np, tableId){
+  ME = seat; NP = np; TABLE_ID = tableId;
   // The real bug behind the "blank card" flash: drawnLot/lastFx/heardBids/
   // heardFolds are module-level and only ever reset by the post-game
   // "play again" handler - never when connecting to a brand-new table.
@@ -993,31 +1094,40 @@ async function onSeated(m){
   // general fields (lot number, price, footer text) still populate via
   // render(), but the character's own name/alias/note/art never do.
   drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer); resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender); lastPanelBidKey = {};
+  sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+  backend = new Backend(sb, TABLE_ID, CID);
+  backend.onSnapshot(s => applyState(s));
+  // Separate listener, not folded into applyState() above: applyState()
+  // early-returns via showFaceoff() once over===true and never reaches
+  // anything past that - exactly the screen this needs to keep updating
+  // through, since the fight itself happens entirely after the auction.
+  backend.onSnapshot(s => applyMatchSnapshot(s.matches));
+  // Wait for both together: the real table data AND the character art
+  // lookup table. Connecting alone isn't enough - the whole point is
+  // that the FIRST render (right after this) needs ART already
+  // populated, or the card's image lookup comes up empty and nothing
+  // ever re-triggers a repaint once it's ready.
+  // Sequential, not Promise.all: backend.connect() fires its FIRST
+  // snapshot internally, synchronously, as its own last step - which
+  // calls applyState() and paints the card immediately, before
+  // connect() has even formally "resolved" from here. Racing the two
+  // in parallel meant that first paint could still land before
+  // stockReady finished, even though we were "waiting for both" -
+  // exactly the split-second no-image flash. Awaiting stockReady FIRST
+  // guarantees ART is already populated before connect()'s internal
+  // render ever fires.
+  await stockReady;
+  await backend.connect();
+}
+
+// The host's admit() sends { t: "seat", cid, seat, np, table_id } once a
+// knock is actually approved - this is where the guest, only now,
+// connects a real backend for the first time.
+async function onSeated(m){
+  clearInterval(window.__knockT);
+  seatedAck = true;
   try {
-    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
-    backend = new Backend(sb, TABLE_ID, CID);
-    backend.onSnapshot(s => applyState(s));
-    // Separate listener, not folded into applyState() above: applyState()
-    // early-returns via showFaceoff() once over===true and never reaches
-    // anything past that - exactly the screen this needs to keep updating
-    // through, since the fight itself happens entirely after the auction.
-    backend.onSnapshot(s => applyMatchSnapshot(s.matches));
-    // Wait for both together: the real table data AND the character art
-    // lookup table. Connecting alone isn't enough - the whole point is
-    // that the FIRST render (right after this) needs ART already
-    // populated, or the card's image lookup comes up empty and nothing
-    // ever re-triggers a repaint once it's ready.
-    // Sequential, not Promise.all: backend.connect() fires its FIRST
-    // snapshot internally, synchronously, as its own last step - which
-    // calls applyState() and paints the card immediately, before
-    // connect() has even formally "resolved" from here. Racing the two
-    // in parallel meant that first paint could still land before
-    // stockReady finished, even though we were "waiting for both" -
-    // exactly the split-second no-image flash. Awaiting stockReady FIRST
-    // guarantees ART is already populated before connect()'s internal
-    // render ever fires.
-    await stockReady;
-    await backend.connect();
+    await connectToTable(m.seat, m.np, m.table_id);
     try { localStorage.setItem(MP_SAVE_KEY, JSON.stringify({ tableId: TABLE_ID, room: ROOM, host: false, me: ME })); } catch {}
   } catch (e) {
     $("knockMsg").hidden = false;
@@ -1034,6 +1144,47 @@ async function onSeated(m){
   // applyState() already calls showScreen("auction") itself, but only
   // once real lot data is genuinely there to paint - that's the only
   // place this screen should ever be revealed from.
+}
+
+// A signed-in account's own version of reconnecting - no knock, no host
+// approval, because a real session can't be spoofed the way a typed
+// name can be. This is what finally covers the case Stage 1 could only
+// diagnose, not fix: a host who opened a table on one device has no way
+// to get back into seat 0 from a different one, since cid is per-
+// browser and every other reconnect path here (including the name-based
+// guest reclaim above) only ever considers seats 1 and up. Works for a
+// guest's own account just as much as a host's - whichever seat this
+// account already has on that table, if any, is what comes back.
+async function reconnectByAccount(roomCode){
+  if (!currentUser) return;
+  const code = (roomCode || "").trim().toUpperCase().slice(0, 4);
+  const msgEl = $("reconnectMsg");
+  if (!code){ if (msgEl) msgEl.textContent = "Enter the table's room code."; return; }
+  if (msgEl) msgEl.textContent = "Reconnecting…";
+  try {
+    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+    const res = await fetch("https://trtccsljexjplnuhnlkz.supabase.co/functions/v1/join-table", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + ART_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ room_code: code, cid: CID, name: currentUser.name, user_id: currentUser.id }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || "That table couldn't be found.");
+    ROOM = code;
+    HOST = (data.seat === 0);
+    await connectToTable(data.seat, data.np, data.table_id);
+    try { localStorage.setItem(MP_SAVE_KEY, JSON.stringify({ tableId: TABLE_ID, room: ROOM, host: HOST, me: ME })); } catch {}
+    if (msgEl) msgEl.textContent = "";
+    // No explicit showScreen() call here either, same reasoning as
+    // onSeated() above - connectToTable()'s own backend.connect() already
+    // triggers applyState(), which is the only place that correctly knows
+    // whether real lot data exists yet to reveal the auction screen for,
+    // versus a table still sitting on the face-off screen, versus one
+    // that's already finished. Calling it explicitly here would risk
+    // exactly the same blank-flash bug that comment already explains.
+  } catch (e) {
+    if (msgEl) msgEl.textContent = e.message || "Could not reconnect - check the room code.";
+  }
 }
 
 /* ---------------------------- tables ---------------------------- */
@@ -1074,7 +1225,7 @@ async function openTable(){
     const res = await fetch("https://trtccsljexjplnuhnlkz.supabase.co/functions/v1/create-table", {
       method: "POST",
       headers: { Authorization: "Bearer " + ART_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ room_code: ROOM, host_cid: CID, host_name: n, np: NP, box: BOX }),
+      body: JSON.stringify({ room_code: ROOM, host_cid: CID, host_name: n, np: NP, box: BOX, host_user_id: currentUser ? currentUser.id : null }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "create-table failed");
@@ -3547,6 +3698,26 @@ function takePick(owner, name){
   ST.picks = {}; ST.locked = [];
   ST.round = MATCH.roundNo();
   if (res.done) ST.end = { winner: res.champion, standings: res.standings };
+  // Character-level stats, genuinely per round the same way as the
+  // multiplayer path (see submit-pick's own comment) - and player-level
+  // bot stats once the match itself concludes, but only for a signed-in
+  // player; a guest playing solo has nothing to attribute a win/loss to.
+  // Guarded on SOLO specifically since takePick() is also reachable from
+  // a couple of legacy broadcast-message handlers that real multiplayer
+  // no longer uses - this is the one place that should ever fire these
+  // calls, regardless of how many paths still technically lead here.
+  if (SOLO){
+    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+    Promise.all(
+      res.ranked.map(f =>
+        sb.rpc("record_character_round", { p_name: f.name, p_won: f.place === 1 && !f.draw, p_drew: f.draw })
+      )
+    ).catch(e => console.error("record_character_round failed:", e));
+    if (res.done && res.champion && currentUser){
+      sb.rpc("record_bot_match_stats", { p_user_id: currentUser.id, p_won: res.champion === P[ME].name })
+        .then(({ error }) => { if (error) console.error("record_bot_match_stats failed:", error); });
+    }
+  }
   res.isDraw ? SFX.pass() : SFX.sold();
   stPaint(); stSend();
 }
@@ -3624,6 +3795,18 @@ refreshSetupBox();
 
 // A code in the link means they were invited, prefill it and say so.
 const invited = new URLSearchParams(location.search).get("r");
+
+// Computed early so the initial screen choice below can use it - the
+// actual "Reopen table X" button text/click-handler still gets wired up
+// in its own block further down, unchanged; this only needs to know
+// whether one exists yet, not populate the button itself.
+let hasResumable = false;
+try {
+  const mpCheck = JSON.parse(localStorage.getItem(MP_SAVE_KEY) || "null");
+  const svCheck = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+  hasResumable = !!((mpCheck && mpCheck.tableId) || (svCheck && svCheck.ROOM && !svCheck.over));
+} catch {}
+
 if (invited){
   ROOM = invited.toUpperCase().slice(0, 4);
   $("knockCode").textContent = ROOM;
@@ -3634,24 +3817,469 @@ if (invited){
     $("knockMsg").hidden = false;
     $("knockMsg").textContent = "Could not reach the table service. Check your connection.";
   });
+} else if (hasResumable){
+  // Reopening an existing table is its own clear intent - skip the
+  // gate/profile detour entirely and land straight on the setup screen,
+  // same as an invite link skips it. The actual "Reopen table X" button
+  // still gets wired up in its own block further down.
+  showScreen("setup");
 }
+
+// Optional Google sign-in - entirely separate from the cid-based guest
+// identity every seat has always had. A signed-in player still gets a
+// cid too (used for the same realtime/broadcast plumbing every guest
+// already relies on); user_id just ADDS a real, stable identity
+// alongside it, passed through to create-table/join-table so their seat
+// links back to a real account instead of only a device-generated id
+// that a cleared cache or a new device could lose.
+let currentUser = null;   // { id, name } | null - null means "playing as a guest"
+let currentProfile = null; // full profiles row for currentUser, or null
+
+async function refreshAuthUI(){
+  sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+  const { data: { session } } = await sb.auth.getSession();
+  const linkRow = $("profileLinkRow"), nameEl = $("authSignedInName"), avatarEl = $("authAvatar");
+  const guestRow = $("guestSignInRow");
+  const wasSignedIn = !!currentUser;
+  if (session && session.user){
+    // profiles.display_name is the REAL name once it's been set - that's
+    // the "fixed name, set by you, that you can change" from the
+    // profile screen. The raw Google name is only ever a one-time
+    // fallback, used before the player has chosen anything of their
+    // own (see the profile screen's own name field/save handler).
+    const { data: profile } = await sb.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
+    currentProfile = profile || null;
+
+    const googleName = session.user.user_metadata?.full_name
+      || session.user.user_metadata?.name
+      || session.user.email
+      || "your account";
+    const displayName = currentProfile?.display_name || googleName;
+    const justSignedIn = !wasSignedIn;
+    currentUser = { id: session.user.id, name: displayName };
+
+    if (linkRow) linkRow.hidden = false;
+    if (guestRow) guestRow.hidden = true;
+    if (nameEl) nameEl.textContent = displayName;
+
+    // Google's own picture is always the fallback - a custom upload
+    // (avatar_url) only ever overrides it, never the other way around.
+    const avatarSrc = currentProfile?.avatar_url || session.user.user_metadata?.avatar_url || null;
+    if (avatarEl){
+      if (avatarSrc){ avatarEl.src = avatarSrc; avatarEl.hidden = false; }
+      else avatarEl.hidden = true;
+    }
+
+    // The FIXED name for a signed-in player - set on the profile screen,
+    // not editable on the setup screen itself. A guest's #myName stays
+    // fully free-typed, untouched by any of this.
+    if ($("myName")){ $("myName").value = displayName.slice(0, 14); $("myName").readOnly = true; }
+    if ($("knockName")){ $("knockName").value = displayName.slice(0, 14); $("knockName").readOnly = true; }
+
+    // A saved favorite-universes preference only ever pre-fills the box
+    // picker, and only if the player hasn't already touched it this
+    // session - see boxTouchedByUser's own comment.
+    if (!boxTouchedByUser && currentProfile?.favorite_universes?.length && typeof refreshSetupBox === "function"){
+      BOX.u = currentProfile.favorite_universes;
+      refreshSetupBox();
+    }
+
+    // Only navigate on the actual moment of signing in (including the
+    // OAuth redirect landing back here) - never on every subsequent
+    // refreshAuthUI() call, or a signed-in player would get yanked back
+    // to their profile screen every time this re-runs for an unrelated
+    // reason (onAuthStateChange firing, a routine re-check). invited and
+    // hasResumable both still take priority, same as they do for a fresh
+    // gate/profile decision - reconnecting to a specific table is a
+    // clearer intent than a generic "welcome back" landing.
+    if (justSignedIn && !invited && !hasResumable && $("gate").hidden === false){
+      showScreen("profile");
+      paintProfileScreen();
+    }
+  } else {
+    currentUser = null;
+    currentProfile = null;
+    if (linkRow) linkRow.hidden = true;
+    if (guestRow) guestRow.hidden = false;
+    if (avatarEl) avatarEl.hidden = true;
+    if ($("myName")) $("myName").readOnly = false;
+    if ($("knockName")) $("knockName").readOnly = false;
+  }
+}
+
+/* --------------------- profile screen --------------------- */
+let statsView = "overall"; // "overall" | "mp" | "bot"
+
+function paintProfileScreen(){
+  if (!currentUser) return;
+  $("profileNameInput").value = currentUser.name;
+  const img = $("profileAvatarImg");
+  const src = currentProfile?.avatar_url || null;
+  if (src){ img.src = src; img.hidden = false; } else img.hidden = true;
+
+  paintStatsView();
+  paintFavChips();
+}
+
+// Three separate views of the same underlying columns rather than one
+// fixed number - multiplayer stats (games_played/wins/losses) and bot
+// stats (bot_games_played/bot_wins/bot_losses) are already tracked as
+// entirely separate counters (see record_match_stats vs
+// record_bot_match_stats), specifically so a player's real competitive
+// record never gets padded by beating an AI. "Overall" is just the sum
+// of both, computed here at display time rather than stored as its own
+// column - nothing needs to write to it directly, so there is nothing
+// to keep in sync.
+function paintStatsView(){
+  const mpGames = currentProfile?.games_played || 0;
+  const mpWins = currentProfile?.wins || 0;
+  const mpLosses = currentProfile?.losses || 0;
+  const botGames = currentProfile?.bot_games_played || 0;
+  const botWins = currentProfile?.bot_wins || 0;
+  const botLosses = currentProfile?.bot_losses || 0;
+
+  let games, wins, losses;
+  if (statsView === "mp"){ games = mpGames; wins = mpWins; losses = mpLosses; }
+  else if (statsView === "bot"){ games = botGames; wins = botWins; losses = botLosses; }
+  else { games = mpGames + botGames; wins = mpWins + botWins; losses = mpLosses + botLosses; }
+
+  $("statGames").textContent = games;
+  $("statWins").textContent = wins;
+  $("statLosses").textContent = losses;
+  $("statRate").textContent = games ? Math.round((wins / games) * 100) + "%" : "—";
+}
+
+$("statsViewChips")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-view]");
+  if (!btn) return;
+  statsView = btn.dataset.view;
+  $("statsViewChips").querySelectorAll("[data-view]").forEach(b => {
+    b.classList.toggle("on", b === btn);
+    b.setAttribute("aria-pressed", b === btn ? "true" : "false");
+  });
+  paintStatsView();
+});
+
+function paintFavChips(){
+  const chipsEl = $("favChips");
+  chipsEl.innerHTML = "";
+  const favs = new Set(currentProfile?.favorite_universes || []);
+  let group = "";
+  for (const [code, u] of Object.entries(UNIVERSES)){
+    if (!STOCK.some(c => c[1] === code)) continue;
+    if (u.group !== group){
+      group = u.group;
+      const h = document.createElement("span");
+      h.className = "chip-group"; h.textContent = group;
+      chipsEl.appendChild(h);
+    }
+    const on = favs.has(code);
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip" + (on ? " on" : "");
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.dataset.code = code;
+    b.textContent = u.name;
+    b.addEventListener("click", () => {
+      // Reads favs.has() fresh here, not the `on` captured above at
+      // render time - that value is fixed the moment this chip was
+      // created and never updates, so relying on it would make every
+      // click after the first behave as if nothing had changed yet,
+      // and a favorite could never actually be toggled back off.
+      if (favs.has(code)) favs.delete(code); else favs.add(code);
+      paintFavChipsFromSet(favs);
+    });
+    chipsEl.appendChild(b);
+  }
+}
+// Re-renders just the on/off state after a click, without rebuilding the
+// whole list from currentProfile - the click already knows the new set,
+// there's no reason to throw away and rebuild every chip to reflect one
+// toggle.
+function paintFavChipsFromSet(favs){
+  $("favChips").querySelectorAll(".chip").forEach(b => {
+    const on = favs.has(b.dataset.code);
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  $("favSaveBtn").dataset.pending = JSON.stringify([...favs]);
+}
+
+$("profileLinkBtn")?.addEventListener("click", () => { showScreen("profile"); paintProfileScreen(); });
+
+$("profileNameSaveBtn")?.addEventListener("click", async () => {
+  if (!currentUser) return;
+  const newName = $("profileNameInput").value.trim().slice(0, 14);
+  if (!newName){ $("nameMsg").textContent = "Name can't be empty."; return; }
+  $("nameMsg").textContent = "Saving…";
+  try {
+    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+    const { error } = await sb.from("profiles").update({ display_name: newName }).eq("id", currentUser.id);
+    if (error) throw error;
+    currentUser = { ...currentUser, name: newName };
+    currentProfile = { ...(currentProfile || {}), display_name: newName };
+    $("nameMsg").textContent = "Saved.";
+  } catch (e) {
+    $("nameMsg").textContent = "Could not save - try again.";
+  }
+});
+
+$("reconnectBtn")?.addEventListener("click", () => { reconnectByAccount($("reconnectCode").value); });
+
+$("profileContinueBtn")?.addEventListener("click", () => {
+  // The FIXED name from the profile carries straight into the setup
+  // screen's own (read-only, for a signed-in player) name field -
+  // refreshAuthUI() already keeps #myName in sync with currentUser.name
+  // any time it changes, so there's nothing left to copy here beyond
+  // just navigating.
+  showScreen("setup");
+});
+
+$("favSaveBtn")?.addEventListener("click", async () => {
+  if (!currentUser) return;
+  const pending = $("favSaveBtn").dataset.pending;
+  const favorite_universes = pending ? JSON.parse(pending) : (currentProfile?.favorite_universes || []);
+  $("favMsg").textContent = "Saving…";
+  try {
+    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+    const { error } = await sb.from("profiles").update({ favorite_universes }).eq("id", currentUser.id);
+    if (error) throw error;
+    currentProfile = { ...(currentProfile || {}), favorite_universes };
+    $("favMsg").textContent = "Saved.";
+  } catch (e) {
+    $("favMsg").textContent = "Could not save - try again.";
+  }
+});
+
+/* --------------------- avatar cropper --------------------- */
+// Opens the moment a file is picked, before anything is ever uploaded -
+// nothing reaches Storage until the person confirms exactly what's
+// inside the circle. cropState tracks the CURRENT pan/zoom in canvas
+// pixel space; the canvas itself is both the live preview AND the exact
+// thing exported on save, so there's no separate "export resolution"
+// to keep in sync with what's actually being shown.
+let cropImg = null;
+let cropState = { scale: 1, offsetX: 0, offsetY: 0 };
+let cropBaseScale = 1;   // the "fully zoomed out, still fills the circle" scale
+let cropDragging = false, cropDragStart = null;
+
+function cropClamp(){
+  const size = $("cropCanvas").width;
+  const w = cropImg.width * cropState.scale, h = cropImg.height * cropState.scale;
+  // Never lets a pan reveal empty space past the image's own edges -
+  // the max offset in either direction is exactly how far the scaled
+  // image overhangs the canvas on that axis; once scale<=canvas size on
+  // an axis, that max is 0 and panning on that axis is locked entirely.
+  const maxX = Math.max(0, (w - size) / 2);
+  const maxY = Math.max(0, (h - size) / 2);
+  cropState.offsetX = Math.max(-maxX, Math.min(maxX, cropState.offsetX));
+  cropState.offsetY = Math.max(-maxY, Math.min(maxY, cropState.offsetY));
+}
+
+function renderCrop(){
+  const canvas = $("cropCanvas"), ctx = canvas.getContext("2d");
+  const size = canvas.width;
+  ctx.clearRect(0, 0, size, size);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  ctx.clip();
+  const w = cropImg.width * cropState.scale, h = cropImg.height * cropState.scale;
+  ctx.drawImage(cropImg, size / 2 - w / 2 + cropState.offsetX, size / 2 - h / 2 + cropState.offsetY, w, h);
+  ctx.restore();
+}
+
+function openCropModal(file){
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    cropImg = img;
+    const size = $("cropCanvas").width;
+    // "Fit to fill" - the smallest scale where the image still fully
+    // covers the circle on both axes, same idea as CSS object-fit:cover.
+    // This is the zoom slider's own minimum (value 1 = this scale).
+    cropBaseScale = Math.max(size / img.width, size / img.height);
+    cropState = { scale: cropBaseScale, offsetX: 0, offsetY: 0 };
+    $("cropZoom").value = "1";
+    URL.revokeObjectURL(url);
+    renderCrop();
+    $("cropModal").hidden = false;
+  };
+  img.src = url;
+}
+
+function closeCropModal(){
+  $("cropModal").hidden = true;
+  cropImg = null;
+  // Cleared so choosing the exact same file again still fires a fresh
+  // 'change' event - a browser won't re-fire change for an unchanged
+  // file list otherwise, silently doing nothing on a second attempt.
+  $("avatarFileInput").value = "";
+}
+
+$("cropCanvas")?.addEventListener("pointerdown", (e) => {
+  cropDragging = true;
+  cropDragStart = { x: e.clientX, y: e.clientY, offsetX: cropState.offsetX, offsetY: cropState.offsetY };
+  e.target.setPointerCapture(e.pointerId);
+});
+$("cropCanvas")?.addEventListener("pointermove", (e) => {
+  if (!cropDragging || !cropImg) return;
+  cropState.offsetX = cropDragStart.offsetX + (e.clientX - cropDragStart.x);
+  cropState.offsetY = cropDragStart.offsetY + (e.clientY - cropDragStart.y);
+  cropClamp();
+  renderCrop();
+});
+$("cropCanvas")?.addEventListener("pointerup", () => { cropDragging = false; });
+$("cropCanvas")?.addEventListener("pointercancel", () => { cropDragging = false; });
+
+$("cropZoom")?.addEventListener("input", () => {
+  if (!cropImg) return;
+  cropState.scale = cropBaseScale * Number($("cropZoom").value);
+  cropClamp();
+  renderCrop();
+});
+
+$("cropCancelBtn")?.addEventListener("click", closeCropModal);
+
+$("cropSaveBtn")?.addEventListener("click", () => {
+  if (!cropImg || !currentUser) return;
+  $("cropCanvas").toBlob(async (blob) => {
+    if (!blob){ $("avatarMsg").textContent = "Could not process that image."; closeCropModal(); return; }
+    closeCropModal();
+    await uploadAvatarBlob(blob, "jpg");
+  }, "image/jpeg", 0.92);
+});
+
+// The actual upload, unchanged from before except that it now always
+// receives the CROPPED result, never the raw original file straight off
+// disk - the crop modal is the only caller now.
+async function uploadAvatarBlob(blob, ext){
+  $("avatarMsg").textContent = "Uploading…";
+  try {
+    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+    // Path MUST start with the uploader's own user id - the Storage
+    // policies from Stage 1 check exactly this (auth.uid() against the
+    // first path segment) to decide who's allowed to write here at all.
+    // A different path shape doesn't get ignored, it gets rejected
+    // outright by every one of those policies.
+    const path = `${currentUser.id}/avatar.${ext}`;
+    const { error: upErr } = await sb.storage.from("avatars").upload(path, blob, { upsert: true, contentType: "image/jpeg" });
+    if (upErr) throw upErr;
+    const { data: pub } = sb.storage.from("avatars").getPublicUrl(path);
+    // Cache-bust: the path is always the same for a given user (upsert
+    // overwrites it in place), so without a changing query string the
+    // browser would just keep showing the OLD cached image forever after
+    // a re-upload, even though the file on the server genuinely changed.
+    const avatar_url = pub.publicUrl + "?t=" + Date.now();
+    const { error: dbErr } = await sb.from("profiles").update({ avatar_url }).eq("id", currentUser.id);
+    if (dbErr) throw dbErr;
+    currentProfile = { ...(currentProfile || {}), avatar_url };
+    paintProfileScreen();
+    if ($("authAvatar")){ $("authAvatar").src = avatar_url; $("authAvatar").hidden = false; }
+    $("avatarMsg").textContent = "Updated.";
+  } catch (err) {
+    // Show the real error, not a guessed cause - "try a smaller file"
+    // was a guess that this would only ever fail on size, which
+    // swallows the actual reason (a missing bucket, an RLS rejection, a
+    // real size limit, or something else) exactly when it matters most
+    // for actually diagnosing what went wrong.
+    $("avatarMsg").textContent = "Could not upload: " + (err?.message || String(err));
+  }
+}
+
+$("avatarFileInput")?.addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file || !currentUser) return;
+  openCropModal(file);
+});
+
+async function beginGoogleSignIn(){
+  sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+  // Full-page redirect, not a popup - simplest, most reliable option,
+  // and works identically on mobile, where popups are often blocked
+  // anyway. redirectTo brings the player straight back to whatever page
+  // they started on (this one) - an invited guest's room code is
+  // already carried in that same URL, so the redirect doesn't lose it.
+  await sb.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: window.location.href },
+  });
+}
+$("gateSignInBtn")?.addEventListener("click", beginGoogleSignIn);
+// Same handler, same redirect-back-to-here behavior - a guest signing in
+// from the setup screen instead of the gate doesn't need different
+// treatment, just a second way to reach the same action.
+$("setupSignInBtn")?.addEventListener("click", beginGoogleSignIn);
+
+$("gateGuestBtn")?.addEventListener("click", () => { showScreen("setup"); });
+
+$("googleSignOutBtn")?.addEventListener("click", async () => {
+  sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+  await sb.auth.signOut();
+  showScreen("gate");
+  await refreshAuthUI();
+});
+
+(async () => {
+  sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+  // The initial gate/setup decision for a fresh, non-invited,
+  // non-resumable visit - invited and hasResumable were already handled
+  // synchronously above (they don't need to wait on a session check at
+  // all), so this only ever runs for the remaining, genuinely-undecided
+  // case: show the gate until we know whether a session already exists.
+  if (!invited && !hasResumable) showScreen("gate");
+  await refreshAuthUI();
+  // A session already existed on load (a returning signed-in visitor,
+  // not a fresh sign-in click) - land them straight on their profile
+  // rather than the generic gate screen, without treating this as the
+  // "justSignedIn" moment refreshAuthUI() itself already handles for the
+  // OAuth-redirect-back case.
+  if (!invited && !hasResumable && currentUser && $("gate").hidden === false){
+    showScreen("profile");
+    paintProfileScreen();
+  }
+  // Checked here specifically, AFTER refreshAuthUI() has actually
+  // resolved - this whole IIFE is never awaited by its own caller (it's
+  // a fire-and-forget top-level call), so anything checking currentUser
+  // from OUTSIDE this function, right after invoking it, would read a
+  // stale null every time regardless of whether a session genuinely
+  // exists - the async fetch inside refreshAuthUI() simply wouldn't have
+  // finished yet at that point.
+  checkResumable();
+  // Covers the redirect-back moment specifically: supabase-js parses the
+  // OAuth token out of the URL automatically on load, but that parsing
+  // finishes asynchronously - onAuthStateChange is what actually fires
+  // once a session genuinely lands, whether that's from this redirect
+  // or a completely separate tab signing out.
+  sb.auth.onAuthStateChange(() => { refreshAuthUI(); });
+})();
 
 // Offer to reopen a table this browser was hosting or seated at (a
 // refresh loses nothing - multiplayer reconnects to the real backend,
 // solo rebuilds its own local state same as always).
-try {
-  const mp = JSON.parse(localStorage.getItem(MP_SAVE_KEY) || "null");
-  const sv = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
-  if (mp && mp.tableId && !invited){
-    $("resumeBtn").hidden = false;
-    $("resumeBtn").textContent = "Reopen table " + mp.room;
-    $("resumeBtn").addEventListener("click", resumeTable);
-  } else if (sv && sv.ROOM && !sv.over && !invited){
-    $("resumeBtn").hidden = false;
-    $("resumeBtn").textContent = "Reopen table " + sv.ROOM;
-    $("resumeBtn").addEventListener("click", resumeTable);
-  }
-} catch {}
+//
+// A signed-in player already has room-code-based rejoin on their
+// profile screen, which works from ANY device - showing this SAME-
+// DEVICE-ONLY shortcut on the home screen too, right next to their own
+// profile chip, was pure redundant clutter specifically for them. A
+// guest has no such alternative at all (there's no profile screen for
+// them to reach), so this one-click resume stays exactly where it
+// always was, completely unchanged, for that case.
+function checkResumable(){
+  try {
+    const mp = JSON.parse(localStorage.getItem(MP_SAVE_KEY) || "null");
+    const sv = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+    let room = null;
+    if (mp && mp.tableId && !invited) room = mp.room;
+    else if (sv && sv.ROOM && !sv.over && !invited) room = sv.ROOM;
+    if (!room) return;
+    const btn = currentUser ? $("profileResumeBtn") : $("resumeBtn");
+    if (!btn) return;
+    btn.hidden = false;
+    btn.textContent = "Reopen table " + room;
+    btn.addEventListener("click", resumeTable);
+  } catch {}
+}
 
 // Ultra arrives after first paint, so re-measure once the webfont lands.
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => {

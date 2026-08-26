@@ -130,6 +130,161 @@ body{
 }
 .cover-strip i{ width:3px; height:3px; background:var(--ink-3); border-radius:50%; }
 
+/* optional google sign-in, sits above the name tab - entirely optional,
+   a guest plays fine without ever touching this */
+.auth-row{
+  display:flex; justify-content:center; align-items:center;
+  gap:12px; margin-bottom:16px; min-height:38px;
+}
+.auth-btn{
+  padding:9px 18px; font-size:11px;
+}
+.auth-signed-in{
+  display:flex; align-items:center; gap:10px;
+  font-family:var(--type); font-size:13px; color:var(--ink-2);
+}
+.auth-signed-in b{ color:var(--ink); }
+.auth-signout{
+  background:none; border:none; padding:0;
+  font-family:var(--type); font-size:12px; color:var(--ink-3);
+  text-decoration:underline; cursor:pointer;
+}
+.auth-signout:hover{ color:var(--ink); }
+
+.profile-chip{
+  display:inline-flex; flex-direction:column; align-items:center; gap:8px;
+  background:none; border:none; padding:0; cursor:pointer;
+  font-family:var(--type); font-size:13px; color:var(--ink-2);
+}
+.profile-chip:hover{ color:var(--ink); }
+
+/* A first-time visitor has no reason to know this picture is a button -
+   a simple golden border on hover is the discoverability hint. */
+.profile-avatar{ transition:border-color .15s, box-shadow .15s; }
+.profile-chip:hover .profile-avatar{
+  border-color:#d4af37;
+  box-shadow:0 0 0 3px #d4af37;
+}
+.profile-avatar{
+  width:187px; height:187px; border-radius:50%; object-fit:cover;
+  border:1px solid var(--rule);
+}
+.profile-avatar-lg{ width:187px; height:187px; }
+
+.modal-backdrop{
+  position:fixed; inset:0; z-index:40;
+  background:rgba(10,8,6,.72);
+  display:flex; align-items:center; justify-content:center;
+  padding:20px;
+}
+.modal-card{
+  position:relative; width:100%; max-width:420px; max-height:88vh; overflow-y:auto;
+  background:var(--pulp); border:1px solid var(--rule); border-radius:4px;
+  padding:28px 24px 22px;
+}
+.modal-close{
+  position:absolute; top:10px; right:14px;
+  background:none; border:none; font-size:22px; line-height:1;
+  color:var(--ink-3); cursor:pointer;
+}
+.modal-close:hover{ color:var(--ink); }
+
+.crop-card{ text-align:center; max-width:380px; }
+.crop-hint{
+  font-family:var(--type); font-size:12px; color:var(--ink-3);
+  margin:0 0 12px;
+}
+.crop-canvas{
+  display:block; margin:0 auto 14px; border-radius:50%;
+  cursor:grab; touch-action:none; background:var(--pulp-2);
+}
+.crop-canvas:active{ cursor:grabbing; }
+.crop-zoom{ display:block; width:100%; margin-bottom:16px; }
+.crop-actions{ display:flex; justify-content:center; gap:12px; }
+
+.profile-head{
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+  text-align:center; margin-bottom:14px;
+}
+.avatar-upload{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+.avatar-edit{
+  font-family:var(--type); font-size:11px; color:var(--ink-3);
+  text-decoration:underline; cursor:pointer;
+}
+.avatar-edit:hover{ color:var(--ink); }
+
+.profile-stats{
+  display:grid; grid-template-columns:repeat(4,1fr); gap:8px;
+  margin:16px 0;
+}
+.stat-box{
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  padding:10px 4px; border:1px solid var(--rule); border-radius:3px;
+}
+.stat-box b{ font-size:20px; color:var(--ink); }
+.stat-box span{ font-size:10px; color:var(--ink-3); text-transform:uppercase; letter-spacing:.04em; }
+
+.profile-favorites{ margin-top:18px; }
+
+.leaderboard-link-row{ text-align:center; margin:0 0 14px; }
+
+.lb-list{ text-align:left; margin:14px 0; max-height:52vh; overflow-y:auto; }
+.lb-row{
+  display:flex; align-items:center; gap:10px;
+  padding:8px 4px; border-bottom:1px solid var(--rule);
+}
+.lb-thumb{
+  width:36px; height:36px; border-radius:4px; object-fit:cover; flex:0 0 auto;
+}
+.lb-thumb-blank{
+  display:flex; align-items:center; justify-content:center;
+  background:var(--pulp-2); color:var(--ink-3); font-size:14px;
+}
+.lb-name{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; }
+.lb-name b{ font-size:13px; font-weight:700; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lb-name i{ font-style:normal; font-size:10px; color:var(--ink-3); }
+.lb-record, .lb-rate, .lb-bought, .lb-price{
+  flex:0 0 auto; width:56px; text-align:right;
+  font-family:var(--data); font-size:11px; color:var(--ink-2);
+}
+.profile-favorites .chips{ margin-bottom:30px; }
+
+.gate-guest{
+  display:block; margin:14px auto 0; background:none; border:none;
+  font-family:var(--type); font-size:13px; color:var(--ink-2);
+  text-decoration:underline; cursor:pointer;
+}
+.gate-guest:hover{ color:var(--ink); }
+
+.profile-link-row{ text-align:center; margin-bottom:14px; }
+.guest-signin-row{ text-align:center; margin-bottom:14px; }
+.auth-signout-btn{ margin-top:28px; }
+
+/* The standalone .pn-pass buttons on the profile screen specifically,
+   listed by id rather than a broad #profile .pn-pass selector - that
+   broader scope would ALSO reach the crop modal's Cancel/"Use this
+   photo" buttons (nested inside #profile, same .pn-pass class), and
+   margin:auto on a flex item consumes space for alignment purposes,
+   which would have pushed those two apart instead of keeping them side
+   by side in their own row. Base .pn-pass itself stays untouched
+   everywhere else too, for the same reason - the auction screen's bid
+   panel needs several of these sitting side by side, not centered one
+   at a time. */
+#profileNameSaveBtn, #favSaveBtn, #reconnectBtn, #profileResumeBtn, #googleSignOutBtn{
+  display:block; margin-left:auto; margin-right:auto;
+}
+/* Equal gap on both sides of "Continue to the table" - matches the
+   28px above googleSignOutBtn, so the stamp button reads as evenly
+   spaced from its neighbor on either side, not tighter on one side
+   than the other. Margins between adjacent block siblings collapse to
+   whichever is larger, not add together - .stamp-btn itself has no
+   margin-top, so this alone produces exactly 28px above it too. */
+#profileResumeBtn{ margin-bottom:28px; }
+
+.tab-input:read-only{
+  color:var(--ink-2); cursor:default; border-bottom-style:dotted;
+}
+
 /* manila divider tabs */
 .tabs-row{
   display:grid; grid-template-columns:1fr auto 1fr; align-items:center;

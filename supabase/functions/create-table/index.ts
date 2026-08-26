@@ -7,7 +7,14 @@
 // so that row has to exist before any bid can be placed. This is what
 // creates it, once, when a host opens a table.
 //
-// Input: { room_code, host_cid, host_name, np, box }
+// Input: { room_code, host_cid, host_name, np, box, host_user_id? }
+// host_user_id is optional and nullable - a signed-in host links their
+// seat to a real account (see the profiles migration); a guest host
+// leaves this null and plays exactly as before, purely on cid. Nothing
+// about the auction, bidding, or fight logic reads this column at all -
+// it exists only so a seat can be traced back to a real, stable identity
+// instead of only a device-generated one, for whatever a real profile
+// eventually needs it for (reconnect-by-account, stats, preferences).
 // Output: { ok: true, table_id }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -24,7 +31,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   try {
-    const { room_code, host_cid, host_name, np, box } = await req.json();
+    const { room_code, host_cid, host_name, np, box, host_user_id } = await req.json();
     if (!room_code || !host_cid || !np || !box) {
       return json({ error: "room_code, host_cid, np, and box are required" }, 400);
     }
@@ -43,6 +50,7 @@ Deno.serve(async (req) => {
     // seat 0 is always the host, same convention game.js already uses
     const { error: sErr } = await sb.from("seats").insert({
       table_id: table.id, seat: 0, cid: host_cid, name: host_name || null, purse: 20, roster: [],
+      user_id: host_user_id || null,
     });
     if (sErr) return json({ error: sErr.message }, 400);
 

@@ -6,7 +6,23 @@
 // had (see game.js's handle() "join" case) - a cid we've already seated
 // gets their existing seat back, not a new one.
 //
-// Input: { room_code, cid, name }
+// Input: { room_code, cid, name, user_id? }
+// user_id is optional and nullable, same reasoning as create-table's
+// host_user_id - links this seat to a real signed-in account if one was
+// provided, changes nothing about how the seat itself works otherwise.
+//
+// NEW: when user_id matches a seat that ALREADY has that same user_id
+// stored (from an earlier visit, on any device), that seat is reclaimed
+// immediately - checked before the cid-match, before table-fullness,
+// before anything else. This is the piece that was missing before real
+// accounts existed: cid is per-browser, so the host of a table opened on
+// one device had no way at all to get back into seat 0 from a different
+// one - not even the name-based reclaim below covers seat 0, since that
+// path only ever runs for guest seats 1 and up. A signed-in account
+// isn't per-device, so this works from anywhere, the moment someone
+// who's actually authenticated as that account asks for it - no host
+// approval needed here the way the name-based reclaim requires it,
+// because a real session can't be spoofed the way a typed name can.
 // Output: { ok: true, table_id, seat, np } or { error, full: true }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -22,7 +38,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   try {
-    const { room_code, cid, name } = await req.json();
+    const { room_code, cid, name, user_id } = await req.json();
     if (!room_code || !cid) return json({ error: "room_code and cid are required" }, 400);
 
     const sb = createClient(
@@ -41,8 +57,28 @@ Deno.serve(async (req) => {
     // reconnect: same cid already has a seat here, walk straight back in
     const already = seats.find((s: any) => s.cid === cid);
     if (already) {
-      if (name) await sb.from("seats").update({ name }).eq("table_id", table.id).eq("seat", already.seat);
+      const patch: Record<string, unknown> = {};
+      if (name) patch.name = name;
+      if (user_id && !already.user_id) patch.user_id = user_id;
+      if (Object.keys(patch).length) {
+        await sb.from("seats").update(patch).eq("table_id", table.id).eq("seat", already.seat);
+      }
       return json({ ok: true, table_id: table.id, seat: already.seat, np: table.np });
+    }
+
+    // reconnect via a real, signed-in account - see the file-level
+    // comment above. Runs on a NEW device (cid didn't match anything
+    // above) for someone who's genuinely authenticated as an account
+    // this table has already seen before, covering every seat including
+    // 0 - the host's own, which nothing else here has ever reached.
+    if (user_id) {
+      const byUserId = seats.find((s: any) => s.user_id === user_id);
+      if (byUserId) {
+        const patch: Record<string, unknown> = { cid };
+        if (name) patch.name = name;
+        await sb.from("seats").update(patch).eq("table_id", table.id).eq("seat", byUserId.seat);
+        return json({ ok: true, table_id: table.id, seat: byUserId.seat, np: table.np });
+      }
     }
 
     const taken = new Set(seats.map((s: any) => s.seat));
@@ -66,7 +102,9 @@ Deno.serve(async (req) => {
       const byName = name && seats.find((s: any) =>
         s.name && s.name.trim().toLowerCase() === String(name).trim().toLowerCase());
       if (byName) {
-        await sb.from("seats").update({ cid }).eq("table_id", table.id).eq("seat", byName.seat);
+        const patch: Record<string, unknown> = { cid };
+        if (user_id && !byName.user_id) patch.user_id = user_id;
+        await sb.from("seats").update(patch).eq("table_id", table.id).eq("seat", byName.seat);
         return json({ ok: true, table_id: table.id, seat: byName.seat, np: table.np });
       }
       return json({ error: "table is full", full: true }, 409);
@@ -74,6 +112,7 @@ Deno.serve(async (req) => {
 
     const { error: insErr } = await sb.from("seats").insert({
       table_id: table.id, seat: freeSeat, cid, name: name || null, purse: 20, roster: [],
+      user_id: user_id || null,
     });
     if (insErr) return json({ error: insErr.message }, 400);
 

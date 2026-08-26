@@ -56,6 +56,12 @@ Deno.serve(async (req) => {
     const owner = mySeat.name;
 
     const state = match.state as any;
+    // A stale or duplicate call after the match already concluded has
+    // nothing left to do - most importantly, it must never reach the
+    // stats-recording block below a second time for the same finished
+    // match. The client never calls this once ST.end is set, but the
+    // server is still the one that decides, not the client's own gating.
+    if (state.done) return json({ ok: true, waiting: false, already_done: true });
     const round = state.round;
     const contenders: string[] | null = state.contenders || null;
 
@@ -155,6 +161,51 @@ Deno.serve(async (req) => {
       contenders: result.contenders,
     };
     await sb.from("matches").update({ state: newState }).eq("table_id", table_id).eq("mode", mode);
+
+    // Character-level stats - genuinely per ROUND, not per match, since
+    // a round can end in a real draw (two fighters tied within the same
+    // rank group) even though the MATCH as a whole never can (sudden
+    // death always eventually produces exactly one champion). result.ranked
+    // already carries everything needed per fighter that took part this
+    // round: place===1 with no tie is a win, a tie is a draw, anything
+    // else is a loss. Runs every round regardless of whether the match
+    // itself just finished - wrapped the same way the match-level stats
+    // below are, so a hiccup here can never block the round's real
+    // result from reaching the players.
+    try {
+      await Promise.all(
+        result.ranked.map((f: any) =>
+          sb.rpc("record_character_round", { p_name: f.name, p_won: f.place === 1 && !f.draw, p_drew: f.draw })
+        )
+      );
+    } catch (statsErr) {
+      console.error("record_character_round failed:", statsErr);
+    }
+
+    // Stats only ever get recorded here, at the exact round that flips
+    // done from false to true - the guard at the top of this function
+    // (state.done -> early return) is what guarantees this block can
+    // never run twice for the same finished match. Every ORIGINAL seat
+    // gets games_played counted, including one eliminated early by a
+    // partial tie (see fight-engine.ts's contenders) - they genuinely
+    // played the match, they just didn't win it. Only a seat with a
+    // real user_id has anything to record against; a guest seat is
+    // simply skipped, not an error. Wrapped so a stats hiccup can never
+    // block the actual fight result from reaching the players - whoever
+    // won still finds out even if this part fails for some reason.
+    if (result.done && result.champion) {
+      try {
+        await Promise.all(
+          seats
+            .filter((s: any) => s.user_id)
+            .map((s: any) =>
+              sb.rpc("record_match_stats", { p_user_id: s.user_id, p_won: s.name === result.champion })
+            )
+        );
+      } catch (statsErr) {
+        console.error("record_match_stats failed:", statsErr);
+      }
+    }
 
     return json({ ok: true, waiting: false, result });
   } catch (e) {

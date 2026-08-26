@@ -43,8 +43,144 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <ul class="pending-list" id="pendingList"></ul>
 </div>
 
+<!-- ============================ GATE ============================ -->
+<!-- The very first thing anyone sees on a fresh visit - see boot logic
+     in game.js for exactly when this shows vs. when it's skipped (an
+     invite link or an already-resumable table both bypass this, since
+     forcing either of those through a generic sign-in prompt first
+     would work against what the visitor is already trying to do). -->
+<main id="gate" class="screen setup-screen" hidden>
+  <div class="guide-cover">
+    <div class="cover-rules" aria-hidden="true"></div>
+    <p class="cover-edition">Ten Characters &middot; Twenty Dollars &middot; One Fight</p>
+    <h1 class="cover-title">Super Drafts</h1>
+    <p class="cover-sub">Sign in to keep a profile - your record, your favorite universes, your own picture.</p>
+
+    <button id="gateSignInBtn" class="stamp-btn" type="button"><span>Sign in with Google</span></button>
+    <button id="gateGuestBtn" class="gate-guest" type="button">Continue as a guest</button>
+    <p class="cover-hint">Guests can still open or join a table with just a typed name - nothing here is required to play.</p>
+  </div>
+</main>
+
+<!-- ============================ PROFILE ============================ -->
+<!-- Lands here immediately after a fresh sign-in (see onAuthStateChange
+     in game.js) - not folded into the setup screen as a modal, since a
+     signed-in player setting their name and picture is meant to feel
+     like a real, first step, not an optional aside on the way to
+     opening a table. Unreachable by a guest - profileLinkBtn on the
+     setup screen (the only other way in) only ever renders once
+     currentUser is set. -->
+<main id="profile" class="screen setup-screen" hidden>
+  <div class="guide-cover">
+    <div class="cover-rules" aria-hidden="true"></div>
+    <p class="cover-edition">Your Profile</p>
+
+    <div class="profile-head">
+      <div class="avatar-upload">
+        <img id="profileAvatarImg" class="profile-avatar profile-avatar-lg" alt="" hidden>
+        <label class="avatar-edit" for="avatarFileInput">Change photo</label>
+        <input type="file" id="avatarFileInput" accept="image/png,image/jpeg,image/webp" hidden>
+      </div>
+      <p class="netmsg" id="avatarMsg" role="status"></p>
+    </div>
+
+    <!-- Cropper - opens the moment a file is chosen, before anything is
+         ever uploaded. Nothing gets sent to Storage until the person
+         confirms exactly what's inside the circle. -->
+    <div class="modal-backdrop" id="cropModal" hidden role="dialog" aria-modal="true" aria-label="Adjust your photo">
+      <div class="modal-card crop-card">
+        <p class="crop-hint">Drag to reposition &middot; slide to zoom</p>
+        <canvas id="cropCanvas" width="320" height="320" class="crop-canvas"></canvas>
+        <input type="range" id="cropZoom" class="crop-zoom" min="1" max="3" step="0.01" value="1">
+        <div class="crop-actions">
+          <button id="cropCancelBtn" class="pn-pass" type="button">Cancel</button>
+          <button id="cropSaveBtn" class="pn-pass" type="button">Use this photo</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabs-row tabs-solo">
+      <div class="tab tab-red">
+        <label class="tab-label" for="profileNameInput">Your name</label>
+        <input id="profileNameInput" class="tab-input" type="text" maxlength="14" autocomplete="off" spellcheck="false" placeholder="write it here">
+      </div>
+    </div>
+    <button id="profileNameSaveBtn" class="pn-pass" type="button">Save name</button>
+    <p class="netmsg" id="nameMsg" role="status"></p>
+
+    <div class="chips" id="statsViewChips">
+      <button type="button" class="chip on" data-view="overall">Overall</button>
+      <button type="button" class="chip" data-view="mp">Multiplayer</button>
+      <button type="button" class="chip" data-view="bot">Single Player</button>
+    </div>
+
+    <section class="profile-stats" aria-label="Your record">
+      <div class="stat-box"><b id="statGames">0</b><span>Played</span></div>
+      <div class="stat-box"><b id="statWins">0</b><span>Wins</span></div>
+      <div class="stat-box"><b id="statLosses">0</b><span>Losses</span></div>
+      <div class="stat-box"><b id="statRate">—</b><span>Win rate</span></div>
+    </section>
+
+    <section class="profile-favorites" aria-label="Favorite universes">
+      <h3 class="fm-head">Favorite universes</h3>
+      <p class="box-note">Pre-fills the box whenever you open a new table. Doesn't change anything mid-game.</p>
+      <div class="chips" id="favChips"></div>
+      <button id="favSaveBtn" class="pn-pass" type="button">Save preferences</button>
+      <p class="netmsg" id="favMsg" role="status"></p>
+    </section>
+
+    <section class="profile-reconnect" aria-label="Reconnect to a table">
+      <h3 class="fm-head">Rejoin a table</h3>
+      <p class="box-note">Already have a game going on another device? Enter its room code to pick up right where you left off - as the host or a player, whichever seat is yours.</p>
+      <div class="tabs-row tabs-solo">
+        <div class="tab tab-blue">
+          <label class="tab-label" for="reconnectCode">Room code</label>
+          <input id="reconnectCode" class="tab-input" type="text" maxlength="4" autocomplete="off" spellcheck="false" placeholder="e.g. K7QM" style="text-transform:uppercase">
+        </div>
+      </div>
+      <button id="reconnectBtn" class="pn-pass" type="button">Rejoin</button>
+      <p class="netmsg" id="reconnectMsg" role="status"></p>
+      <!-- Same "Reopen table" this device may already remember, moved
+           here from the home screen - see checkResumable() in game.js.
+           Hidden unless a resumable table genuinely exists; nothing
+           duplicated for a guest, who never reaches this screen at all. -->
+      <button id="profileResumeBtn" class="pn-pass" type="button" hidden></button>
+    </section>
+
+    <button id="profileContinueBtn" class="stamp-btn" type="button"><span>Continue to the table</span></button>
+    <button id="googleSignOutBtn" class="pn-pass auth-signout-btn" type="button">Sign out</button>
+  </div>
+</main>
+
 <!-- ============================ SETUP ============================ -->
-<main id="setup" class="screen setup-screen">
+<!-- ============================ LEADERBOARD ============================ -->
+<main id="leaderboard" class="screen setup-screen" hidden>
+  <div class="guide-cover">
+    <div class="cover-rules" aria-hidden="true"></div>
+    <p class="cover-edition">Character Leaderboard</p>
+
+    <div class="tabs-row tabs-solo">
+      <div class="tab tab-blue">
+        <label class="tab-label" for="lbSearch">Search</label>
+        <input id="lbSearch" class="tab-input" type="text" autocomplete="off" spellcheck="false" placeholder="a character's name">
+      </div>
+    </div>
+
+    <div class="chips" id="lbSortChips">
+      <button type="button" class="chip on" data-sort="wins">Most Wins</button>
+      <button type="button" class="chip" data-sort="rate">Best Win Rate</button>
+      <button type="button" class="chip" data-sort="bought">Most Bought</button>
+      <button type="button" class="chip" data-sort="price">Priciest</button>
+    </div>
+
+    <p class="netmsg" id="lbMsg" role="status"></p>
+    <div id="lbList" class="lb-list"></div>
+
+    <button id="lbBackBtn" class="pn-pass" type="button">Back</button>
+  </div>
+</main>
+
+<main id="setup" class="screen setup-screen" hidden>
   <div class="guide-cover">
     <div class="cover-rules" aria-hidden="true"></div>
     <p class="cover-edition" id="coverEdition">Twenty Lots &middot; Ten Sold &middot; Two Buyers</p>
@@ -54,6 +190,27 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <div class="cover-strip">
       <span id="stockCount">Issues in Stock</span><i></i><span>Comics &amp; Anime</span><i></i><span>Base Versions</span><i></i><span>No Cosmic Gods</span><i></i><span>Twenty a Sale</span>
     </div>
+
+    <p class="leaderboard-link-row">
+      <button id="leaderboardOpenBtn" class="pn-pass" type="button">Character Leaderboard</button>
+    </p>
+
+    <!-- Only rendered at all once currentUser is set - a guest never
+         sees this, and has no other way to reach the profile screen.
+         Just the avatar, no name text underneath - "Your name" right
+         below already shows it, repeating it here was pure clutter. -->
+    <p class="profile-link-row" id="profileLinkRow" hidden>
+      <button id="profileLinkBtn" class="profile-chip" type="button">
+        <img id="authAvatar" class="profile-avatar" alt="" hidden>
+      </button>
+    </p>
+
+    <!-- The inverse of profileLinkRow above - shown for a guest, hidden
+         once signed in. Playing as a guest never required leaving this
+         screen at all, so signing in later shouldn't either. -->
+    <p class="guest-signin-row" id="guestSignInRow">
+      <button id="setupSignInBtn" class="pn-pass" type="button">Sign in with Google</button>
+    </p>
 
     <div class="tabs-row tabs-solo">
       <div class="tab tab-red">
