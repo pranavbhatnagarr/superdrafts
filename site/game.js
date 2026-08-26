@@ -3827,6 +3827,28 @@ try {
   hasResumable = !!((mpCheck && mpCheck.tableId) || (svCheck && svCheck.ROOM && !svCheck.over));
 } catch {}
 
+// A deliberate, just-clicked "sign in" action always wins over a
+// leftover resumable-table flag from some earlier, unrelated session.
+// Without this, hasResumable stays permanently true for anyone who has
+// EVER played a multiplayer game and not explicitly closed the table -
+// nothing clears MP_SAVE_KEY just because a game finished normally -
+// which silently hijacked every future sign-in redirect (a real OAuth
+// sign-in is a full page reload, wiping all JS state and re-running
+// this exact boot sequence from scratch) straight past the profile
+// screen it was actually supposed to land on, landing on the setup
+// screen instead and looking exactly like signing in did nothing at
+// all. sessionStorage specifically, not localStorage - this only needs
+// to survive the one redirect round-trip in this same tab, set right
+// before the redirect in beginGoogleSignIn(), and is consumed (read
+// once, then removed) the moment this boot checks it, so it can never
+// incorrectly persist into some later, unrelated page load.
+let justSigningIn = false;
+try {
+  justSigningIn = sessionStorage.getItem("longbox.justSigningIn") === "1";
+  sessionStorage.removeItem("longbox.justSigningIn");
+} catch {}
+if (justSigningIn) hasResumable = false;
+
 if (invited){
   ROOM = invited.toUpperCase().slice(0, 4);
   $("knockCode").textContent = ROOM;
@@ -4038,6 +4060,14 @@ $("profileNameSaveBtn")?.addEventListener("click", async () => {
     if (error) throw error;
     currentUser = { ...currentUser, name: newName };
     currentProfile = { ...(currentProfile || {}), display_name: newName };
+    // Saved to the database instantly, but #myName/#knockName only ever
+    // get their VALUE set inside refreshAuthUI() - which doesn't run
+    // again just because this save happened. Without this, the fields
+    // kept showing the old name until something else (a sign-out, a
+    // fresh page load) happened to trigger refreshAuthUI() on its own -
+    // the data was never actually delayed, only what was visibly shown.
+    if ($("myName")) $("myName").value = newName;
+    if ($("knockName")) $("knockName").value = newName;
     $("nameMsg").textContent = "Saved.";
   } catch (e) {
     $("nameMsg").textContent = "Could not save - try again.";
@@ -4215,14 +4245,30 @@ $("avatarFileInput")?.addEventListener("change", (e) => {
 
 async function beginGoogleSignIn(){
   sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+  // Marks this specific redirect round-trip so the NEXT boot (after the
+  // full page reload the OAuth flow causes) knows to prioritize landing
+  // on the profile screen over a leftover resumable-table flag - see
+  // that check's own comment for the full reasoning.
+  try { sessionStorage.setItem("longbox.justSigningIn", "1"); } catch {}
+  // Deliberately NOT window.location.href - confirmed via debug logging
+  // that this URL can carry a stray leftover "#" fragment (from wherever
+  // exactly - Supabase's own internal processing, a prior redirect, it
+  // doesn't matter which). Supabase's redirect construction appends its
+  // own #access_token=... onto whatever redirectTo already had, without
+  // ever replacing an existing fragment first - one stray "#" already
+  // there becomes a malformed "##access_token=..." on return, which its
+  // OWN detectSessionInUrl logic then fails to parse at all, silently
+  // reporting no session despite a perfectly valid token sitting right
+  // there. Building this explicitly hash-free removes the possibility
+  // entirely, regardless of how the leftover fragment would have formed.
+  const cleanRedirect = window.location.origin + window.location.pathname + window.location.search;
   // Full-page redirect, not a popup - simplest, most reliable option,
   // and works identically on mobile, where popups are often blocked
-  // anyway. redirectTo brings the player straight back to whatever page
-  // they started on (this one) - an invited guest's room code is
-  // already carried in that same URL, so the redirect doesn't lose it.
+  // anyway. An invited guest's room code lives in the query string,
+  // which cleanRedirect above preserves untouched.
   await sb.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: window.location.href },
+    options: { redirectTo: cleanRedirect },
   });
 }
 $("gateSignInBtn")?.addEventListener("click", beginGoogleSignIn);
@@ -4242,21 +4288,65 @@ $("googleSignOutBtn")?.addEventListener("click", async () => {
 
 (async () => {
   sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+  // Attached BEFORE anything else runs, specifically before the first
+  // refreshAuthUI() call below - a genuine race, not a hypothetical one:
+  // Supabase's own internal processing of an OAuth token sitting in the
+  // URL runs asynchronously and can complete WHILE that first call is
+  // still awaiting its own getSession() response (especially when
+  // Google skips its consent screen entirely for an already-authorized
+  // account, making the whole redirect round-trip nearly instant). If
+  // the "signed in" event fires before this listener exists to catch
+  // it, it's simply gone - nothing replays a missed event later. This
+  // was the actual reason a second sign-in click was needed: the second
+  // click's own fresh redirect happened to let the timing line up by
+  // coincidence, not because anything was actually fixed.
+  sb.auth.onAuthStateChange(() => { refreshAuthUI(); });
   // The initial gate/setup decision for a fresh, non-invited,
   // non-resumable visit - invited and hasResumable were already handled
   // synchronously above (they don't need to wait on a session check at
   // all), so this only ever runs for the remaining, genuinely-undecided
   // case: show the gate until we know whether a session already exists.
-  if (!invited && !hasResumable) showScreen("gate");
+  //
+  // Skipped specifically when justSigningIn is true - this boot IS the
+  // OAuth redirect landing back from a deliberate sign-in click, so a
+  // real session is about to be confirmed a moment later regardless.
+  // Showing "Sign in with Google" for that one brief instant, only to
+  // immediately replace it with the profile screen once the session
+  // check resolves, is exactly the kind of visible flash-then-correct
+  // that reads as janky rather than instant - the fix is not showing
+  // the wrong screen in the first place, not showing it faster.
+  if (!invited && !hasResumable && !justSigningIn) showScreen("gate");
   await refreshAuthUI();
+  // Strips the OAuth hash fragment out of the visible URL right after
+  // refreshAuthUI()'s getSession() call has had its chance to read it -
+  // left in place, it sat in window.location.href indefinitely (this is
+  // a single-page app; nothing else ever navigates or reloads to clear
+  // it), meaning the NEXT sign-in click captured this exact stale,
+  // already-consumed token data as ITS OWN redirectTo target, since
+  // beginGoogleSignIn() builds that from window.location.href directly.
+  // First sign-in always worked because the URL was still clean at that
+  // point; every sign-in after it was quietly corrupted by garbage left
+  // over from the one before. Only the hash is touched - the query
+  // string (an invited link's own room code) is left completely alone.
+  if (window.location.hash) {
+    try { history.replaceState(null, "", window.location.pathname + window.location.search); } catch {}
+  }
   // A session already existed on load (a returning signed-in visitor,
   // not a fresh sign-in click) - land them straight on their profile
-  // rather than the generic gate screen, without treating this as the
-  // "justSignedIn" moment refreshAuthUI() itself already handles for the
-  // OAuth-redirect-back case.
-  if (!invited && !hasResumable && currentUser && $("gate").hidden === false){
+  // rather than the generic gate screen. Checking currentUser directly
+  // here, not gate's own visibility - justSigningIn's whole point above
+  // was to make sure gate was NEVER shown for that path, so gating this
+  // on "was gate visible" would silently fail for the exact case this
+  // was built to fix.
+  if (!invited && !hasResumable && currentUser){
     showScreen("profile");
     paintProfileScreen();
+  } else if (!invited && !hasResumable && justSigningIn){
+    // The redirect landed but no session actually materialized (the
+    // sign-in was cancelled partway, or genuinely failed) - gate was
+    // never shown for this path, so show it now rather than leaving
+    // every screen hidden with nothing for the person to do.
+    showScreen("gate");
   }
   // Checked here specifically, AFTER refreshAuthUI() has actually
   // resolved - this whole IIFE is never awaited by its own caller (it's
@@ -4266,12 +4356,6 @@ $("googleSignOutBtn")?.addEventListener("click", async () => {
   // exists - the async fetch inside refreshAuthUI() simply wouldn't have
   // finished yet at that point.
   checkResumable();
-  // Covers the redirect-back moment specifically: supabase-js parses the
-  // OAuth token out of the URL automatically on load, but that parsing
-  // finishes asynchronously - onAuthStateChange is what actually fires
-  // once a session genuinely lands, whether that's from this redirect
-  // or a completely separate tab signing out.
-  sb.auth.onAuthStateChange(() => { refreshAuthUI(); });
 })();
 
 // Offer to reopen a table this browser was hosting or seated at (a
