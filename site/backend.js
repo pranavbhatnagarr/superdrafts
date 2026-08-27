@@ -116,7 +116,6 @@ export class Backend {
       // upstream of it.
       passedIn: this._lot.passed_in || false,
       lockUntil: this._lot.lock_until ? new Date(this._lot.lock_until).getTime() : 0,
-      bidDeadline: this._lot.bid_deadline ? new Date(this._lot.bid_deadline).getTime() : 0,
       history: this._lot.history || [],
     } : null;
 
@@ -137,7 +136,6 @@ export class Backend {
       box: this._table.box,
       np: this._table.np,
       lockLeft: lot && lot.lockUntil ? Math.max(0, lot.lockUntil - now) : 0,
-      bidLeft: lot && lot.bidDeadline ? Math.max(0, lot.bidDeadline - now) : 0,
       deckLeft: this._table.deck ? this._table.deck.length : 0,
       fx: this._lot ? (this._lot.fx || null) : null,   // top-level, not nested in `lot` - applyState() reads s.fx directly
       matches: this._matches, // keyed by mode - a table can hold a "random" row and a "prep" row at once, see start-match's own comment for why
@@ -331,16 +329,5 @@ export class Backend {
   }
   submitPick(seat, name, mode){
     return this._act("submit-pick", { table_id: this.tableId, seat, cid: this.cid, name, mode });
-  }
-  // Client-driven timeout resolution: close-lot re-validates everything
-  // server-side (it re-checks bid_deadline itself, doesn't trust the
-  // caller), so any connected client - host or guest - can safely call
-  // this the instant its own local countdown hits zero. This is what
-  // gives back the ORIGINAL instant-feeling UX (a real setTimeout firing
-  // exactly on deadline, like the old scheduleBidTimer()) instead of
-  // waiting on either another player's next action or cron's 1-minute
-  // backstop.
-  closeLot(){
-    return this._act("close-lot", { table_id: this.tableId });
   }
 }

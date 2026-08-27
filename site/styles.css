@@ -1021,39 +1021,6 @@ body{
   text-align:center; line-height:1.2; overflow-wrap:break-word;
 }
 
-/* the 3-2-1 countdown in a bidder's last 3 seconds to answer. Sits above
-   even the price sticker (z-index:4) since this is the thing that most
-   needs to be seen right now. pointer-events:none so it never blocks a
-   frantic click on the bid buttons underneath it. */
-.bid-timer{
-  position:absolute; inset:0; z-index:6;
-  display:flex; align-items:center; justify-content:center;
-  pointer-events:none;
-}
-.bid-timer-num{
-  font-family:var(--wax); font-size:clamp(70px,20vw,128px); line-height:1;
-  color:#fff2df;
-  text-shadow:0 0 8px rgba(214,32,26,.9), 0 0 34px rgba(214,32,26,.65), 0 4px 0 rgba(0,0,0,.55);
-  animation:bidTimerPop .82s cubic-bezier(.2,.9,.25,1) both;
-}
-@keyframes bidTimerPop{
-  0%{ transform:scale(2.1) rotate(-8deg); opacity:0; }
-  38%{ transform:scale(1.06) rotate(3deg); opacity:1; }
-  64%{ transform:scale(.97) rotate(-1deg); }
-  100%{ transform:scale(1) rotate(0deg); opacity:1; }
-}
-/* the card itself gets nervous along with the number: a quick red-edged
-   shake for as long as the countdown is live. */
-.issue.timer-urgent .cover{
-  animation:timerShake .42s ease-in-out infinite;
-  box-shadow:0 0 0 3px rgba(214,32,26,.6), 0 26px 50px -22px rgba(0,0,0,.9);
-}
-@keyframes timerShake{
-  0%, 100%{ transform:rotate(-1deg); }
-  25%{ transform:rotate(-1.8deg); }
-  75%{ transform:rotate(-.2deg); }
-}
-
 .call{
   margin:22px 0 0; text-align:center; max-width:44ch;
   font-family:var(--type); font-size:clamp(13px,1.6vw,16px);

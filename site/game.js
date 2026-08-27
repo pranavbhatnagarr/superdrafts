@@ -191,16 +191,6 @@ const ACK_MS = 1600;
 let lockTill = 0;                 // local clock: when this screen may bid again
 const locked = () => Date.now() < lockTill;
 
-// A live bid puts the rival on the clock: 8 seconds to answer (outbid, or
-// pass and hand it over) before the lot sells itself to whoever is
-// standing. The last 3 of those seconds get the 3-2-1 countdown on the
-// card. Purely a pacing device, same spirit as ACK_MS above, just longer
-// and rendered rather than just felt.
-const BID_TIMER_MS = 8000;
-const BID_URGENT_MS = 3000;
-let bidDeadlineLocal = 0;         // local clock: when the standing bid auto-sells
-let bidTimerShown = 0;            // last countdown digit painted, so repaints don't restart the pop
-
 // What is in the box. The host owns this and it travels to the joiner.
 let BOX = { u: ["MAR","DC"], tiers: false };
 // Set the moment a player actually clicks a universe chip themselves -
@@ -490,8 +480,7 @@ function handle(m){
 
 function snapshot(fx){
   const lockLeft = lot && lot.lockUntil ? Math.max(0, lot.lockUntil - Date.now()) : 0;
-  const bidLeft = lot && lot.bidDeadline ? Math.max(0, lot.bidDeadline - Date.now()) : 0;
-  return { P, lot, lotNum, over, box: BOX, np: NP, lockLeft, bidLeft,
+  return { P, lot, lotNum, over, box: BOX, np: NP, lockLeft,
            deckLeft: deck ? deck.length : 0, fx: fx || null };
 }
 
@@ -503,63 +492,8 @@ function pushState(fx){
   if (SOLO) botTick();
 }
 
-// Client-driven timeout resolution, restoring the original instant feel.
-// The lazy-check inside place-bid only fires when someone actually takes
-// an action - if both players just watch the clock hit zero without
-// clicking anything, nothing triggers it, leaving cron's 1-minute
-// backstop as the only thing that would eventually close it. This
-// schedules a real setTimeout for the exact moment the CURRENT lot's own
-// deadline arrives (only rescheduling when the deadline actually
-// changes, not on every snapshot), and fires backend.closeLot() right
-// then - close-lot re-validates everything server-side itself, so this
-// is safe even though any connected client can trigger it.
-let __closeLotDeadline = 0;
-let timeoutResultPreview = null;
-// A tiny scheduling cushion prevents the request landing a few milliseconds
-// before the recorded deadline while keeping settlement visually immediate.
-const CLIENT_GRACE_MS = 25;
-function scheduleCloseLot(s){
-  if (!backend || !s.lot || s.lot.sold || !s.lot.bidDeadline) return;
-  if (s.lot.bidDeadline === __closeLotDeadline) return;   // already scheduled for this exact deadline
-  __closeLotDeadline = s.lot.bidDeadline;
-  clearTimeout(window.__closeLotTimer);
-  const wait = Math.max(0, s.lot.bidDeadline - Date.now()) + CLIENT_GRACE_MS;
-  window.__closeLotTimer = setTimeout(() => {
-    previewTimeoutResult(s.lotNum);
-    backend.closeLot().catch(() => {});
-  }, wait);
-}
-
-// Show the result implied by the last confirmed lot at the exact visual
-// deadline. The server remains authoritative and corrects any rare mismatch.
-function previewTimeoutResult(expectedLotNum){
-  if (!lot || lot.sold || lotNum !== expectedLotNum) return;
-  let word, line, tone;
-  if (lot.high !== null){
-    word = "Sold";
-    line = `${lot.char.name} to seat ${lot.high} for ${money(lot.price)}`;
-    tone = lot.high === 0 ? "red" : "blue";
-  } else {
-    const ob = obliged();
-    if (ob !== null){
-      word = "Sold";
-      line = `${lot.char.name} to seat ${ob} for $1`;
-      tone = ob === 0 ? "red" : "blue";
-    } else {
-      const soloSeat = seats().find(inPlay);
-      const cost = soloSeat !== undefined ? passCost(soloSeat) : 0;
-      word = "Passed";
-      line = `${lot.char.name}, nobody wanted it` + (cost ? `, ${money(cost)} to walk away` : "");
-      tone = "grey";
-    }
-  }
-  timeoutResultPreview = { lotNum, word, line };
-  stamp(word, line, tone, true);
-  word === "Sold" ? SFX.sold() : SFX.passedIn();
-}
 function applyState(s, local){
   if (!s || !s.lot) return;          // nothing to draw before the sale opens
-  scheduleCloseLot(s);
   // Track what is actually on the cover. The host mutates lotNum before it
   // publishes, so comparing state-to-state would never see the change.
   const lotChanged = drawnLot !== s.lotNum;
@@ -612,32 +546,8 @@ function applyState(s, local){
   clearTimeout(window.__lockTimer);
   if (s.lockLeft) window.__lockTimer =
     setTimeout(() => { if (lot && !over) render(); }, s.lockLeft + 250);
-  // Uses the real, absolute deadline straight from the database now,
-  // not a recomputed Date.now()+bidLeft. That relative approach made
-  // sense in the old host-broadcast architecture (no shared, absolute
-  // timestamp existed to compare against), but now that backend.js
-  // provides lot.bidDeadline as a real timestamp, recomputing it fresh
-  // on every single snapshot - including every routine 3-second poll,
-  // whether or not the deadline actually changed - introduced exactly
-  // the kind of accumulating drift that caused several other bugs
-  // today: each recomputation combines a slightly-delayed bidLeft
-  // value with a freshly-read Date.now(), which can systematically
-  // shift the PERCEIVED deadline earlier or later depending on network
-  // timing, however small. Using the absolute value directly means the
-  // countdown is fixed and correct the moment a lot opens, and never
-  // drifts no matter how many redundant snapshots arrive in between -
-  // it only ever changes when the real deadline genuinely does (a bid
-  // extending it, or a new lot).
-  bidDeadlineLocal = (s.lot && s.lot.bidDeadline) || 0;
   if (!local) started = true;
-  if (over){
-    showFaceoff();
-    if (timeoutResultPreview){
-      timeoutResultPreview = null;
-      releaseStamp(100);
-    }
-    return;
-  }
+  if (over) return showFaceoff();
   // A fresh sale is starting: over just flipped back to false, which only
   // happens right after a deal, never mid-match. Any ST left over from the
   // match that just finished is stale on THIS browser the moment that
@@ -716,26 +626,11 @@ function applyState(s, local){
     if (lotChanged) fitName();
     if (s.fx && s.fx.id !== lastFx){
       lastFx = s.fx.id;
-      const alreadyPreviewed = timeoutResultPreview &&
-        timeoutResultPreview.lotNum === s.lotNum &&
-        timeoutResultPreview.word === s.fx.word &&
-        timeoutResultPreview.line === s.fx.line;
-      if (!alreadyPreviewed){
-        timeoutResultPreview = null;
-        stamp(s.fx.word, s.fx.line, s.fx.tone);
-        s.fx.word === "Sold" ? SFX.sold() : SFX.passedIn();
-      }
+      stamp(s.fx.word, s.fx.line, s.fx.tone);
+      s.fx.word === "Sold" ? SFX.sold() : SFX.passedIn();
     }
   };
-  const nextLotAfterPreview = lotChanged && timeoutResultPreview &&
-    s.lotNum !== timeoutResultPreview.lotNum;
-  if (nextLotAfterPreview){
-    // Paint the confirmed next card behind the still-visible result, then
-    // remove the overlay. There is never an uncovered old-card frame.
-    doVisualUpdate();
-    timeoutResultPreview = null;
-    releaseStamp(100);
-  } else if (lotChanged && Date.now() < stampHideAt){
+  if (lotChanged && Date.now() < stampHideAt){
     clearTimeout(window.__stampDeferredRender);
     window.__stampDeferredRender = setTimeout(doVisualUpdate, stampHideAt - Date.now() + 20);
   } else {
@@ -1141,7 +1036,7 @@ async function connectToTable(seat, np, tableId){
   // lotChanged check reads false and skips renderLot() entirely - the
   // general fields (lot number, price, footer text) still populate via
   // render(), but the character's own name/alias/note/art never do.
-  drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer); resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender); lastPanelBidKey = {}; pendingAction = null;
+  drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender); lastPanelBidKey = {}; pendingAction = null;
   sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
   backend = new Backend(sb, TABLE_ID, CID);
   backend.onSnapshot(s => applyState(s));
@@ -1291,7 +1186,7 @@ async function openTable(){
     // Same reset as the guest path in onSeated() - a reused tab can
     // otherwise carry a previous test table's rendering state into this
     // brand-new one and cause renderLot() to be silently skipped.
-    drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer); resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender); lastPanelBidKey = {}; pendingAction = null;
+    drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; resetMatchState(); stampHideAt = 0; clearTimeout(window.__stampDeferredRender); lastPanelBidKey = {}; pendingAction = null;
     backend = new Backend(sb, TABLE_ID, CID);
     backend.onSnapshot(s => {
       applyState(s);
@@ -1539,7 +1434,7 @@ function resumeTable(){
   if (mp && mp.tableId){
     HOST = mp.host; ME = mp.me; ROOM = mp.room; TABLE_ID = mp.tableId;
     resetMatchState();
-    drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0; __closeLotDeadline = 0; clearTimeout(window.__closeLotTimer);
+    drawnLot = -1; lastFx = 0; heardBids = 0; heardFolds = 0;
     (async () => {
       try {
         await connect();   // re-establish chan too: presence, roles, and the knock/admit flow still run on it
@@ -1591,11 +1486,6 @@ function resumeTable(){
   if (!sv) return;
   HOST = true; ME = 0; started = true;
   ROOM = sv.ROOM; deck = sv.deck; P = sv.P; lot = sv.lot; lotNum = sv.lotNum; over = sv.over;
-  // A saved lot's bidDeadline is just a timestamp from before the reload; the
-  // actual JS timer that would act on it is gone with the old page. Without
-  // this, the countdown UI could reappear (rebuilt from that stale
-  // timestamp) with nothing behind it to ever resolve the lot.
-  if (lot && !lot.sold && lot.bidDeadline) scheduleBidTimer();
   connect().then(() => { pushState(); }).catch(() => nudge("Could not reopen that table."));
 }
 
@@ -1647,64 +1537,12 @@ function canPass(p){
 }
 
 function nextLot(){
-  clearTimeout(window.__bidTimer);
   if (bought() >= SLOTS * NP) return finish();
   if (lotNum >= perSale() || !deck.length) return finish();
   lotNum++;
   lot = { char: deck.shift(), price: 0, high: null, opener: (lotNum - 1) % NP,
           passed: seats().map(() => false) };
-  // Same clock, running from lot zero: nobody has to open it, but if
-  // neither buyer does within the window, something still has to happen
-  // (see scheduleBidTimer's own comment for which outcome it picks).
-  lot.bidDeadline = Date.now() + BID_TIMER_MS;
-  scheduleBidTimer();
   pushState();
-}
-
-// Host only: 8 seconds after a bid lands, if nobody has answered it, the
-// lot just sells itself to whoever is standing. The same clock also covers
-// the lot BEFORE anyone has bid at all (see nextLot() above): running out
-// with no bids either passes it in unsold (same as both buyers declining
-// by hand) or, if the lot is compulsory and somebody has to buy it anyway,
-// sells it to that buyer at the $1 opening price rather than leaving it
-// unresolved forever - obliged() below is exactly the rule the "Pass"
-// button already enforces for a compulsory lot, just applied here to a
-// buyer who never acted at all. Re-armed on every fresh bid (bid() calls
-// this again, and the clearTimeout below drops the old one), and harmless
-// to fire late: the lot/high/price check below means a stale timer from a
-// bid that has since been outbid or resolved does nothing.
-function scheduleBidTimer(){
-  clearTimeout(window.__bidTimer);
-  if (!lot || lot.sold) return;
-  const ref = lot, high = lot.high, price = lot.price;
-  // Normally this runs right after lot.bidDeadline was just set to
-  // "now + BID_TIMER_MS", so wait works out the same either way. It only
-  // matters after resumeTable() restores a deadline stamped before a
-  // reload: waiting out whatever time is actually left (possibly already
-  // past, which just resolves it on the next tick) instead of handing out
-  // a fresh 8 seconds nobody asked for.
-  const wait = lot.bidDeadline ? Math.max(0, lot.bidDeadline - Date.now()) : BID_TIMER_MS;
-  window.__bidTimer = setTimeout(() => {
-    if (lot !== ref || lot.sold) return;
-    if (high === null){
-      const ob = obliged();
-      if (ob !== null) return award(ob, 1);
-      // Same gap close-lot's server-side twin had until earlier today:
-      // letting the clock run out instead of clicking Pass yourself was
-      // hardcoded straight to passIn(0), skipping the solo-run $1 charge
-      // entirely regardless of whether one was actually owed - unlike
-      // passLocalSolo() (an explicit click), which already deducts this
-      // correctly via passCost() before ever calling passIn(). The
-      // deduction has to happen HERE, not inside passIn() itself - that
-      // function only ever builds the display text, it was never the
-      // one responsible for touching a purse.
-      const soloSeat = seats().find(inPlay);
-      const cost = soloSeat !== undefined ? passCost(soloSeat) : 0;
-      if (cost) P[soloSeat].purse -= cost;
-      return passIn(cost);
-    }
-    if (lot.high === high && lot.price === price) award(high, price);
-  }, wait);
 }
 
 /* ---------------------------- actions ---------------------------- */
@@ -1742,7 +1580,6 @@ function bid(p, amount){
   // parallel display.
   pendingAction = { lotNum, type: "bid", seat: p, amount };
   lot.high = p; lot.price = amount;
-  lot.bidDeadline = Date.now() + BID_TIMER_MS;
   render();
   backend.bid(p, amount, lotNum).catch(err => {
     // A real rejection, not just a slow response - the guess was wrong,
@@ -1796,7 +1633,7 @@ function resolveLotForDisplay(incoming){
       return incoming;
     }
     if (incoming.sold){ pendingAction = null; return incoming; }
-    return { ...incoming, high: pendingAction.seat, price: pendingAction.amount, bidDeadline: lot.bidDeadline };
+    return { ...incoming, high: pendingAction.seat, price: pendingAction.amount };
   }
 
   if (pendingAction.type === "pass"){
@@ -1828,8 +1665,6 @@ function bidLocalSolo(p, amount){
   lot.lockUntil = Date.now() + ACK_MS;
   seats().forEach(q => { const el = $("other" + q); if (el) el.value = ""; });
   if (!rivals(p).some(q => inPlay(q) && !lot.passed[q])) return award(p, amt);
-  lot.bidDeadline = Date.now() + BID_TIMER_MS;
-  scheduleBidTimer();
   pushState();
 }
 
@@ -1862,7 +1697,6 @@ function award(p, price){
   // A lot settles exactly once. Controls stay on screen through the stamp
   // animation, so without this a second click resells the same issue.
   if (lot.sold) return;
-  clearTimeout(window.__bidTimer);
   lot.sold = true;
   lot.high = p; lot.price = price;
   P[p].purse -= price;
@@ -1892,17 +1726,7 @@ function award(p, price){
 // comment at its one call site in applyState() for the actual bug this
 // closes (the stamp ending up on top of the wrong card).
 let stampHideAt = 0;
-function releaseStamp(delay = 250){
-  const layer = $("stampLayer"), mark = $("stampMark");
-  stampHideAt = Date.now() + delay;
-  clearTimeout(window.__stampHideTimer);
-  window.__stampHideTimer = setTimeout(() => {
-    layer.hidden = true;
-    mark.classList.remove("hit");
-  }, delay);
-}
-
-function stamp(word, line, tone, persist = false){
+function stamp(word, line, tone){
   const layer = $("stampLayer"), mark = $("stampMark");
   $("smWord").textContent = word;
   $("smLine").textContent = line;
@@ -1913,14 +1737,11 @@ function stamp(word, line, tone, persist = false){
   mark.style.animation = "";
   mark.classList.add("hit");
   clearTimeout(window.__stampHideTimer);
-  if (persist){
-    // Keep the preview over the current card until the Edge Function or the
-    // matching Realtime result confirms that the lot really settled.
-    stampHideAt = Date.now() + 30000;
-    window.__stampHideTimer = setTimeout(() => releaseStamp(0), 30000);
-  } else {
-    releaseStamp(1100);
-  }
+  stampHideAt = Date.now() + 1100;
+  clearTimeout(window.__stampHideTimer);
+  window.__stampHideTimer = setTimeout(() => {
+    layer.hidden = true; mark.classList.remove("hit");
+  }, 1100);
 }
 
 
@@ -2553,39 +2374,6 @@ function renderSticker(){
 }
 
 const setGo = (panel, off) => { const g = panel.querySelector(".pn-go"); if (g) g.disabled = off; };
-
-// Polled on an interval (see setInterval(driveBidTimer, ...) below) rather
-// than scheduled per-second: bidDeadlineLocal can be rebuilt at any moment
-// by a fresh state push (a new bid resets it, a sale resolving clears it),
-// so a plain countdown that only recomputes when told to would drift or
-// miss the reset. Cheap enough to just re-derive the digit every tick.
-function driveBidTimer(){
-  const el = $("bidTimer"), issue = $("issue");
-  if (!el || $("auction").hidden){ if (el) el.hidden = true; return; }
-  const numEl = $("bidTimerNum");
-  const active = lot && !lot.sold && bidDeadlineLocal > 0;
-  const msLeft = active ? bidDeadlineLocal - Date.now() : -1;
-  const urgent = msLeft > 0 && msLeft <= BID_URGENT_MS;
-  if (issue) issue.classList.toggle("timer-urgent", urgent);
-  if (!urgent){
-    el.hidden = true;
-    bidTimerShown = 0;
-    return;
-  }
-  const n = Math.min(3, Math.max(1, Math.ceil(msLeft / 1000)));
-  el.hidden = false;
-  if (n !== bidTimerShown){
-    bidTimerShown = n;
-    numEl.textContent = n;
-    // Same reflow-restart trick as stamp() above: forces the pop animation
-    // to replay from the start for each new digit rather than the browser
-    // treating an already-running animation as unchanged.
-    numEl.style.animation = "none";
-    void numEl.offsetWidth;
-    numEl.style.animation = "";
-  }
-}
-setInterval(driveBidTimer, 100);
 
 // Tracks the last set of bid-amount values shown per seat, so
 // renderPanels() only rebuilds those buttons when they've actually

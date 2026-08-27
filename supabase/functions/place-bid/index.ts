@@ -27,8 +27,6 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
 const SLOTS = 5;
-const BID_TIMER_MS = 8000;
-const ACK_MS = 1600;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
@@ -86,7 +84,6 @@ Deno.serve(async (req) => {
     if (lot.sold) return json({ error: "no open lot" }, 409);
 
     const NP = table.np;
-    const seatsList = seats.map((s) => s.seat).filter((s) => s !== 0).concat(0).sort((a, b) => a - b);
     // seats() in game.js is really just "0..NP-1" - reproduce that directly
     const allSeats = Array.from({ length: NP }, (_, i) => i);
 
@@ -125,18 +122,8 @@ Deno.serve(async (req) => {
 
     // ---- award: settle a lot to a winning seat ----
     async function award(p: number, price: number) {
-      // Atomically claim this lot before doing anything else. Multiple
-      // triggers can legitimately race to resolve the SAME expired lot
-      // at once now - place-bid's own lazy-check, close-lot via cron,
-      // and (new) each connected client's own scheduled timeout all
-      // independently try to resolve a lot the instant its deadline
-      // passes. Without this guard, more than one of them could read the
-      // deck before any of them had written to it, and each would
-      // independently deal out the SAME next card under two different
-      // lot numbers - a real, observed bug, not a theoretical one.
-      // .eq("sold", false) makes this an atomic compare-and-swap: only
-      // the caller whose UPDATE actually matched a still-unsold row gets
-      // a row back. Everyone else backs off immediately.
+      // Atomically claim this lot before doing anything else so duplicate
+      // pass requests cannot settle it twice.
       const fx = { id: Date.now(), word: "Sold", line: `${lot.card.name} to seat ${p} for $${price}`, tone: p === 0 ? "red" : "blue" };
       const { data: claimed, error: claimErr } = await sb
         .from("lots")
@@ -214,22 +201,9 @@ Deno.serve(async (req) => {
         high_seat: null, high_amount: 0,
         opener: (nextLotNum - 1) % NP,
         passed_by: allSeats.map(() => false),
-        bid_deadline: new Date(Date.now() + BID_TIMER_MS).toISOString(),
         sold: false,
       });
     }
-
-    // Timeout resolution is now handled entirely by close-lot (triggered
-    // by either connected client's own scheduled timer at the deadline,
-    // or by cron as a backstop) - not by this function preemptively
-    // closing a lot on the way to processing a bid. That used to be a
-    // real bug: if THIS request's own bid arrived late enough to trip
-    // the same expiry check, it never got processed as a bid at all -
-    // the request itself closed the lot (often against the very player
-    // who just tried to act) instead of applying what they actually
-    // clicked. The atomic .eq("sold", false) claims below already make
-    // a genuinely-late bid fail safely on their own; there's no need for
-    // this function to also race to resolve the timeout itself.
 
     // ==== the actual action ====
     if (kind === "bid") {
@@ -249,27 +223,19 @@ Deno.serve(async (req) => {
         return json({ ok: true, ...result });
       }
 
-      // Same atomic-claim reasoning as award()/passIn(), applied to the
-      // one write that was missing it: a REGULAR standing bid (not the
-      // immediate-award case) was writing high_seat/high_amount straight
-      // onto the lot with no guard at all. If this request's bid arrived
-      // just after a competing timeout call had already closed the lot,
-      // this write used to succeed silently anyway, overwriting an
-      // already-decided row with a bid that should have been rejected -
-      // the request came back {ok:true} and looked fine, while doing
-      // nothing real. .eq("sold", false) makes this fail loudly instead.
+      // Only update a lot that is still open; simultaneous actions are
+      // reconciled by the sold guard.
       const { data: claimed, error: claimErr } = await sb
         .from("lots")
         .update({
           high_seat: seat, high_amount: amt,
-          bid_deadline: new Date(Date.now() + BID_TIMER_MS).toISOString(),
           history: [...(lot.history || []), { p: seat, amt }],
         })
         .eq("table_id", table_id).eq("lot_num", lot.lot_num).eq("sold", false)
         .select();
       if (claimErr) return json({ error: claimErr.message }, 400);
       if (!claimed || claimed.length === 0) {
-        return json({ error: "too late - that lot was just closed" }, 409);
+        return json({ error: "that lot was just closed" }, 409);
       }
 
       return json({ ok: true });
@@ -279,10 +245,7 @@ Deno.serve(async (req) => {
       if (!canPass(seat)) return json({ error: "cannot pass right now" }, 409);
       const newPassed = [...passedArr]; newPassed[seat] = true;
 
-      // Same atomic-claim fix as the bid write above, and for the same
-      // reason: this write had no guard at all, so a pass arriving just
-      // after a competing timeout call closed the lot would silently
-      // succeed against an already-decided row.
+      // Only update a lot that is still open.
       const { data: claimed, error: claimErr } = await sb
         .from("lots")
         .update({ passed_by: newPassed })
@@ -290,7 +253,7 @@ Deno.serve(async (req) => {
         .select();
       if (claimErr) return json({ error: claimErr.message }, 400);
       if (!claimed || claimed.length === 0) {
-        return json({ error: "too late - that lot was just closed" }, 409);
+        return json({ error: "that lot was just closed" }, 409);
       }
 
       const cost = passCost(seat);

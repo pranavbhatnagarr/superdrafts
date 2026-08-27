@@ -31,7 +31,6 @@ superdrafts/
 │   │   ├── join-table/      seats a guest - reconnect-by-cid, or by name if the table's full
 │   │   ├── start-table/     shuffles and deals the deck server-side, deals lot 1
 │   │   ├── place-bid/       every bid and pass, with every anti-cheat check below
-│   │   ├── close-lot/       resolves a lot whose clock ran out, same rules as place-bid
 │   │   ├── lock-roles/      validates and locks one seat's five role assignments
 │   │   ├── start-match/     commits a real random seed before a fight begins
 │   │   ├── submit-pick/     holds both sides' picks until both are in, then resolves the round

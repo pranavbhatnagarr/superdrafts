@@ -6,9 +6,6 @@ verify_jwt = false
 [functions.place-bid]
 verify_jwt = false
 
-[functions.close-lot]
-verify_jwt = false
-
 [functions.start-match]
 verify_jwt = false
 
