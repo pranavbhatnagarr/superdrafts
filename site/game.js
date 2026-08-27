@@ -392,6 +392,8 @@ function setWire(on, text){
 async function connect(){
   if (!window.supabase) throw new Error("offline");
   sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+  // Do not leave an older room channel alive when reconnecting in this tab.
+  if (chan) { try { await sb.removeChannel(chan); } catch {} chan = null; }
   chan = sb.channel("longbox-" + ROOM,
     { config: { broadcast: { self: false }, presence: { key: CID } } });
 
@@ -524,12 +526,7 @@ function scheduleCloseLot(s){
   const wait = Math.max(0, s.lot.bidDeadline - Date.now()) + CLIENT_GRACE_MS;
   window.__closeLotTimer = setTimeout(() => {
     previewTimeoutResult(s.lotNum);
-    backend.closeLot()
-      .then(result => {
-        if (result && result.action !== "none" && timeoutResultPreview?.lotNum === s.lotNum)
-          releaseStamp(250);
-      })
-      .catch(() => {});
+    backend.closeLot().catch(() => {});
   }, wait);
 }
 
@@ -633,7 +630,14 @@ function applyState(s, local){
   // extending it, or a new lot).
   bidDeadlineLocal = (s.lot && s.lot.bidDeadline) || 0;
   if (!local) started = true;
-  if (over) return showFaceoff();
+  if (over){
+    showFaceoff();
+    if (timeoutResultPreview){
+      timeoutResultPreview = null;
+      releaseStamp(100);
+    }
+    return;
+  }
   // A fresh sale is starting: over just flipped back to false, which only
   // happens right after a deal, never mid-match. Any ST left over from the
   // match that just finished is stale on THIS browser the moment that
@@ -716,15 +720,22 @@ function applyState(s, local){
         timeoutResultPreview.lotNum === s.lotNum &&
         timeoutResultPreview.word === s.fx.word &&
         timeoutResultPreview.line === s.fx.line;
-      timeoutResultPreview = null;
-      if (alreadyPreviewed) releaseStamp(250);
-      else {
+      if (!alreadyPreviewed){
+        timeoutResultPreview = null;
         stamp(s.fx.word, s.fx.line, s.fx.tone);
         s.fx.word === "Sold" ? SFX.sold() : SFX.passedIn();
       }
     }
   };
-  if (lotChanged && Date.now() < stampHideAt){
+  const nextLotAfterPreview = lotChanged && timeoutResultPreview &&
+    s.lotNum !== timeoutResultPreview.lotNum;
+  if (nextLotAfterPreview){
+    // Paint the confirmed next card behind the still-visible result, then
+    // remove the overlay. There is never an uncovered old-card frame.
+    doVisualUpdate();
+    timeoutResultPreview = null;
+    releaseStamp(100);
+  } else if (lotChanged && Date.now() < stampHideAt){
     clearTimeout(window.__stampDeferredRender);
     window.__stampDeferredRender = setTimeout(doVisualUpdate, stampHideAt - Date.now() + 20);
   } else {
@@ -1120,6 +1131,7 @@ async function askForChair(){
 // for the account-reconnect flow) - this only ever does the connecting,
 // never the UI around it.
 async function connectToTable(seat, np, tableId){
+  if (backend) backend.disconnect();
   ME = seat; NP = np; TABLE_ID = tableId;
   // The real bug behind the "blank card" flash: drawnLot/lastFx/heardBids/
   // heardFolds are module-level and only ever reset by the post-game
@@ -1464,7 +1476,6 @@ async function joinTable(){
     if (res.ok){
       const data = await res.json();
       ROOM = c; HOST = data.seat === 0; ME = data.seat; NP = data.np; started = false;
-      chan = null;
       await connect();
       if (HOST){
         $("lobbyCode").textContent = ROOM;
@@ -1483,7 +1494,6 @@ async function joinTable(){
   $("knockCode").textContent = c;
   try { $("knockName").value = localStorage.getItem("longbox.name") || myName() || ""; } catch {}
   showScreen("knock");
-  chan = null;
   connect().catch(() => {
     $("knockMsg").hidden = false;
     $("knockMsg").textContent = "Could not reach that table.";

@@ -35,9 +35,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   try {
-    const { table_id, box, np } = await req.json();
-    if (!table_id || !box?.u?.length || !np) {
-      return new Response(JSON.stringify({ error: "table_id, box.u, and np are required" }),
+    const { table_id, host_cid, box, np } = await req.json();
+    if (!table_id || !host_cid || !box?.u?.length || !np) {
+      return new Response(JSON.stringify({ error: "table_id, host_cid, box.u, and np are required" }),
         { status: 400, headers: CORS });
     }
 
@@ -51,10 +51,16 @@ Deno.serve(async (req) => {
     // already in play.
     const { data: existing, error: fetchErr } = await sb
       .from("tables")
-      .select("started")
+      .select("started, host_cid, np")
       .eq("id", table_id)
       .single();
     if (fetchErr) return new Response(JSON.stringify({ error: fetchErr.message }), { status: 400, headers: CORS });
+    if (existing?.host_cid !== host_cid) {
+      return new Response(JSON.stringify({ error: "only the host may start the table" }), { status: 403, headers: CORS });
+    }
+    if (existing?.np !== np) {
+      return new Response(JSON.stringify({ error: "player count does not match the table" }), { status: 409, headers: CORS });
+    }
     if (existing?.started) {
       return new Response(JSON.stringify({ error: "table already started" }), { status: 409, headers: CORS });
     }
@@ -80,8 +86,8 @@ Deno.serve(async (req) => {
         .filter((c) => box.u.includes(c.pub))
     ).slice(0, perSale(np));
 
-    if (!deck.length) {
-      return new Response(JSON.stringify({ error: "no characters match this box" }), { status: 400, headers: CORS });
+    if (deck.length < perSale(np)) {
+      return new Response(JSON.stringify({ error: "not enough characters match this box" }), { status: 400, headers: CORS });
     }
 
     const firstCard = deck[0];

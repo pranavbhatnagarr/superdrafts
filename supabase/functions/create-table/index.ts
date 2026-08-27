@@ -35,6 +35,10 @@ Deno.serve(async (req) => {
     if (!room_code || !host_cid || !np || !box) {
       return json({ error: "room_code, host_cid, np, and box are required" }, 400);
     }
+    if (!/^[A-Z2-9]{4}$/.test(room_code) || ![2, 3].includes(np) || !Array.isArray(box.u) || !box.u.length) {
+      return json({ error: "invalid room code, player count, or box" }, 400);
+    }
+
 
     const sb = createClient(
       Deno.env.get("SUPABASE_URL")!,

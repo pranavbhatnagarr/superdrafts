@@ -37,8 +37,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   try {
-    const { table_id, mode } = await req.json();
-    if (!table_id || !mode) return json({ error: "table_id and mode are required" }, 400);
+    const { table_id, host_cid, mode } = await req.json();
+    if (!table_id || !host_cid || !mode) return json({ error: "table_id, host_cid, and mode are required" }, 400);
+    if (mode !== "random" && mode !== "prep") return json({ error: "invalid encounter mode" }, 400);
 
     const sb = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -66,13 +67,14 @@ Deno.serve(async (req) => {
     // would be for two independent WRITES (nothing here creates a state
     // any other client could observe half-done).
     const [{ data: table, error: tErr }, { data: seats, error: sErr }, { data: otherMatches, error: omErr }] = await Promise.all([
-      sb.from("tables").select("np").eq("id", table_id).single(),
+      sb.from("tables").select("np, host_cid").eq("id", table_id).single(),
       sb.from("seats").select("locked").eq("table_id", table_id),
       sb.from("matches").select("mode").eq("table_id", table_id),
     ]);
     if (tErr) return json({ error: tErr.message }, 400);
     if (sErr) return json({ error: sErr.message }, 400);
     if (omErr) return json({ error: omErr.message }, 400);
+    if (table.host_cid !== host_cid) return json({ error: "only the host may start the match" }, 403);
 
     if (!seats || seats.length < table.np || !seats.every((s: any) => s.locked)) {
       return json({ error: "every seat must lock their roles before the fight can start" }, 409);

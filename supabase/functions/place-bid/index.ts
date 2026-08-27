@@ -53,10 +53,10 @@ Deno.serve(async (req) => {
     if (sErr) return json({ error: sErr.message }, 400);
     if (!table || table.finished) return json({ error: "table not active" }, 409);
 
-    // seat 0 has no owner (mirrors the client's own convention - seat 0 is
-    // never "somebody's chair" in the act() handler either)
+    // Every seat, including seat 0 (the host), has a real cid owner.
+    // Skipping this check for seat 0 let any caller bid as the host.
     const mySeat = seats.find((s) => s.seat === seat);
-    if (seat !== 0 && (!mySeat || mySeat.cid !== cid)) {
+    if (!mySeat || mySeat.cid !== cid) {
       return json({ error: "you may only act for your own seat" }, 403);
     }
 

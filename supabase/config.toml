@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.restart-table]
 verify_jwt = false
+
+[functions.lock-roles]
+verify_jwt = false

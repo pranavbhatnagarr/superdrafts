@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
         }))
         .filter((c) => box.u.includes(c.pub))
     ).slice(0, perSale(NP));
-    if (!deck.length) return json({ error: "no characters match this box" }, 400);
+    if (deck.length < perSale(NP)) return json({ error: "not enough characters match this box" }, 400);
 
     const firstCard = deck[0];
     const remainingDeck = deck.slice(1);

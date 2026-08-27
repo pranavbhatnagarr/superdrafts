@@ -289,7 +289,7 @@ export class Backend {
 
   // ---- actions: thin wrappers, all the real logic lives server-side ----
   startTable(box, np){
-    return this._act("start-table", { table_id: this.tableId, box, np });
+    return this._act("start-table", { table_id: this.tableId, host_cid: this.cid, box, np });
   }
   // "Run it again" used to just reset the host's own local P array and
   // call the old local dealDeck()/nextLot() - never touching the
@@ -316,7 +316,7 @@ export class Backend {
     return this._act("place-bid", { table_id: this.tableId, seat, cid: this.cid, kind: "pass", lotNum });
   }
   startMatch(mode){
-    return this._act("start-match", { table_id: this.tableId, mode });
+    return this._act("start-match", { table_id: this.tableId, host_cid: this.cid, mode });
   }
   // Called once, at the moment a seat actually locks in - not per
   // individual drag. roles must list all 5 of this seat's characters,
