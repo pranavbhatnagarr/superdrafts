@@ -26,6 +26,7 @@ const CORS = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
+const MIN_SLOTS = 3;
 const SLOTS = 5;
 
 Deno.serve(async (req) => {
@@ -89,23 +90,24 @@ Deno.serve(async (req) => {
 
     const slotsLeft = (p: number) => SLOTS - (seats.find((s) => s.seat === p)?.roster?.length || 0);
     const inPlay = (p: number) => slotsLeft(p) > 0;
+    const minimumLeft = (p: number) => Math.max(0, MIN_SLOTS - (seats.find((s) => s.seat === p)?.roster?.length || 0));
     const rivals = (p: number) => allSeats.filter((q) => q !== p);
-    const ceiling = (p: number) => (seats.find((s) => s.seat === p)?.purse || 0) - (slotsLeft(p) - 1);
+    const ceiling = (p: number) => (seats.find((s) => s.seat === p)?.purse || 0) - Math.max(0, minimumLeft(p) - 1);
     const askPrice = () => (lot.high_seat === null ? 1 : lot.high_amount + 1);
     const bought = () => seats.reduce((n, s) => n + (s.roster?.length || 0), 0);
-    const buysOwed = () => SLOTS * NP - bought();
+    const buysOwed = () => allSeats.reduce((n, p) => n + minimumLeft(p), 0);
     const perSale = () => (NP === 3 ? 25 : 15);
     const lotsLeft = () => perSale() - table.current_lot + 1;
     const passesLeft = () => Math.max(0, lotsLeft() - buysOwed());
     const compulsory = () => passesLeft() <= 0;
     const soloRun = () => allSeats.filter(inPlay).length === 1;
-    const passCost = (p: number) => (soloRun() && inPlay(p) ? 1 : 0);
+    const passCost = (p: number) => (allSeats.some((q) => !inPlay(q)) && inPlay(p) ? 1 : 0);
 
     const obliged = (): number | null => {
       if (!compulsory()) return null;
       for (let i = 0; i < NP; i++) {
         const p = (lot.opener + i) % NP;
-        if (inPlay(p)) return p;
+        if (minimumLeft(p) > 0) return p;
       }
       return null;
     };
@@ -117,7 +119,7 @@ Deno.serve(async (req) => {
       if (lot.high_seat !== null) return true;
       if (obliged() === p) return false;
       const cost = passCost(p);
-      return (seats.find((s) => s.seat === p)?.purse || 0) - cost >= slotsLeft(p);
+      return (seats.find((s) => s.seat === p)?.purse || 0) - cost >= minimumLeft(p);
     };
 
     // ---- award: settle a lot to a winning seat ----

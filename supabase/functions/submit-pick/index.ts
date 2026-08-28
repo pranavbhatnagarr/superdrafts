@@ -27,19 +27,25 @@ const CORS = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
+// Stable but server-only salt: concurrent retries resolve identically, while
+// clients cannot predict a close-match stalemate before locking their pick.
+const secretSeed = (value: string): number => {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
+  return hash >>> 0;
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   try {
-    const { table_id, seat, cid, name, mode } = await req.json();
-    if (!table_id || seat === undefined || !cid || !name || !mode) {
-      return json({ error: "table_id, seat, cid, name, and mode are required" }, 400);
+    const { table_id, seat, cid, names, mode } = await req.json();
+    if (!table_id || seat === undefined || !cid || !Array.isArray(names) || !mode) {
+      return json({ error: "table_id, seat, cid, names, and mode are required" }, 400);
     }
 
-    const sb = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sb = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
 
     const [{ data: table, error: tErr }, { data: seats, error: sErr }, { data: match, error: mErr }] =
       await Promise.all([
@@ -87,18 +93,28 @@ Deno.serve(async (req) => {
     const teams = seats.map((s: any) => ({
       owner: s.name, purse: s.purse,
       fighters: (s.roster || []).map((r: any) => ({ ...r.char, role: r.role, price: r.price })),
-    }));
+    }));    if (teams.some((team: any) => team.fighters.some((fighter: any) => !Number(fighter.power)))) {
+      return json({ error: "This table predates power levels. Restart the table to play with the new rules." }, 409);
+    }
+
     const sides = buildSides(teams, state.mode, state);
     const mySide = sides.find((s) => s.owner === owner);
     const legalNow = state.overtime
       ? mySide.fighters.filter((f: any) => !mySide.drawnOut.has(f.name))
       : mySide.fighters.filter((f: any) => !f.used);
-    const legalPool = legalNow.length ? legalNow : mySide.fighters;
-    if (!legalPool.some((f: any) => f.name === name)) {
-      return json({ error: "that fighter isn't yours to send this round" }, 400);
+    const legalPool = legalNow;
+    const uniqueNames = [...new Set(names.map((name: unknown) => String(name)))];
+    const roundsLeft = 4 - Number(round);
+    const minPick = Math.max(1, legalPool.length - 2 * (roundsLeft - 1));
+    const maxPick = Math.min(2, legalPool.length - (roundsLeft - 1));
+    if (uniqueNames.length < minPick || uniqueNames.length > maxPick) {
+      return json({ error: `send between ${minPick} and ${maxPick} characters this round` }, 400);
+    }
+    if (uniqueNames.some((name) => !legalPool.some((f: any) => f.name === name))) {
+      return json({ error: "every fighter must be yours, unused, and unique" }, 400);
     }
 
-    await sb.from("picks").insert({ table_id, mode, round_num: round, owner, name });
+    await sb.from("picks").insert({ table_id, mode, round_num: round, owner, name: JSON.stringify(uniqueNames) });
 
     // Re-query the picks table itself, not the in-memory state.locked -
     // two concurrent submit-pick calls (one per seat, which is the
@@ -134,10 +150,14 @@ Deno.serve(async (req) => {
     // result and write the exact same newState. A redundant second
     // write isn't corruption, just a harmless duplicate of identical
     // data.
-    const allPicks = currentPicks!;
+    const allPicks = currentPicks!.map((pick: any) => {
+      try { return { owner: pick.owner, names: JSON.parse(pick.name) }; }
+      catch { return { owner: pick.owner, names: [pick.name] }; }
+    });
 
     const points = state.points.length ? state.points : sides.map(() => 0);
-    const result = resolveRound(sides, allPicks, points, state.overtime, Number(match.seed), contenders);
+    const privateSeed = (Number(match.seed) ^ secretSeed(serviceKey)) >>> 0;
+    const result = resolveRound(sides, allPicks, points, state.overtime, privateSeed, contenders, Number(state.round || 1));
     if (!result) return json({ error: "round could not be resolved" }, 409);
 
     const newUsed: Record<string, string[]> = { ...state.used };

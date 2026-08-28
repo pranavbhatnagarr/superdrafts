@@ -18,7 +18,7 @@ let RIVALRIES = [];
  * ------------------------------------------------------------------ */
 let STOCK = [];
 
-const SLOTS = 5, PURSE = 20;
+const MIN_SLOTS = 3, SLOTS = 5, FIGHT_ROUNDS = 3, PURSE = 20;
 
 // Two or three buyers. Everything below counts seats rather than assuming a
 // pair, so the third chair is a number, not a special case.
@@ -139,12 +139,29 @@ const tierIconHtml = tier => {
   return `<svg class="tier-icon tier-icon-${mat}" viewBox="0 0 48 48" role="img" aria-label="Tier ${tier || "?"}">`
     + `<title>Tier ${tier || "?"}</title>`
     + `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1">${stopTags}</linearGradient></defs>`
-    + `<circle cx="24" cy="24" r="21" fill="none" stroke="url(#${gid})" stroke-width="4"/>`
-    + `<circle cx="24" cy="24" r="15.5" fill="none" stroke="url(#${gid})" stroke-width="1.4" opacity=".65"/>`
+    + `<path d="M24 2.5 42.6 13.2 42.6 34.8 24 45.5 5.4 34.8 5.4 13.2Z" fill="url(#${gid})" stroke="var(--ink)" stroke-width="1.2"/>`
+    + `<path d="M24 7.2 38.5 15.6 38.5 32.4 24 40.8 9.5 32.4 9.5 15.6Z" fill="var(--pulp)" fill-opacity=".88" stroke="url(#${gid})" stroke-width="2"/>`
+    + `<path d="M24 10.5 35.6 17.2 35.6 30.8 24 37.5 12.4 30.8 12.4 17.2Z" fill="none" stroke="url(#${gid})" stroke-width="1" opacity=".65"/>`
     + `<text x="24" y="25" text-anchor="middle" dominant-baseline="central" `
     + `font-family="var(--slab)" font-weight="900" font-size="${fontSize}" fill="url(#${gid})" `
     + `stroke="var(--ink)" stroke-width="0.6" paint-order="stroke">${escTxt(tier || "?")}</text>`
     + `</svg>`;
+};
+const powerBand = value => {
+  const power = Number(value) || 0;
+  if (power >= 100) return "sp";
+  if (power >= 90) return "s";
+  if (power >= 80) return "a";
+  if (power >= 70) return "b";
+  if (power >= 60) return "c";
+  if (power >= 50) return "d";
+  return "plain";
+};
+const powerBadgeHtml = value => {
+  const power = Math.max(0, Number(value) || 0);
+  const band = powerBand(power);
+  return `<span class="power-badge power-band-${band}" role="img" aria-label="Power level ${power}">`
+    + `<span class="power-badge-value">${power}</span><span class="power-badge-label">Power Lvl</span></span>`;
 };
 
 
@@ -162,19 +179,12 @@ function effTier(ch, mode, role){
   i -= roleShift(ch, role, mode);
   return LADDER[Math.max(0, Math.min(LADDER.length - 1, i))];
 }
-const teamScore = (roster, mode) =>
-  roster.reduce((n, r) => n + (POINTS[effTier(r.char, mode, r.role)] || 0), 0);
+const teamScore = roster =>
+  roster.reduce((total, entry) => total + (Number(entry.char.power) || 0), 0);
 
-// Binding, with a close-call window: a clear lead decides the fight, a narrow
-// one leaves it to tactics so a near-even draft still gets a real story.
-const CLOSE = 0.20;
-function verdict(mode){
-  const scores = seats().map(p => teamScore(P[p].roster, mode));
-  const top = Math.max(...scores), hi = top || 1;
-  const lead = scores.indexOf(top);
-  const rest = scores.filter((_, i) => i !== lead);
-  const gap = (top - Math.max(...rest)) / hi;      // only the nearest rival matters
-  return { scores, gap, close: gap <= CLOSE, winner: gap <= CLOSE ? null : lead };
+// Tiers remain visible context, but only power levels decide clashes.
+function verdict(){
+  return { scores: seats().map(p => teamScore(P[p].roster)) };
 }
 
 // Lots dealt per sale. Deliberately tight: at ten per buyer half the box went
@@ -262,8 +272,8 @@ const ART_EXTRA = {
 };
 
 // Fetches the whole roster and its artwork in a single request and fills in
-// STOCK (still the same 8-column shape everything else here expects: name,
-// universe, real name, blurb, tier, prep shift, fit roles, bad roles) and
+// STOCK (name, universe, real name, blurb, tier, prep shift, fit roles,
+// bad roles, dialogue lines, and power level) and
 // ART (name -> image url). Unlike a missing picture, a missing roster is
 // fatal to the game, so the Open/Join buttons stay disabled until this
 // either succeeds or gives up.
@@ -277,7 +287,7 @@ async function loadStock(){
     // setup screen dead; now the optional columns drop out one at a time and
     // the sale still runs, just without whatever that column fed.
     const CORE = "name,universe,real_name,tier,fit_roles,bad_roles,image_url";
-    const OPTIONAL = ["prep_shift", "blurb", "lines"];
+    const OPTIONAL = ["Power_lvl", "prep_shift", "blurb", "lines"];
     const ask = cols => fetch(
       ART_URL + "/rest/v1/characters?select=" + cols + "&universe=not.is.null",
       { headers: { apikey: ART_KEY, Authorization: "Bearer " + ART_KEY } });
@@ -293,11 +303,13 @@ async function loadStock(){
     if (!r.ok) throw new Error("HTTP " + r.status);
     const rows = await r.json();
     if (!rows.length) throw new Error("empty roster");
+    if (rows.some(row => !Number(row.Power_lvl ?? row.power_lvl)))
+      throw new Error("The roster is missing Power_lvl values.");
 
     STOCK = rows.map(row => [
       row.name, row.universe, row.real_name, row.blurb || "",
       row.tier, row.prep_shift || 0, row.fit_roles || "", row.bad_roles || "",
-      row.lines || null
+      row.lines || null, Number(row.Power_lvl ?? row.power_lvl ?? 0)
     ]);
 
     // Rivalries are optional. A failure here costs flavour, not the game.
@@ -467,7 +479,7 @@ function handle(m){
   // actually start the fight at all. Both now validate against the
   // seat the message itself claims (m.p), the same pattern as "roles".
   if (m.t === "pick" && HOST && m.p > 0 && m.p < NP && typeof m.name === "string")
-    takePick(P[m.p].name, m.name);
+    takePick(P[m.p].name, m.names || [m.name]);
   if (m.t === "startstory" && HOST && m.p === caller()
       && (!ST || ST.end || ST.err) && modeLeft(m.mode)) startStory(m.mode);
   if (m.t === "closed" && !HOST){
@@ -730,8 +742,8 @@ function paintNP(){
     b.querySelector("b").textContent = n === 2 ? "Two buyers" : "Three buyers";
     const lots = n === 3 ? 25 : 15;
     b.querySelector("em").textContent = n === 2
-      ? `Head to head. ${lots} lots, five each.`
-      : `Free for all, five against five against five. ${lots} lots.`;
+      ? `Head to head. ${lots} lots, three to five each.`
+      : `Free for all, three to five characters each. ${lots} lots.`;
     b.addEventListener("click", () => { NP = n; refreshSetupBox(); });
     row.appendChild(b);
   }
@@ -868,7 +880,7 @@ $("lbSortChips")?.addEventListener("click", (e) => {
 function refreshSetupBox(){
   paintNP();
   $("coverEdition").textContent =
-    `${perSale()} Lots \u00b7 ${5 * NP} Sold \u00b7 ${NP === 3 ? "Three" : "Two"} Buyers`;
+    `${perSale()} Lots \u00b7 3–5 Each \u00b7 ${NP === 3 ? "Three" : "Two"} Buyers`;
   BOX.tiers = $("showTiers").checked;
   paintBox($("uniChips"), $("boxCount"), refreshSetupBox);
 }
@@ -1153,7 +1165,7 @@ function dealDeck(){
   deck = shuffle(STOCK
     .map((c, i) => ({
       name: c[0], pub: c[1], alias: c[2], note: c[3], tier: c[4], prep: c[5],
-      fit: c[6], bad: c[7], lines: c[8] || null,
+      fit: c[6], bad: c[7], lines: c[8] || null, power: Number(c[9] || 0),
       no: 1 + ((i * 37 + 11) % 480)
     }))
     .filter(c => BOX.u.includes(c.pub)));
@@ -1334,10 +1346,14 @@ function botTick(){
           return { name: nm, tier: r ? effTier(r.char, ST.mode, r.role) : "E" };
         }));
       return botThink(() => {
-        const choice = BOTS[seat].pick({
-          mine: mine.map(nm => ({ name: nm, tier: tierOf(nm) })), rivals, mode: ST.mode
-        });
-        if (choice) takePick(P[seat].name, choice);
+        const availability = avail.find(a => a.owner === P[seat].name) || { min: 1, max: 1 };
+        const count = availability.min;
+        const choices = mine.slice().sort((a, b) => {
+          const ca = P[seat].roster.find(x => x.char.name === a)?.char;
+          const cb = P[seat].roster.find(x => x.char.name === b)?.char;
+          return Number(cb?.power || 0) - Number(ca?.power || 0);
+        }).slice(0, count);
+        if (choices.length) takePick(P[seat].name, choices);
         botTick();
       }, 1200 + Math.random() * 600);
     }
@@ -1491,9 +1507,10 @@ function resumeTable(){
 
 /* ------------------------- rules helpers ------------------------- */
 const slotsLeft = p => SLOTS - P[p].roster.length;
+const minimumLeft = p => Math.max(0, MIN_SLOTS - P[p].roster.length);
 const inPlay    = p => slotsLeft(p) > 0;
 // Must always keep $1 in reserve for every slot that stays empty after this buy.
-const ceiling   = p => P[p].purse - (slotsLeft(p) - 1);
+const ceiling   = p => P[p].purse - Math.max(0, minimumLeft(p) - 1);
 const soloRun   = () => seats().filter(inPlay).length === 1;
 const askPrice  = () => lot.high === null ? 1 : lot.price + 1;
 
@@ -1504,13 +1521,13 @@ const askPrice  = () => lot.high === null ? 1 : lot.price + 1;
 // lots remaining minus the buys still owed. When that reaches zero the rest
 // are compulsory, which is what stops anyone passing their way out of a roster.
 const bought      = () => P.reduce((n, x) => n + x.roster.length, 0);
-const buysOwed    = () => (SLOTS * NP) - bought();
+const buysOwed    = () => P.reduce((n, _x, p) => n + minimumLeft(p), 0);
 const lotsLeft    = () => perSale() - lotNum + 1;          // counting the one on the block
 const passesLeft  = () => Math.max(0, lotsLeft() - buysOwed());
 const compulsory  = () => passesLeft() <= 0;
 
 // Once one buyer is finished, walking away costs a dollar. Before that it is free.
-const passCost = p => (soloRun() && inPlay(p)) ? 1 : 0;
+const passCost = p => (seats().some(q => !inPlay(q)) && inPlay(p)) ? 1 : 0;
 
 // Who is on the hook when a lot cannot be passed in.
 function obliged(){
@@ -1522,7 +1539,7 @@ function obliged(){
   // nobody on the hook and passed a compulsory lot in unsold.
   for (let i = 0; i < NP; i++){
     const p = (lot.opener + i) % NP;
-    if (inPlay(p)) return p;
+    if (minimumLeft(p) > 0) return p;
   }
   return null;
 }
@@ -1533,7 +1550,7 @@ function canPass(p){
   if (lot.high !== null) return true;                     // dropping out is always allowed
   if (obliged() === p) return false;                      // somebody has to buy this one
   const cost = passCost(p);
-  return P[p].purse - cost >= slotsLeft(p);               // must still be able to fill up
+  return P[p].purse - cost >= minimumLeft(p);               // must still be able to fill up
 }
 
 function nextLot(){
@@ -2528,7 +2545,7 @@ function showFaceoff(){
   // rather than at scattered connect-time call sites, so it can't be
   // silently lost again the way it was the first time this was fixed.
   if (!faceoffSoundPlayed){ faceoffSoundPlayed = true; SFX.finish(); }
-  $("foTitle").textContent = NP === 3 ? "Five Against Five Against Five" : "Five Against Five";
+  $("foTitle").textContent = P.slice(0, NP).map(player => player.roster.length).join(" Against ");
   paintRoles();
   showScreen("faceoff");
   buildFoSides();
@@ -2556,9 +2573,9 @@ function showFaceoff(){
 /* ---------------------- assigning the five roles ---------------------- */
 // Everyone assigns their own five, one role each. Locked once confirmed, and
 // the fight cannot be written until every buyer has locked.
-const rolesDone = p => P[p].roster.length === SLOTS &&
+const rolesDone = p => P[p].roster.length >= MIN_SLOTS && P[p].roster.length <= SLOTS &&
   P[p].roster.every(r => r.role) &&
-  new Set(P[p].roster.map(r => r.role)).size === SLOTS;
+  new Set(P[p].roster.map(r => r.role)).size === P[p].roster.length;
 const allLocked = () => seats().every(p => P[p].locked);
 // Whoever kept the most money calls the encounter. A tie goes to the earlier seat.
 const caller = () => seats().reduce((best, p) => P[p].purse > P[best].purse ? p : best, 0);
@@ -2741,7 +2758,7 @@ function paintRoles(){
       sec.innerHTML = `<div class="ledger-tab"><span class="lt-name"></span></div>
         <div class="role-bench" data-drop="bench">${
           bench.length ? bench.map(({ i }) => roleChipHtml(p, i)).join("")
-                        : `<span class="role-bench-empty">All five assigned</span>`
+                        : `<span class="role-bench-empty">All assigned</span>`
         }</div>
         <ul class="role-slots">${
           ROLES.map(ro => {
@@ -2830,7 +2847,7 @@ const MODE_NAME = { random: "Random encounter", prep: "A week of prep" };
 // place that prints a round number goes through this so the label and the
 // actual picking rules (myRemaining(), MATCH's own eligible()) never say
 // two different things about which phase the match is in.
-const roundLabel = n => n <= SLOTS ? `Round ${n}` : `Overtime ${n - SLOTS}`;
+const roundLabel = n => `Round ${Math.min(n, FIGHT_ROUNDS)} of ${FIGHT_ROUNDS}`;
 
 // Each draft is worth two issues, one of each encounter. Writing the same one
 // twice would cost tokens to tell the same story, so a used encounter closes.
@@ -2930,8 +2947,10 @@ function revealHtml(ranked, opts){
   // and that third fighter is a perfectly real, undisputed winner even
   // though the other two are drawn cards in the very same round.
   const topPlace = ranked.filter(x => x.place === 1);
-  const roundWinner = topPlace.length === 1 ? topPlace[0].name : null;
-  const drawNames = topPlace.length > 1 ? topPlace.map(x => x.name) : [];
+  const topOwners = [...new Set(topPlace.map(x => x.owner))];
+  const roundWinner = topOwners.length === 1 && !topPlace.some(x => x.draw)
+    ? topPlace.map(x => x.name).join(" + ") : null;
+  const drawNames = topOwners.length > 1 ? topOwners : [];
   const maxPlace = Math.max(...ranked.map(x => x.place));
   const n = ranked.length;
 
@@ -2957,11 +2976,20 @@ function revealHtml(ranked, opts){
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-  const shuffled = ranked.slice();
-  for (let i = shuffled.length - 1; i > 0; i--){
-    const j = Math.floor(shuffleRng() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  // Shuffle whole teams, not individual fighters. Characters submitted by
+  // the same player stay together, so a VS marker can only ever describe
+  // the boundary between opposing teams rather than splitting teammates.
+  const teamGroups = [];
+  for (const fighter of ranked){
+    let group = teamGroups.find(team => team.owner === fighter.owner);
+    if (!group){ group = { owner: fighter.owner, fighters: [] }; teamGroups.push(group); }
+    group.fighters.push(fighter);
   }
+  for (let i = teamGroups.length - 1; i > 0; i--){
+    const j = Math.floor(shuffleRng() * (i + 1));
+    [teamGroups[i], teamGroups[j]] = [teamGroups[j], teamGroups[i]];
+  }
+  const shuffled = teamGroups.flatMap(team => team.fighters);
 
   // A grid, not a flex row: a fighter column for every card, an auto-width
   // column for every VS between them, so the tier chip underneath a given
@@ -3016,28 +3044,31 @@ function revealHtml(ranked, opts){
   // each sitting in its own auto-width column between the two cards it
   // separates.
   const vsBadges = [];
-  for (let i = 0; i < n - 1; i++)
-    vsBadges.push(`<span class="reveal-vs" style="grid-column:${2 * i + 2};grid-row:1">VS</span>`);
+  for (let i = 0; i < n - 1; i++){
+    if (shuffled[i].owner !== shuffled[i + 1].owner)
+      vsBadges.push(`<span class="reveal-vs" style="grid-column:${2 * i + 2};grid-row:1">VS</span>`);
+  }
 
   // is-fresh/is-shown govern only the flip itself, which always happens
   // right away. is-effects is separate and arrives up to 3 seconds later:
   // it is what actually switches on the winner's glow and the loser's droop
   // and grayscale, see the matching rules in styles.css.
-  // The tier chips: name, a material medallion, then "Tier", one per
+  // The result badges: name, effective-tier medallion, and power level, one set per
   // fighter column so each chip sits directly under its own card - same
   // column number the card above it used, row 3 rather than row 1. Gated
   // on the same effects timer as the win/lose glow so it lands with the
   // reveal rather than before it.
   const tierChips = shuffled.map((x, i) =>
     `<span class="tier-chip" style="grid-column:${2 * i + 1};grid-row:3">`
-    + `<span class="tier-chip-name">${escTxt(x.name)}</span>${tierIconHtml(x.eff)}`
-    + `<span class="tier-chip-label">Tier</span></span>`).join("");
+    + `<span class="tier-chip-name">${escTxt(x.name)}</span><span class="result-badges">`
+    + `${tierIconHtml(x.eff)}${powerBadgeHtml(x.power)}</span>`
+    + `<span class="tier-chip-label">Tier ${escTxt(x.eff)}, power ${Number(x.power) || 0}</span></span>`).join("");
 
   const winnerLine = roundWinner
     ? `Winner: <b>${escTxt(roundWinner)}</b>`
     : `Stalemate: <b>${escTxt(drawNames.join(" & "))}</b>`;
 
-  return `<div class="round-reveal${ranked.length > 2 ? " is-three" : ""}${historic ? " round-reveal-historic" : ""}${fresh ? " is-fresh" : " is-shown"}${shown ? " is-effects" : ""}"
+  return `<div class="round-reveal${ranked.length > 2 ? " is-three" : ""}${ranked.length > 3 ? " is-team" : ""}${historic ? " round-reveal-historic" : ""}${fresh ? " is-fresh" : " is-shown"}${shown ? " is-effects" : ""}"
     style="grid-template-columns:${gridCols}">
     ${cards.join("")}
     ${vsBadges.join("")}
@@ -3110,13 +3141,10 @@ function matchTallyText(standings){
 // existing styling (already small, red toned, uppercase) rather than adding
 // a new element: that field only ever shows the round counter during the
 // match and sits empty once it ends, so it is free to repurpose here.
-function tierScoreCaption(){
+function powerScoreCaption(){
   if (!ST.v) return "";
-  const basis = ST.mode === "prep" ? "with a week of prep" : "on raw capability";
   const parts = seats().map(p => `${escTxt(P[p].name)} ${Math.round(ST.v.scores[p])}`).join(", ");
-  const tail = ST.v.close ? "Close enough that the choices decide it."
-    : "Not especially close, on paper.";
-  return `Tier score, ${basis}, roles counted: ${parts}. ${tail}`;
+  return `Roster power: ${parts}. Combined deployed power decided each round.`;
 }
 
 function stPaint(){
@@ -3228,7 +3256,7 @@ function stPaint(){
   // the match ends the right side clears, since the stamp and bars above
   // already show the final score, and the left side switches to the tier
   // caption the same way it always has.
-  const leftText = shownWinner ? tierScoreCaption()
+  const leftText = shownWinner ? powerScoreCaption()
     : (ST.end || !ST.standings) ? "" : roundLabel(ST.round || 1);
   const rightText = shownWinner ? "" : matchTallyText(shownStandings);
   $("storyScoreLeft").textContent = leftText;
@@ -3259,48 +3287,24 @@ function stPaint(){
   } else if (picking){
     const mine = myRemaining();
     const sent = ST.picks && ST.picks[P[ME].name];
-    const waiting = (ST.locked || []).filter(n => n !== P[ME].name);
-    // Arm the 5-second clock the moment this becomes a live, unmade choice;
-    // clear it once sent. Keyed on the round (and overtime phase) rather
-    // than just "sent or not", so a repaint mid-countdown (another player's
-    // bid... pick landing, a resize, anything that calls stPaint again)
-    // never restarts a clock that is already running for this same round.
-    // Sending a fighter is untimed. A five second clock that fired a random
-    // card on your behalf took the round away from whoever was still deciding.
-    // textContent escapes on its own; escTxt here would show the entities.
-    $("scWho").textContent = sent
-      ? `${sent} is in. Waiting on the others.`
-      : ST.overtime
-        ? `${roundLabel(ST.round || 1)}. Sudden death — send anyone but a card that already drew. They will not see who until it lands.`
-        : `${roundLabel(ST.round || 1)}. Send one of yours. They will not see who until it lands.`;
+    const bounds = fightPickBounds(mine.length, ST.round || 1);
+    if (sent){
+      const sentNames = Array.isArray(sent) ? sent : [sent];
+      $("scWho").textContent = `${sentNames.join(" + ")} ${sentNames.length === 1 ? "is" : "are"} in. Waiting on the others.`;
+    } else {
+      $("scWho").textContent = `${roundLabel(ST.round || 1)}. Select ${bounds.min === bounds.max ? bounds.min : `${bounds.min} or ${bounds.max}`} unused character${bounds.max > 1 ? "s" : ""}, then lock them in.`;
+    }
+
     const opts = $("scOpts");
-    // Same fix, same reasoning, as the bid buttons in renderPanels():
-    // this used to rebuild every fight-pick card unconditionally on
-    // every call, including the routine 3-second poll firing while a
-    // pick was simply sitting there unmade - if a tap landed in the
-    // instant one of those redundant rebuilds tore a card out of the
-    // DOM, the tap was lost. This arguably matters MORE than the bid
-    // buttons: every single round of every fight needs exactly one of
-    // these taps to register the first time. Key includes `sent` too,
-    // not just the card list, so the one legitimate rebuild that SHOULD
-    // happen (disabling the cards the instant you actually pick) still
-    // does - that transition is driven by your own click, not an
-    // incidental background poll, so there's no reason to guard it.
-    const optKey = mine.map(c => c.name).join(",") + "|" + (sent || "");
-    // Also checks opts.innerHTML directly, not just the tracked key -
-    // same defensive reasoning as the bid-button guard's identical
-    // check: this already resets lastPickOptionsKey correctly in both
-    // branches that clear opts.innerHTML above, so it isn't currently
-    // exposed to that exact bug, but checking the real DOM state here
-    // too means it can't regress the same way even if a future branch
-    // ever clears the container without remembering to reset the key.
+    const selectionKey = [...selectedFightPicks].sort().join(",");
+    const optKey = mine.map(c => c.name).join(",") + "|" + (sent ? JSON.stringify(sent) : selectionKey);
     if (lastPickOptionsKey !== optKey || !opts.innerHTML){
       lastPickOptionsKey = optKey;
       opts.innerHTML = "";
       mine.forEach(c => {
         const b = document.createElement("button");
         b.type = "button";
-        b.className = "sc-opt sc-send sc-card";
+        b.className = "sc-opt sc-send sc-card" + (selectedFightPicks.has(c.name) ? " selected" : "");
         b.disabled = !!sent;
         const artUrl = ART.get(c.name);
         b.innerHTML = `
@@ -3313,13 +3317,25 @@ function stPaint(){
           </span>`;
         b.querySelector(".sc-card-pub").textContent = (UNIVERSES[c.pub] || {}).name || c.pub;
         b.querySelector(".sc-card-name").textContent = c.name;
-        if (!sent) b.addEventListener("click", () => sendPick(c.name));
+        if (!sent) b.addEventListener("click", () => {
+          if (selectedFightPicks.has(c.name)) selectedFightPicks.delete(c.name);
+          else if (selectedFightPicks.size < bounds.max) selectedFightPicks.add(c.name);
+          stPaint();
+        });
         opts.appendChild(b);
       });
+      if (!sent){
+        const confirm = document.createElement("button");
+        confirm.type = "button";
+        confirm.className = "stamp-btn stamp-btn-sm fight-pick-confirm";
+        confirm.innerHTML = "<span>Send Selected</span>";
+        confirm.disabled = selectedFightPicks.size < bounds.min || selectedFightPicks.size > bounds.max;
+        confirm.addEventListener("click", () => sendPick([...selectedFightPicks]));
+        opts.appendChild(confirm);
+      }
     }
     if (!mine.length) $("scWho").textContent = "Nobody left to send.";
   }
-
   // Only the person who called the encounter can start it, and only once.
   const done = !!ST.end || !!ST.err;
   const spent = ST.runs && ST.runs.length >= 2 && !ST.err;
@@ -3329,8 +3345,8 @@ function stPaint(){
   $("writeHint").textContent = ST.err
     ? "Something went wrong. You can run it again."
     : spent ? "Both encounters are done. Run it again for a fresh draft."
-    : done ? "Run the other encounter to see how the same five would have done."
-           : "Five rounds, one character each, nobody sees the other pick. A tied score after five forces sudden death.";
+    : done ? "Run the other encounter to see how the same rosters would have done."
+           : "Three rounds. Send one or two unused characters each round; every drafted character must fight. Combined power wins the round.";
   // No clock between matches either.
 }
 
@@ -3362,12 +3378,13 @@ let MATCH = null;
 // pick has been sent), so the picker only rebuilds when that actually
 // changes - see the guard inside stPaint() for the exact bug this closes.
 let lastPickOptionsKey = null;
+let selectedFightPicks = new Set();
 
 function resetMatchState(){
   ST = null; MATCH = null; matchRuns = []; lastSeenSeed = null;
   pendingEffects = null; shownSig = ""; shownStandings = null; shownWinner = null;
   shownRoundWinners = []; revealedRound = ""; flipInFlight = false;
-  lastPickOptionsKey = null;
+  lastPickOptionsKey = null; selectedFightPicks.clear();
   clearTimeout(window.__effectDelayTimer);
 }
 
@@ -3459,8 +3476,9 @@ function applyMatchSnapshot(matches){
   const standings = seats().map((q, i) => ({ owner: P[q].name, points: (state.points || [])[i] || 0 }));
   const lastRound = state.beats.length ? state.beats[state.beats.length - 1].ranked : null;
   const roundWinners = state.beats.map(b => {
-    const top = b.ranked.filter(x => x.place === 1);
-    return top.length === 1 ? top[0].owner : null;
+    const top = b.ranked.filter(x => x.place === 1 && !x.draw);
+    const owners = [...new Set(top.map(x => x.owner))];
+    return owners.length === 1 ? owners[0] : null;
   });
 
   // My own pick is local-only knowledge - the server never reveals what
@@ -3468,7 +3486,8 @@ function applyMatchSnapshot(matches){
   // forward across repeated snapshots (a re-render, the 3-second poll)
   // as long as the round hasn't actually moved on; a genuinely new round
   // clears it, same as the server's own ST.picks reset used to.
-  const samRound = ST && ST.round === state.round && ST.overtime === state.overtime;
+  const samRound = ST && ST.round === state.round;
+  if (!samRound) selectedFightPicks.clear();
   const picks = samRound ? ST.picks : {};
 
   ST = {
@@ -3577,106 +3596,73 @@ function buildMatch(){
 // same five, it does not deal a fresh hand. A side with nothing left
 // un-drawn falls back to its full roster, same reasoning as fight.js's own
 // fallback, so the two never disagree about what is legal to offer.
+function fightPickBounds(remaining, round){
+  const roundsLeft = 4 - round;
+  return {
+    min: Math.max(1, remaining - 2 * (roundsLeft - 1)),
+    max: Math.min(2, remaining - (roundsLeft - 1))
+  };
+}
+
 function myRemaining(){
   if (!ST || !P[ME]) return [];
-  const drawnOut = new Set(ST.drawnOut && ST.drawnOut[P[ME].name] || []);
-  if (ST.overtime){
-    const elig = P[ME].roster.filter(r => !drawnOut.has(r.char.name));
-    return (elig.length ? elig : P[ME].roster).map(r => r.char);
-  }
   const used = new Set(ST.used && ST.used[P[ME].name] || []);
   return P[ME].roster.filter(r => !used.has(r.char.name)).map(r => r.char);
 }
 
-function sendPick(name){
+function sendPick(names){
   if (!ST || ST.end || ST.picks[P[ME].name]) return;
-  // Once contenders narrows the field (a partial tie in a 3+ player
-  // game sent the tied sides to overtime, leaving someone out), a seat
-  // that isn't in that list has nothing left to send - guard here so
-  // the UI can't even attempt it, not just rely on submit-pick's own
-  // server-side rejection of the same case.
-  if (SOLO !== true && ST.contenders && !ST.contenders.includes(P[ME].name)) return;
+  const chosen = [...new Set((Array.isArray(names) ? names : [names]).map(String))];
+  const remaining = myRemaining();
+  const bounds = fightPickBounds(remaining.length, ST.round || 1);
+  if (chosen.length < bounds.min || chosen.length > bounds.max) return;
+  if (chosen.some(name => !remaining.some(char => char.name === name))) return;
   SFX.bid();
   if (SOLO || !backend){
-    if (HOST) takePick(P[ME].name, name);
-    else send({ t: "pick", cid: CID, p: ME, name });
+    if (HOST) takePick(P[ME].name, chosen);
+    else send({ t: "pick", cid: CID, p: ME, names: chosen });
     return;
   }
-  // Optimistic: shows "X is in, waiting on the others" immediately on
-  // THIS browser, same instant feel as before. The server never reveals
-  // what was picked to anyone but the seat that sent it - this is purely
-  // local memory of my own choice, not something read back from the
-  // snapshot. Rolled back if the actual submit-pick call fails.
-  ST.picks[P[ME].name] = name;
+  ST.picks[P[ME].name] = chosen;
+  selectedFightPicks.clear();
   stPaint();
-  backend.submitPick(ME, name, ST.mode).catch(err => {
+  backend.submitPick(ME, chosen, ST.mode).catch(err => {
     delete ST.picks[P[ME].name];
     gameNudge(err.message);
     stPaint();
   });
 }
 
-// Host only. Holds each pick until every side is in, then resolves once.
-function takePick(owner, name){
-  if (!HOST || !ST || ST.end || !MATCH) return;
-  if (ST.picks[owner]) return;                       // one pick per round
+function takePick(owner, names){
+  if (!HOST || !ST || ST.end || !MATCH || ST.picks[owner]) return;
+  const chosen = [...new Set((Array.isArray(names) ? names : [names]).map(String))];
   const side = MATCH.available().find(a => a.owner === owner);
-  if (!side || !side.names.includes(name)) return;   // not theirs to send
-  ST.picks[owner] = name;
-  // Say who has locked in, never what they sent.
-  ST.locked = seats().map(q => P[q].name).filter(n => ST.picks[n]);
+  if (!side || chosen.length < side.min || chosen.length > side.max ||
+      chosen.some(name => !side.names.includes(name))) return;
+  ST.picks[owner] = chosen;
+  ST.locked = seats().map(q => P[q].name).filter(name => ST.picks[name]);
   if (ST.locked.length < seats().length){ stPaint(); stSend(); return; }
 
-  const res = MATCH.resolve(seats().map(q => ({ owner: P[q].name, name: ST.picks[P[q].name] })));
+  const res = MATCH.resolve(seats().map(q => ({ owner: P[q].name, names: ST.picks[P[q].name] })));
   if (!res){ ST.picks = {}; ST.locked = []; stPaint(); stSend(); return; }
-  // Record who was sent this round into the synced state, not just into
-  // MATCH's own local .used flags, since those never reach the guest.
   for (const q of seats()){
-    const owner = P[q].name, sent = ST.picks[owner];
-    if (!sent) continue;
-    ST.used[owner] = ST.used[owner] || [];
-    if (!ST.used[owner].includes(sent)) ST.used[owner].push(sent);
+    const ownerName = P[q].name;
+    ST.used[ownerName] = ST.used[ownerName] || [];
+    for (const sent of ST.picks[ownerName] || []){
+      if (!ST.used[ownerName].includes(sent)) ST.used[ownerName].push(sent);
+    }
   }
-  // Same again for whoever just drew: MATCH's own per-side drawnOut set is
-  // host-only, so it has to be copied out into synced state the same way
-  // .used already is, or the guest's own myRemaining() never learns a card
-  // is barred from overtime and offers it again.
-  res.ranked.forEach(x => {
-    if (!x.draw) return;
-    ST.drawnOut[x.owner] = ST.drawnOut[x.owner] || [];
-    if (!ST.drawnOut[x.owner].includes(x.name)) ST.drawnOut[x.owner].push(x.name);
-  });
-  ST.overtime = res.overtimeNow;
-  // Each beat carries its own round's ranked result now, not just an empty
-  // placeholder: stPaint renders every past round's cards from this, not
-  // only the latest, so the whole match stays visible as it goes rather
-  // than only ever showing whatever just happened. Draw status and whether
-  // the round was fought in overtime both live inside b.ranked itself
-  // (each fighter's own .draw flag) or are derivable from the round's
-  // position against SLOTS (see roundLabel) - nothing else needs storing
-  // here.
+  ST.overtime = false;
   ST.beats.push({ ranked: res.ranked });
   ST.standings = res.standings;
   ST.lastRound = res.ranked;
-  // The pie chart's per-round wedge colours read from this, not from
-  // MATCH's own history, for the same reason .used lives on ST: only ST
-  // actually reaches the guest. Whoever holds place 1 ALONE is the winner;
-  // if two or three share it, nobody has a single winner to record - null
-  // rather than arbitrarily picking one of the tied names.
-  const topPlace = res.ranked.filter(x => x.place === 1);
-  const winner = topPlace.length === 1 ? topPlace[0] : null;
-  ST.roundWinners.push(winner && winner.owner);
+  const topOwners = [...new Set(res.ranked.filter(x => x.place === 1 && !x.draw).map(x => x.owner))];
+  ST.roundWinners.push(topOwners.length === 1 ? topOwners[0] : null);
   ST.picks = {}; ST.locked = [];
   ST.round = MATCH.roundNo();
+  selectedFightPicks.clear();
   if (res.done) ST.end = { winner: res.champion, standings: res.standings };
-  // Character-level stats, genuinely per round the same way as the
-  // multiplayer path (see submit-pick's own comment) - and player-level
-  // bot stats once the match itself concludes, but only for a signed-in
-  // player; a guest playing solo has nothing to attribute a win/loss to.
-  // Guarded on SOLO specifically since takePick() is also reachable from
-  // a couple of legacy broadcast-message handlers that real multiplayer
-  // no longer uses - this is the one place that should ever fire these
-  // calls, regardless of how many paths still technically lead here.
+
   if (SOLO){
     sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
     Promise.all(
@@ -3692,7 +3678,6 @@ function takePick(owner, name){
   res.isDraw ? SFX.pass() : SFX.sold();
   stPaint(); stSend();
 }
-
 function writeFight(){
   if (ME !== caller()) return;
   const mode = chosenMode();
@@ -4309,17 +4294,9 @@ $("googleSignOutBtn")?.addEventListener("click", async () => {
   checkResumable();
 })();
 
-// Offer to reopen a table this browser was hosting or seated at (a
-// refresh loses nothing - multiplayer reconnects to the real backend,
-// solo rebuilds its own local state same as always).
-//
-// A signed-in player already has room-code-based rejoin on their
-// profile screen, which works from ANY device - showing this SAME-
-// DEVICE-ONLY shortcut on the home screen too, right next to their own
-// profile chip, was pure redundant clutter specifically for them. A
-// guest has no such alternative at all (there's no profile screen for
-// them to reach), so this one-click resume stays exactly where it
-// always was, completely unchanged, for that case.
+// Remind a signed-in player of the last room code without duplicating the
+// Rejoin action directly above it. Guests still need the one-click resume
+// control because they do not have the profile rejoin form.
 function checkResumable(){
   try {
     const mp = JSON.parse(localStorage.getItem(MP_SAVE_KEY) || "null");
@@ -4328,7 +4305,14 @@ function checkResumable(){
     if (mp && mp.tableId && !invited) room = mp.room;
     else if (sv && sv.ROOM && !sv.over && !invited) room = sv.ROOM;
     if (!room) return;
-    const btn = currentUser ? $("profileResumeBtn") : $("resumeBtn");
+    if (currentUser){
+      const hint = $("profileResumeHint");
+      if (!hint) return;
+      hint.hidden = false;
+      hint.textContent = "Last table joined was: " + room;
+      return;
+    }
+    const btn = $("resumeBtn");
     if (!btn) return;
     btn.hidden = false;
     btn.textContent = "Reopen table " + room;

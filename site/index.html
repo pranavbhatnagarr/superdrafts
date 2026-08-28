@@ -52,7 +52,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <main id="gate" class="screen setup-screen" hidden>
   <div class="guide-cover">
     <div class="cover-rules" aria-hidden="true"></div>
-    <p class="cover-edition">Ten Characters &middot; Twenty Dollars &middot; One Fight</p>
+    <p class="cover-edition">Three to Five Characters &middot; Twenty Dollars &middot; Three Rounds</p>
     <h1 class="cover-title">Super Drafts</h1>
     <p class="cover-sub">Sign in to keep a profile - your record, your favorite universes, your own picture.</p>
 
@@ -140,11 +140,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       </div>
       <button id="reconnectBtn" class="pn-pass" type="button">Rejoin</button>
       <p class="netmsg" id="reconnectMsg" role="status"></p>
-      <!-- Same "Reopen table" this device may already remember, moved
-           here from the home screen - see checkResumable() in game.js.
-           Hidden unless a resumable table genuinely exists; nothing
-           duplicated for a guest, who never reaches this screen at all. -->
-      <button id="profileResumeBtn" class="pn-pass" type="button" hidden></button>
+      <p id="profileResumeHint" class="last-table-hint" hidden></p>
     </section>
 
     <button id="profileContinueBtn" class="stamp-btn" type="button"><span>Continue to Homepage</span></button>
@@ -182,12 +178,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <main id="setup" class="screen setup-screen" hidden>
   <div class="guide-cover">
     <div class="cover-rules" aria-hidden="true"></div>
-    <p class="cover-edition" id="coverEdition">Twenty Lots &middot; Ten Sold &middot; Two Buyers</p>
+    <p class="cover-edition" id="coverEdition">Fifteen Lots &middot; Three to Five Each &middot; Two Buyers</p>
     <h1 class="cover-title">Super Drafts</h1>
-    <p class="cover-sub">Ten Characters. Twenty Dollars. One Fight.</p>
+    <p class="cover-sub">Three to Five Each. Twenty Dollars. Three Rounds.</p>
 
     <div class="cover-strip">
-      <span id="stockCount">Issues in Stock</span><i></i><span>Comics &amp; Anime</span><i></i><span>Base Versions</span><i></i><span>No Cosmic Gods</span><i></i><span>Twenty a Sale</span>
+      <span id="stockCount">Issues in Stock</span><i></i><span>Comics &amp; Anime</span><i></i><span>Base Versions</span><i></i><span>No Cosmic Gods</span><i></i><span>Three-Round Fights</span>
     </div>
 
     <p class="leaderboard-link-row">
@@ -265,16 +261,17 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <section class="frontmatter" aria-label="How the sale runs">
       <h2 class="fm-head">How the sale runs</h2>
       <ol class="fm-list">
-        <li><b>Twenty lots, ten sold.</b> Twenty characters come out of the box one at a time, in a random order. You each buy five. The other ten pass in unsold.</li>
+        <li><b>Build a roster of three to five.</b> Characters come out one at a time. Once you own three, further buys are optional; nobody may own more than five.</li>
         <li><b>Open outcry.</b> Bid against each other in dollars. When you stop bidding, hit <b>Pass</b> and the standing bid takes the lot at that price.</li>
-        <li><b>Nobody bids, it passes in.</b> If you both pass before anyone opens, that character is gone for good. That is how the other ten leave the box.</li>
-        <li><b>Passes are finite, and you never count them.</b> Ten lots have to be bought, so every lot you let go is one less chance to be choosy. The header shows what is left.</li>
-        <li><b>Then it becomes compulsory.</b> When the lots remaining equal the buys still owed, passing stops. Whatever comes up, somebody is buying it.</li>
-        <li><b>Keep a dollar per slot.</b> You can never bid so deep that you cannot afford $1 for each empty slot, so both rosters always reach five.</li>
-        <li><b>Buying alone costs to walk away.</b> Once the other side is full, each pass you make costs $1, so a fat purse buys patience and nothing else.</li>
+        <li><b>Nobody bids, it passes in.</b> If everyone passes before anyone opens, that character is gone for good.</li>
+        <li><b>Three is mandatory.</b> Every buyer must leave the sale with at least three characters.</li>
+        <li><b>Then it becomes compulsory.</b> If the remaining lots are needed to bring everyone to three, passing stops.</li>
+        <li><b>Keep a dollar per required slot.</b> You cannot bid away the money needed to reach the three-character minimum.</li>
+        <li><b>Passing can cost.</b> Once any player reaches five characters, every pass by a player whose roster is not full costs $1.</li>
+        <li><b>Three fight rounds.</b> Send one or two unused characters per round. All drafted characters must be deployed across the three rounds.</li>
         <li><b>Then they fight.</b> Base versions. Pick a random encounter or a week of prep, and the issue gets fought on the spot.</li>
       </ol>
-      <p class="fm-foot">Tiers are the only number on the table, and they decide the fight. Everything else is what you already know. <a class="fm-link" href="tiers.html">Every character is graded in the tier guide</a>, if you would rather read the box before you bid on it.</p>
+      <p class="fm-foot">Tiers still describe each character, but combined power level decides each round. The higher team total wins; equal totals draw. <a class="fm-link" href="tiers.html">Every character is graded in the tier guide</a>, if you would rather read the box before you bid on it.</p>
     </section>
 
     <p class="cover-hint">Two or three buyers, any devices, anywhere in the world. Every bid is public, so talk your way into a bargain.</p>
@@ -402,7 +399,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <!-- ============================ FACE-OFF ============================ -->
 <main id="faceoff" class="screen faceoff-screen" hidden>
   <header class="fo-head">
-    <h2 class="fo-title" id="foTitle">Five Against Five</h2>
+    <h2 class="fo-title" id="foTitle">Roster Against Roster</h2>
     <div class="gh-rule" aria-hidden="true"></div>
   </header>
 
@@ -413,7 +410,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <div class="fo-actions">
     <section class="roles-wrap">
       <h3 class="fm-head">Give everyone a job</h3>
-      <p class="roles-note">One role each, all five used. A tick means the role suits them and
+      <p class="roles-note">One unique role per drafted character. A tick means the role suits them and
         buys a tier. A cross means it does not, and costs one. Locked once you confirm.</p>
       <div class="role-board" id="roleBox"></div>
     </section>

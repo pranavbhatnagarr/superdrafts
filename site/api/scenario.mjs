@@ -61,10 +61,9 @@ CANON
 - Invent nothing: no extra powers, no extra characters. The drafted characters
   are the only people who exist. No named allies, soldiers or bystanders.
 - Judge across worlds by typical showings, never a single best feat or a peak
-  end-of-series version. Tiers are given, S world-threatening down to E capable
-  human. Within one tier, tactics can swing it. Three or more tiers apart is
-  decided, unless the weaker side has a specific named reason. Never rebalance a
-  world because it is a favourite.
+  end-of-series version. Power levels and the match result are supplied by the
+  game and are binding. Tiers are descriptive context only and never override
+  that result. Never rebalance a world because it is a favourite.
 - Instant-win abilities (one-shot kills, mind control, absolute barriers) only
   land on someone unaware or unprepared. In an open fight nobody is.
 - Prices are texture: $1 meant written off, $9 meant fought over.
@@ -166,16 +165,16 @@ gadget-builders matter enormously here, and raw power matters less. Show the
 preparation paying off, or failing.`
 };
 
-// The tier maths is settled before the writer sees anything. Its job is to make
-// the result convincing, not to decide it, otherwise the tiers mean nothing.
+// The game settles the power-based result before the writer sees anything. The
+// writer explains that outcome and never substitutes its own tier judgement.
 function ruling(r, body){
   if (!r || !Array.isArray(r.scores)) return "";
   const line = r.scores
     .map((v, i) => `${String((r.names && r.names[i]) || "side " + (i + 1)).slice(0, 20)} ${v}`)
     .join(", ");
-  const head = `TIER SCORE (already calculated, not your decision): ${line}.`;
+  const head = `POWER SCORE (already calculated, not your decision): ${line}.`;
   if (r.close) return head + `
-The top two are close enough that the tiers do not settle it. YOU decide the winner
+The game marked the matchup as close. Follow the supplied result and make it feel earned
 on tactics, matchups, terrain and nerve, and say plainly that it was close.`;
   return head + `
 THE WINNER IS ${String(r.winner).slice(0, 20)}. This is decided and you may not
@@ -282,7 +281,7 @@ marks, no character names simply strung together.` : ""}`;
 
 const FINAL_RULES = n => `
 Write EXACTLY ${n} short paragraph${n > 1 ? "s" : ""} resolving the fight, then
-the verdict. Honour the tier ruling exactly. No title, no headings.
+the verdict. Honour the supplied power-based ruling exactly. No title, no headings.
 
 THE CONCLUSION carries the most weight in the issue, so no quipping through it.
 If the end-game choice gave someone up, that defeat lands here properly: their
@@ -312,7 +311,7 @@ Answer with JSON and nothing else, in exactly this shape:
  "out": ["exact names of everyone taken out in THIS beat, nobody already out"],
  "winner": "the owner name, exactly as given",
  "mvp": "character name, colon, one sentence on what they did. May be from the losing side",
- "read": "three or four sentences, and NEVER mention money, prices or dollar amounts. First: which characters and roles decided this, using their final tiers, as OWNER then role then character then final tier, for example \"Ana's Strategist Nightwing, final tier C\", using the real owner names given above and never the one in this example. Then: for each decision under DECISIONS, say what would have happened instead had that player taken the option they turned down, and whether it would have changed the result. Never write an owner name on its own as if they played."}`;
+ "read": "three or four sentences, and NEVER mention money, prices or dollar amounts. First: which characters decided this, listing OWNER, role, character, final tier, and power level, for example \"Ana's Strategist Nightwing, final tier C\", using the real owner names given above and never the one in this example. Then: for each decision under DECISIONS, say what would have happened instead had that player taken the option they turned down, and whether it would have changed the result. Never write an owner name on its own as if they played."}`;
 // Models drop the markers now and then and answer in prose with "A)" and "B)"
 // lines. Read both shapes, and prefer the marked one when it is there.
 // Every character the box can deal. The writer is only ever told about the
@@ -423,9 +422,10 @@ function roster(team){
   if (!team || !Array.isArray(team.picks)) return null;
   const picks = team.picks.slice(0, 5).map(p => {
     const world = String(p.world || p.pub || "").slice(0, 24);
-    const tier = /^[SABCDE]$/.test(String(p.tier)) ? `, final tier ${p.tier}` : "";
+    const tier = /^(S\+|[SABCDE])$/.test(String(p.tier)) ? `, final tier ${p.tier}` : "";
+    const power = Number.isFinite(Number(p.power)) ? `, power ${Number(p.power)}` : "";
     const role = p.role ? `, ${String(p.role).slice(0, 14)}` : "";
-    return `- ${String(p.name).slice(0, 40)} (${world}${tier}${role}), $${Number(p.price) | 0}`;
+    return `- ${String(p.name).slice(0, 40)} (${world}${tier}${power}${role}), $${Number(p.price) | 0}`;
   });
   return `${String(team.name).slice(0, 20)}'s team:\n${picks.join("\n")}`;
 }

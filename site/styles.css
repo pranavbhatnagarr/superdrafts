@@ -270,17 +270,9 @@ body{
    everywhere else too, for the same reason - the auction screen's bid
    panel needs several of these sitting side by side, not centered one
    at a time. */
-#profileNameSaveBtn, #favSaveBtn, #reconnectBtn, #profileResumeBtn, #googleSignOutBtn{
+#profileNameSaveBtn, #favSaveBtn, #reconnectBtn, #googleSignOutBtn{
   display:block; margin-left:auto; margin-right:auto;
 }
-/* Equal gap on both sides of "Continue to the table" - matches the
-   28px above googleSignOutBtn, so the stamp button reads as evenly
-   spaced from its neighbor on either side, not tighter on one side
-   than the other. Margins between adjacent block siblings collapse to
-   whichever is larger, not add together - .stamp-btn itself has no
-   margin-top, so this alone produces exactly 28px above it too. */
-#profileResumeBtn{ margin-bottom:28px; }
-
 .tab-input:read-only{
   color:var(--ink-2); cursor:default; border-bottom-style:dotted;
 }
@@ -689,6 +681,12 @@ body{
   box-shadow:0 6px 16px -6px rgba(0,0,0,.5);
 }
 .ghost-btn.resume-btn:hover{ background:var(--red-dk); border-color:var(--red-dk); color:var(--pulp); }
+.last-table-hint{
+  margin:2px 0 28px; text-align:center;
+  font-family:var(--data); font-size:12px; font-weight:700;
+  letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3);
+}
+.last-table-hint[hidden]{ display:none; }
 
 .lobby-cover{ text-align:center; }
 .lobby-title{
@@ -1760,6 +1758,9 @@ svg.rs-icon{
   transition:transform .15s ease;
 }
 .sc-card:hover:not(:disabled) .sc-card-img{ transform:scale(1.04); }
+.sc-card.selected{ outline:4px solid var(--gold); outline-offset:-4px; box-shadow:0 0 0 2px var(--ink), 0 5px 14px rgba(0,0,0,.28); }
+.sc-card.selected::after{ content:'SELECTED'; position:absolute; top:7px; right:7px; z-index:4; padding:3px 5px; background:var(--gold); color:var(--ink); border:1px solid var(--ink); font:700 8px var(--data); letter-spacing:.08em; }
+.fight-pick-confirm{ grid-column:1/-1; justify-self:center; margin-top:8px; }
 .sc-card-blank{
   position:absolute; inset:0; display:grid; place-items:center;
   font:700 40px var(--slab); color:var(--ink-3);
@@ -1808,6 +1809,9 @@ svg.rs-icon{
 }
 /* three seats need the extra column, so give that shape more room */
 .round-reveal.is-three{ max-width:min(100%, 760px); }
+.round-reveal.is-team{ max-width:min(100%, 920px); column-gap:clamp(2px, 1vw, 9px); }
+.round-reveal.is-team .reveal-card{ width:clamp(42px, 13vw, 110px); }
+.round-reveal.is-team .reveal-vs{ font-size:clamp(8px, 2vw, 14px); }
 .reveal-card{
   justify-self:center;
   width:clamp(96px, 24vw, 160px);
@@ -2089,8 +2093,8 @@ svg.rs-icon{
    first pass so the material actually reads at a glance instead of needing
    a second look. */
 .tier-icon{
-  width:clamp(28px, 8vw, 37.5px); height:clamp(28px, 8vw, 37.5px); flex:0 0 auto;
-  filter:drop-shadow(0 1px 1px rgba(0,0,0,.45));
+  width:clamp(42px, 12vw, 56.25px); height:clamp(42px, 12vw, 56.25px); flex:0 0 auto;
+  filter:drop-shadow(0 2px 2px rgba(0,0,0,.42));
 }
 .tier-icon-diamond{
   filter:drop-shadow(0 1px 1px rgba(0,0,0,.4)) drop-shadow(0 0 3px rgba(143,216,245,.65));
@@ -2102,6 +2106,29 @@ svg.rs-icon{
 .tier-icon-prism{
   filter:drop-shadow(0 1px 1px rgba(0,0,0,.4)) drop-shadow(0 0 3px rgba(200,139,255,.6)) drop-shadow(0 0 5px rgba(91,141,255,.4));
 }
+.result-badges{ display:flex; align-items:center; justify-content:center; gap:9px; }
+.power-badge{
+  width:clamp(42px, 12vw, 56.25px); height:clamp(42px, 12vw, 56.25px);
+  border-radius:28% 28% 46% 46% / 22% 22% 58% 58%; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  box-sizing:border-box; border:3px solid; color:var(--ink);
+  font-family:var(--data); line-height:.82;
+  filter:drop-shadow(0 2px 2px rgba(0,0,0,.42));
+}
+.power-badge-value{ font-size:clamp(18px, 5.1vw, 24px); font-weight:700; }
+.power-badge-label{ margin-top:4px; font-size:8px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+.power-band-sp{
+  border-radius:3px; border-color:#c88bff;
+  background:linear-gradient(135deg,#ffe6fb,#c88bff 42%,#5b8dff 72%,#3f3f8f);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.5);
+}
+.power-band-s{ border-color:#8fd8f5; background:linear-gradient(135deg,#fff,#8fd8f5,#3f8fb8); }
+.power-band-a{ border-color:#c99a2e; background:linear-gradient(135deg,#fbe28a,#c99a2e,#7a5a12); }
+.power-band-b{ border-color:#aab2ba; background:linear-gradient(135deg,#f5f7f9,#aab2ba,#666e75); }
+.power-band-c{ border-color:#a35c22; background:linear-gradient(135deg,#e7a06a,#a35c22,#5e340f); }
+.power-band-d{ border-color:#8a5a34; background:linear-gradient(135deg,#d3ac78,#8a5a34,#4d3018); color:#fff2df; }
+.power-band-plain{ border-color:#81786b; background:#bbb2a3; color:#3d3932; filter:none; }
+.round-reveal-historic .power-badge{ width:41.25px; height:41.25px; }
+.round-reveal-historic .power-badge-value{ font-size:18px; }
 /* the word under the medallion, same small red-caps treatment as the
    fighter's own name above it so "Tier" reads as part of the same label,
    not a separate caption. Stacked under the icon rather than beside it now
@@ -2123,7 +2150,7 @@ svg.rs-icon{
 .round-reveal-historic .reveal-card{
   width:clamp(64px, 15vw, 104px);
 }
-.round-reveal-historic .tier-icon{ width:27.5px; height:27.5px; }
+.round-reveal-historic .tier-icon{ width:41.25px; height:41.25px; }
 .round-reveal-historic .tier-chip-name,
 .round-reveal-historic .tier-chip-label{ font-size:10px; }
 .round-reveal-historic .reveal-vs{

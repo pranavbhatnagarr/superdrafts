@@ -123,11 +123,11 @@ until every seat has genuinely locked.
 
 Base versions only, no cosmic gods. Five blind rounds: each side sends one
 character, nobody sees who the other side sent until both picks are locked
-in, and every character fights exactly once. Whoever holds the strictly
-better tier wins the round outright — there's no dice roll once tiers are
-set, so the draft, the roles, and the prep choice are the whole game.
-Landing on the exact same tier is a draw: nobody scores, and neither of
-those two cards can be sent again.
+in, and every character fights exactly once. The higher `Power_lvl` wins.
+Equal power always produces a stalemate. A gap of 1–5 can also stalemate,
+with chances of 50%, 40%, 30%, 20%, and 10% respectively; a gap above 5 is
+always decisive. Tiers stay visible for grading, roles, prep, and presentation,
+but never decide the result. Stalemated cards cannot be resent in sudden death.
 
 **Who actually decides this:** the deciding logic (`fight-engine.ts`) is
 shared between the browser and the backend — the same pure function, so a
@@ -140,9 +140,9 @@ no read access for either client — `submit-pick` only combines them once
 both are actually in. `fight.js` in the browser still turns an already-
 resolved round into the prose you read; it never decides anything itself.
 
-Tiers run **S, A, B, C, D, E**, worth **16, 8, 4, 2, 1, 0.5** points. A week
-of prep re-tiers everyone before the fight starts — a Strategist with a week
-to plan is a different fighter than one caught flat-footed.
+Tiers run **S, A, B, C, D, E**. Roles and a week of prep can change the
+displayed effective tier, but they do not change `Power_lvl` or override a
+power-based fight result.
 
 If the five rounds end tied, it goes to **sudden death**: same two rosters,
 replayed with anything that hasn't already drawn, until someone wins a round
@@ -150,10 +150,9 @@ outright. A matchup that stays genuinely dead-even keeps going for a while,
 but it is guaranteed to end — after enough sudden-death rounds with no
 result, the match forces a finish rather than drawing forever.
 
-There's also a **tier score** shown alongside the fight — a straight sum of
-both rosters' tier points (roles counted) as a sanity check on the result.
-Inside a 20% gap it's called close, and the actual five-round fight is what
-decides it either way.
+Every round result shows both the fighter's effective tier and power level.
+The final summary shows each roster's total power, while match points still
+come from the five individual clashes.
 
 A table can run **both** encounter types — random and prep — against the
 same drafted rosters, one after the other, without redrafting.

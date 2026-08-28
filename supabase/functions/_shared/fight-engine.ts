@@ -25,7 +25,6 @@
 // mid-round.
 
 const LADDER = ["S+", "S", "A", "B", "C", "D", "E"];
-const POINTS: Record<string, number> = { "S+": 32, S: 16, A: 8, B: 4, C: 2, D: 1, E: 0.5 };
 
 export function rng(seed: number) {
   let a = seed >>> 0;
@@ -61,30 +60,29 @@ export function effTier(ch: any, mode: string, role: string): string {
   return LADDER[Math.max(0, Math.min(LADDER.length - 1, i))];
 }
 
-export function rankFighters(fighters: any[], strict: boolean) {
-  const key = (f: any) => strict
-    ? [LADDER.indexOf(f.eff), f.val, f.baseIdx]
-    : [LADDER.indexOf(f.eff)];
-  const same = (a: any, b: any) => key(a).every((v, i) => v === key(b)[i]);
-  const cmp = (a: any, b: any) => {
-    const x = key(a), y = key(b);
-    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i];
-    return 0;
-  };
-  const withIdx = fighters.map((f) => ({ f, idx: LADDER.indexOf(f.eff) }));
-  withIdx.sort((a, b) => cmp(a.f, b.f));
-  const order = withIdx.map((x) => x.f);
+// Power level alone decides a clash. Equal power always stalemates. A power
+// gap of 1-5 has a 50/40/30/20/10 percent stalemate chance respectively;
+// otherwise the higher-power fighter wins.
+const powerLevel = (f: any): number => Math.max(0, Number(f.power ?? f.Power_lvl ?? f.power_lvl ?? 0) || 0);
+const stalemateChance = (gap: number): number => gap === 0 ? 1 : (gap >= 1 && gap <= 5 ? (6 - gap) / 10 : 0);
 
+export function rankFighters(fighters: any[], _strict: boolean, random: () => number) {
+  const sorted = fighters.slice().sort((a, b) => powerLevel(b) - powerLevel(a));
   const groups: { idx: number; fighters: any[] }[] = [];
-  for (const x of withIdx) {
+  for (const fighter of sorted) {
     const last = groups[groups.length - 1];
-    if (last && same(last.fighters[0], x.f)) last.fighters.push(x.f);
-    else groups.push({ idx: x.idx, fighters: [x.f] });
+    if (!last) {
+      groups.push({ idx: -powerLevel(fighter), fighters: [fighter] });
+      continue;
+    }
+    const gap = powerLevel(last.fighters[0]) - powerLevel(fighter);
+    const chance = stalemateChance(gap);
+    if (chance === 1 || (chance > 0 && random() < chance)) last.fighters.push(fighter);
+    else groups.push({ idx: -powerLevel(fighter), fighters: [fighter] });
   }
   const tied = new Set<any>();
   groups.forEach((g) => { if (g.fighters.length > 1) g.fighters.forEach((f) => tied.add(f)); });
-
-  return { order, groups, tied, fullDraw: groups.length === 1 };
+  return { order: groups.flatMap((g) => g.fighters), groups, tied, fullDraw: groups.length === 1 };
 }
 
 export function pointsForGroups(groups: { idx: number; fighters: any[] }[], seatCount: number) {
@@ -124,15 +122,14 @@ export function buildSides(teams: any[], mode: string, priorState: any) {
     return {
       ix, owner: t.owner,
       fighters: t.fighters.map((f: any) => ({
-        ...f, side: ix,
+        ...f, side: ix, power: powerLevel(f),
         eff: effTier(f, mode, f.role),
         val: effValue(f, mode, f.role),
         baseIdx: LADDER.indexOf(f.tier),
         used: usedNames.includes(f.name),
       })),
       drawnOut: new Set(drawnOutNames),
-      rawScore: t.fighters.reduce((n: number, f: any) =>
-        n + (POINTS[effTier(f, "random", f.role)] || 0), 0),
+      rawScore: t.fighters.reduce((n: number, f: any) => n + powerLevel(f), 0),
       purse: t.purse,
     };
   });
@@ -161,87 +158,75 @@ function eligible(side: any, isOT: boolean) {
 // final and they take no further part.
 export function resolveRound(
   sides: any[],
-  picks: { owner: string; name: string }[],
+  picks: { owner: string; names?: string[]; name?: string }[],
   points: number[],
-  overtime: boolean,
+  _overtime: boolean,
   seed: number,
-  contenders: string[] | null = null,
+  _contenders: string[] | null = null,
+  roundNumber = 1,
 ) {
-  const r = rng(seed);
-  const wasOvertime = overtime;
+  const r = rng((seed ^ Math.imul(roundNumber, 0x9E3779B9)) >>> 0);
+  if (roundNumber < 1 || roundNumber > 3) return null;
+  const roundsLeft = 4 - roundNumber;
+  const chosenTeams: any[] = [];
 
-  // A filtered VIEW for "who's still deciding this round" - iteration
-  // and ranking use this, but any lookup by numeric index (sides[x])
-  // still has to use the original, full `sides` array below, since
-  // activeSides' own array positions no longer line up with the side
-  // indices baked into each fighter once this is filtered.
-  const activeSides = contenders ? sides.filter((s) => contenders.includes(s.owner)) : sides;
-
-  const chosen = picks.map((p) => {
-    const side = activeSides.find((x) => x.owner === p.owner);
-    if (!side) return null;
-    const legal = eligible(side, wasOvertime);
-    return legal.find((f: any) => f.name === p.name) || null;
-  }).filter(Boolean);
-  if (chosen.length !== activeSides.length) return null;
-  if (!wasOvertime) chosen.forEach((f: any) => { f.used = true; });
-
-  const { order: ranked, groups, tied, fullDraw } = rankFighters(chosen, wasOvertime);
-  const soleLeader = groups[0].fighters.length === 1;
-  const roundWinnerSide = soleLeader ? groups[0].fighters[0].side : null;
-
-  tied.forEach((f: any) => sides[f.side].drawnOut.add(f.name));
-
-  let pointsMap: Map<any, number> | null = null;
-  if (!wasOvertime) {
-    pointsMap = pointsForGroups(groups, activeSides.length);
-    pointsMap.forEach((pts, f) => { points[f.side] += pts; });
+  for (const side of sides) {
+    const submitted = picks.find((p) => p.owner === side.owner);
+    const names = submitted ? (submitted.names || (submitted.name ? [submitted.name] : [])) : [];
+    const unique = [...new Set(names)];
+    const legal = side.fighters.filter((f: any) => !f.used);
+    const min = Math.max(1, legal.length - 2 * (roundsLeft - 1));
+    const max = Math.min(2, legal.length - (roundsLeft - 1));
+    if (unique.length < min || unique.length > max) return null;
+    const fighters = unique.map((name) => legal.find((f: any) => f.name === name)).filter(Boolean);
+    if (fighters.length !== unique.length) return null;
+    chosenTeams.push({ side, fighters, power: fighters.reduce((n: number, f: any) => n + powerLevel(f), 0) });
   }
 
-  let done = false, championOwner: string | null = null;
-  let overtimeNow = overtime;
-  let newContenders = contenders;
-
-  if (wasOvertime) {
-    if (soleLeader) {
-      done = true; championOwner = sides[roundWinnerSide!].owner;
-      points[roundWinnerSide!] += 1;
-    } else if (activeSides.every((x: any) => x.fighters.every((f: any) => x.drawnOut.has(f.name)))) {
-      done = true;
-      const activePoints = activeSides.map((x: any) => points[x.ix]);
-      const best = Math.max(...activePoints);
-      const live = activeSides.filter((_x: any, i: number) => activePoints[i] === best);
-      const top = Math.max(...live.map((x: any) => x.rawScore));
-      const front = live.filter((x: any) => x.rawScore === top);
-      const champ = front.length === 1 ? front[0] : pick(r, front);
-      championOwner = champ.owner;
-      points[champ.ix] += 1;
-    }
-  } else {
-    const regularOver = sides.every((s) => s.fighters.every((f: any) => f.used));
-    if (regularOver) {
-      const best = Math.max(...points);
-      const tiedSides = sides.filter((_s, i) => points[i] === best);
-      if (tiedSides.length === 1) { done = true; championOwner = tiedSides[0].owner; }
-      else { overtimeNow = true; newContenders = tiedSides.map((s) => s.owner); }
-    }
+  chosenTeams.forEach((team) => team.fighters.forEach((f: any) => { f.used = true; }));
+  const ordered = chosenTeams.slice().sort((a, b) => b.power - a.power);
+  const groups: any[] = [];
+  for (const team of ordered) {
+    const last = groups[groups.length - 1];
+    if (last && last.power === team.power) last.teams.push(team);
+    else groups.push({ power: team.power, teams: [team] });
   }
+  const soleLeader = groups[0].teams.length === 1;
+  if (soleLeader) points[groups[0].teams[0].side.ix] += 1;
 
-  const groupPlace = new Map<any, number>();
-  groups.forEach((g, gi) => g.fighters.forEach((f) => groupPlace.set(f, gi + 1)));
+  const place = new Map<number, number>();
+  groups.forEach((group, index) => group.teams.forEach((team: any) => place.set(team.side.ix, index + 1)));
+  const ranked = groups.flatMap((group) => group.teams.flatMap((team: any) =>
+    team.fighters.map((f: any) => ({
+      owner: team.side.owner, name: f.name, place: place.get(team.side.ix),
+      eff: f.eff, power: f.power, teamPower: team.power,
+      draw: group.teams.length > 1,
+      points: soleLeader && team === groups[0].teams[0] ? 1 : 0,
+    }))
+  ));
+
+  const done = roundNumber === 3;
+  let championOwner: string | null = null;
+  if (done) {
+    const bestPoints = Math.max(...points);
+    let finalists = sides.filter((_side, i) => points[i] === bestPoints);
+    if (finalists.length > 1) {
+      const bestPower = Math.max(...finalists.map((side) => side.rawScore));
+      finalists = finalists.filter((side) => side.rawScore === bestPower);
+    }
+    championOwner = finalists.length === 1 ? finalists[0].owner : pick(r, finalists).owner;
+  }
 
   return {
-    ranked: ranked.map((f: any) => ({
-      owner: sides[f.side].owner, name: f.name, place: groupPlace.get(f),
-      eff: f.eff, draw: tied.has(f),
-      points: pointsMap ? (pointsMap.get(f) || 0) : 0,
-    })),
-    isDraw: fullDraw,
-    roundWasOvertime: wasOvertime,
-    overtimeNow,
-    standings: sides.map((s, i) => ({ owner: s.owner, points: points[i] })),
-    done, champion: done ? championOwner : null,
-    points, overtime: overtimeNow,
-    contenders: newContenders,
+    ranked,
+    isDraw: !soleLeader,
+    roundWasOvertime: false,
+    overtimeNow: false,
+    standings: sides.map((side, i) => ({ owner: side.owner, points: points[i] })),
+    done,
+    champion: done ? championOwner : null,
+    points,
+    overtime: false,
+    contenders: null,
   };
 }

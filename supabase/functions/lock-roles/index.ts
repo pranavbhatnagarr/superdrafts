@@ -62,12 +62,31 @@ Deno.serve(async (req) => {
     // collapsing every failure case into one status here changes nothing
     // about what the player actually sees - the specific reason is still
     // the exact message the database raised.
-    const { data: newRoster, error: lockErr } = await sb.rpc("lock_role", {
-      p_table_id: table_id, p_seat: seat, p_cid: cid, p_roles: roles,
-    });
-    if (lockErr) return json({ error: lockErr.message }, 400);
+    const { data: seatRow, error: seatErr } = await sb.from("seats")
+      .select("cid, roster, locked")
+      .eq("table_id", table_id).eq("seat", seat).single();
+    if (seatErr) return json({ error: seatErr.message }, 400);
+    if (seatRow.cid !== cid) return json({ error: "you may only lock your own roster" }, 403);
+    if (seatRow.locked) return json({ ok: true, roster: seatRow.roster });
 
-    return json({ ok: true, roster: newRoster });
+    const roster = Array.isArray(seatRow.roster) ? seatRow.roster : [];
+    if (roster.length < 3 || roster.length > 5 || roles.length !== roster.length)
+      return json({ error: "a roster must contain 3 to 5 characters" }, 400);
+    const legalRoles = new Set(["S", "W", "P", "A", "E"]);
+    const chosen = new Set(roles.map((r: any) => r.role));
+    if (chosen.size !== roles.length || [...chosen].some((role) => !legalRoles.has(role)))
+      return json({ error: "each character needs a different valid role" }, 400);
+    if (roles.some((r: any, i: number) => r.name !== roster[i]?.char?.name))
+      return json({ error: "role list does not match your roster" }, 400);
+
+    const newRoster = roster.map((entry: any, i: number) => ({ ...entry, role: roles[i].role }));
+    const { data: updated, error: updateErr } = await sb.from("seats")
+      .update({ roster: newRoster, locked: true })
+      .eq("table_id", table_id).eq("seat", seat).eq("cid", cid).eq("locked", false)
+      .select("roster").single();
+    if (updateErr) return json({ error: updateErr.message }, 400);
+
+    return json({ ok: true, roster: updated.roster });
   } catch (e) {
     return json({ error: String(e) }, 500);
   }

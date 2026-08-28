@@ -28,7 +28,7 @@
 // this engine and the public tier guide all read. They used to be written
 // out here as well, which is exactly the kind of second copy that goes
 // stale the first time a tier is retuned.
-import { LADDER, POINTS } from "./rules.js";
+import { LADDER } from "./rules.js";
 
 /* Small deterministic PRNG. Math.random cannot be used anywhere in here:
    the two players would get different stories for the same fight. */
@@ -56,20 +56,14 @@ function drawer(r){
 
 /* ---------------------------- the simulation ---------------------------- */
 
-// Same maths the auction screen already shows, so a clash and the tier score
-// on the ledger can never disagree.
+// Tiers are still calculated for display, roles, and prep. They no longer rank
+// fighters; powerLevel() below is the sole result input.
 function effTier(ch, mode, role, roleShift){
   const i = effValue(ch, mode, role, roleShift);
   return LADDER[Math.max(0, Math.min(LADDER.length - 1, i))];
 }
 
-// The same sum without the clamp. effTier caps at S+, so a base S wearing a
-// suiting role and a base A with prep AND a suiting role both print "S+" and
-// are indistinguishable - which is fine in a regular round, where a shared
-// tier is meant to be a real stalemate, and fatal in overtime, where it sends
-// the match round and round with no way to separate them. Sudden death reads
-// this instead: how far past the cap a fighter actually got, then what tier
-// they started from. Whoever was weaker to begin with loses the tie.
+// Keep the unclamped tier value for existing display and narration metadata.
 function effValue(ch, mode, role, roleShift){
   let i = LADDER.indexOf(ch.tier);
   if (mode === "prep") i -= (ch.prep || 0);
@@ -77,53 +71,29 @@ function effValue(ch, mode, role, roleShift){
   return i;
 }
 
-// The rule now: whichever fighter has the strictly better tier always wins,
-// no roll, ever. Exactly the same tier is a draw between whoever shares it.
-// Role fit and prep already had their say before this point, inside
-// effTier - they move a fighter a full rung on the ladder, they do not
-// additionally thumb the scale once two fighters actually meet at the same
-// rung. That is what makes a same-tier clash a real coin a plan cannot buy
-// its way out of, rather than a coin flip dressed up as a tactical edge.
-//
-// Groups fighters by tier, best first. Two shapes are possible with two
-// seats; three-seat rounds add a third:
-//   - every tier distinct: a normal ranking, nobody tied with anyone.
-//   - every fighter shares one tier: nobody has any edge over anybody, a
-//     full draw - the round awards no points at all and every fighter in
-//     it is barred from resend in overtime.
-//   - (three seats only) exactly two share a tier and the third stands
-//     alone: those two drew with EACH OTHER specifically, barred from
-//     overtime resend the same as a full draw, while the lone fighter is
-//     never touched by it - see pointsForGroups just below for what each
-//     of them actually scores.
-function rankFighters(fighters, strict){
-  // A regular round compares the printed tier and nothing else, so equals
-  // draw. Overtime compares how far past the cap they got and then the tier
-  // they started from, so only two genuinely identical cards can still draw.
-  const key = f => strict
-    ? [LADDER.indexOf(f.eff), f.val, f.baseIdx]
-    : [LADDER.indexOf(f.eff)];
-  const same = (a, b) => key(a).every((v, i) => v === key(b)[i]);
-  const cmp = (a, b) => { const x = key(a), y = key(b);
-    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i];
-    return 0; };
-  const withIdx = fighters.map(f => ({ f, idx: LADDER.indexOf(f.eff) }));
-  // Stable sort: ties keep the order they were sent in, which only ever
-  // surfaces as which name prints first within a tied group, never as an
-  // actual ranking between them - there isn't one.
-  withIdx.sort((a, b) => cmp(a.f, b.f));
-  const order = withIdx.map(x => x.f);
+// Power level alone decides a clash. Equal power always stalemates. When the
+// gap is 1-5, the weaker fighter can only hold the stronger fighter to a
+// stalemate: 50%, 40%, 30%, 20%, then 10%. A gap above 5 is decisive.
+const powerLevel = f => Math.max(0, Number(f.power ?? f.Power_lvl ?? f.power_lvl ?? 0) || 0);
+const stalemateChance = gap => gap === 0 ? 1 : (gap >= 1 && gap <= 5 ? (6 - gap) / 10 : 0);
 
+function rankFighters(fighters, _strict, random){
+  const order = fighters.slice().sort((a, b) => powerLevel(b) - powerLevel(a));
   const groups = [];
-  for (const x of withIdx){
+  for (const fighter of order){
     const last = groups[groups.length - 1];
-    if (last && same(last.fighters[0], x.f)) last.fighters.push(x.f);
-    else groups.push({ idx: x.idx, fighters: [x.f] });
+    if (!last){
+      groups.push({ idx: -powerLevel(fighter), fighters: [fighter] });
+      continue;
+    }
+    const gap = powerLevel(last.fighters[0]) - powerLevel(fighter);
+    const chance = stalemateChance(gap);
+    if (chance === 1 || (chance > 0 && random() < chance)) last.fighters.push(fighter);
+    else groups.push({ idx: -powerLevel(fighter), fighters: [fighter] });
   }
   const tied = new Set();
   groups.forEach(g => { if (g.fighters.length > 1) g.fighters.forEach(f => tied.add(f)); });
-
-  return { order, groups, tied, fullDraw: groups.length === 1 };
+  return { order: groups.flatMap(g => g.fighters), groups, tied, fullDraw: groups.length === 1 };
 }
 
 // Points for a resolved clash, given rankFighters' own groups (already
@@ -180,204 +150,114 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
   const sides = teams.map((t, ix) => ({
     ix, owner: t.owner,
     fighters: t.fighters.map(f => ({
-      ...f, side: ix, eff: effTier(f, mode, f.role, roleShift),
-      val: effValue(f, mode, f.role, roleShift),
-      baseIdx: LADDER.indexOf(f.tier), used: false
+      ...f, side: ix, power: powerLevel(f), eff: effTier(f, mode, f.role, roleShift),
+      val: effValue(f, mode, f.role, roleShift), baseIdx: LADDER.indexOf(f.tier), used: false
     })),
-    // Names permanently barred from being resent once they have been part
-    // of a draw, in a regular round or in overtime. Regular-round eligibility
-    // still runs on each fighter's own .used flag above; this is the
-    // separate list overtime eligibility runs on instead (see available()
-    // and resolve() below) - the two never overlap in what they gate.
-    drawnOut: new Set(),
-    // Raw capability: the same tier score the ledger shows, but always
-    // computed as if the encounter were random, so a week of prep never
-    // feeds into it. This is the last word when sudden death cannot
-    // separate two sides on the cards they sent.
-    rawScore: t.fighters.reduce((n, f) =>
-      n + (POINTS[effTier(f, "random", f.role, roleShift)] || 0), 0),
+    rawScore: t.fighters.reduce((n, f) => n + powerLevel(f), 0),
     purse: t.purse
   }));
   const points = sides.map(() => 0);
   const history = [];
-  // Flips once, permanently, the moment every roster slot has been sent and
-  // the standings are still tied. From that point every future round is
-  // sudden death: any card but the ones already drawn out may be resent,
-  // and the first round that is not itself a draw ends the whole match.
-  let overtime = false;
-  const all = () => sides.flatMap(s => s.fighters);
-  // The pregame ground is themed around whoever actually won the auction:
-  // the buyer who finished with the most money left, and specifically
-  // their single most famous fighter - highest tier first, price paid as
-  // the tiebreak (what the auction itself already said mattered), name
-  // last for full determinism. A purse tie is broken with the seed rather
-  // than always favouring seat 0, so both browsers agree without either
-  // buyer being favoured.
+
   const maxPurse = Math.max(...sides.map(s => s.purse || 0));
   const richestSides = sides.filter(s => (s.purse || 0) === maxPurse);
   const richest = richestSides.length > 1 ? pick(r, richestSides) : richestSides[0];
   const famous = richest && richest.fighters.length
     ? richest.fighters.slice().sort((a, b) =>
         LADDER.indexOf(a.tier) - LADDER.indexOf(b.tier) ||
-        (b.price || 0) - (a.price || 0) ||
-        a.name.localeCompare(b.name))[0]
+        (b.price || 0) - (a.price || 0) || a.name.localeCompare(b.name))[0]
     : null;
-  // Only counts as "home ground" if that specific fighter has a mapped
-  // hometown - see the comment on HOME above. Otherwise this falls back to
-  // neutral ground exactly as it did before this fighter had a home at all.
   const homeChar = famous && HOME[famous.name] ? famous : null;
   const neutralPick = homeChar ? null : pick(r, NEUTRAL);
   const ground = homeChar ? HOME[homeChar.name] : neutralPick.ground;
   const groundPlace = homeChar ? PLACE[homeChar.name] : neutralPick.place;
 
-  // The one pool-of-legal-fighters rule, used by both available() (what the
-  // page is allowed to OFFER) and resolve() (what it is allowed to ACCEPT).
-  // They have to agree exactly, or a card the UI shows as pickable can turn
-  // around and get silently rejected the moment it is actually sent - which
-  // is exactly what having two separately-written versions of "who's
-  // eligible" risks the instant one of them changes and the other does not.
-  function eligible(side, isOT){
-    if (!isOT) return side.fighters.filter(f => !f.used);
-    const elig = side.fighters.filter(f => !side.drawnOut.has(f.name));
-    return elig.length ? elig : side.fighters;   // nothing left un-drawn: don't deadlock
-  }
+  const availableFor = side => side.fighters.filter(f => !f.used);
+  const boundsFor = side => {
+    const remaining = availableFor(side).length;
+    const roundsLeft = 3 - history.length;
+    return {
+      min: Math.max(1, remaining - 2 * (roundsLeft - 1)),
+      max: Math.min(2, remaining - (roundsLeft - 1))
+    };
+  };
 
   return {
     ground, homeChar,
     title: () => titleFor(mode, groundPlace),
     roundNo: () => history.length + 1,
-    totalRounds: () => sides[0].fighters.length,
-    // Whether the round about to be picked is a sudden-death round. The
-    // page needs this to label rounds past the roster size as overtime
-    // rather than "Round 6 of 5", and to know which picking rules apply
-    // before it has resolve()'s own per-round confirmation of the same
-    // thing (see resolve()'s overtimeNow field).
-    inOvertime: () => overtime,
-    // What each side still has in hand. Two entirely different pools
-    // depending on phase: a regular round only ever offers characters that
-    // have never been sent; overtime offers every character EXCEPT ones
-    // already drawn out, including characters a regular round already
-    // used, since sudden death is played from the same five cards, not a
-    // fresh five.
-    available: () => sides.map(s => ({ owner: s.owner, names: eligible(s, overtime).map(f => f.name) })),
+    totalRounds: () => 3,
+    inOvertime: () => false,
+    available: () => sides.map(s => ({
+      owner: s.owner,
+      names: availableFor(s).map(f => f.name),
+      ...boundsFor(s)
+    })),
     standings: () => sides.map((s, i) => ({ owner: s.owner, points: points[i] })),
 
     resolve(picks){
-      // Captured before anything below can flip it: this round's own rules
-      // (which pool it drew from, whether it can still bank points) are
-      // whatever the match's phase WAS when the pick was made, never
-      // whatever the phase becomes as a result of resolving it.
-      const wasOvertime = overtime;
-
-      const chosen = picks.map(p => {
-        const side = sides.find(x => x.owner === p.owner);
-        if (!side) return null;
-        const legal = eligible(side, wasOvertime);
-        return legal.find(f => f.name === p.name) || null;
-      }).filter(Boolean);
-      if (chosen.length !== sides.length) return null;   // a pick was missing or ineligible
-      if (!wasOvertime) chosen.forEach(f => { f.used = true; });
-
-      const { order: ranked, groups, tied, fullDraw } = rankFighters(chosen, wasOvertime);
-      // The round's top group: one fighter in it means a clean, undisputed
-      // best - a real winner, whether or not anyone else in the round also
-      // happens to tie for a lower spot with somebody. More than one
-      // fighter in it means the top spot itself is shared, which is still
-      // unresolved no matter what else happened underneath it.
-      const soleLeader = groups[0].fighters.length === 1;
-      const roundWinnerSide = soleLeader ? groups[0].fighters[0].side : null;
-
-      // Every fighter that shared a tier with at least one other fighter
-      // this round is barred from ever being resent, whether or not the
-      // round as a whole produced any points - drawing with one specific
-      // opponent costs the same either way, and this is the one list every
-      // later overtime round's eligible() checks against.
-      tied.forEach(f => sides[f.side].drawnOut.add(f.name));
-
-      let pointsMap = null;
-      if (!wasOvertime){
-        // Regular rounds only: overtime never banks real points, a decisive
-        // result there ends the match outright instead (see below).
-        pointsMap = pointsForGroups(groups, sides.length);
-        pointsMap.forEach((pts, f) => { points[f.side] += pts; });
+      if (history.length >= 3) return null;
+      const chosenTeams = [];
+      for (const side of sides){
+        const submitted = picks.find(p => p.owner === side.owner);
+        const names = submitted ? (submitted.names || (submitted.name ? [submitted.name] : [])) : [];
+        const unique = [...new Set(names)];
+        const legal = availableFor(side);
+        const { min, max } = boundsFor(side);
+        if (unique.length < min || unique.length > max) return null;
+        const fighters = unique.map(name => legal.find(f => f.name === name)).filter(Boolean);
+        if (fighters.length !== unique.length) return null;
+        chosenTeams.push({ side, fighters, power: fighters.reduce((n, f) => n + powerLevel(f), 0) });
       }
 
+      chosenTeams.forEach(team => team.fighters.forEach(f => { f.used = true; }));
+      const orderedTeams = chosenTeams.slice().sort((a, b) => b.power - a.power);
+      const powerGroups = [];
+      for (const team of orderedTeams){
+        const last = powerGroups[powerGroups.length - 1];
+        if (last && last.power === team.power) last.teams.push(team);
+        else powerGroups.push({ power: team.power, teams: [team] });
+      }
+      const soleLeader = powerGroups[0].teams.length === 1;
+      if (soleLeader) points[powerGroups[0].teams[0].side.ix] += 1;
+
+      const teamPlace = new Map();
+      powerGroups.forEach((group, index) => group.teams.forEach(team => teamPlace.set(team.side.ix, index + 1)));
+      const ranked = powerGroups.flatMap(group => group.teams.flatMap(team =>
+        team.fighters.map(f => ({
+          owner: team.side.owner, name: f.name, place: teamPlace.get(team.side.ix),
+          eff: f.eff, power: f.power, teamPower: team.power,
+          draw: group.teams.length > 1, points: soleLeader && team === powerGroups[0].teams[0] ? 1 : 0
+        }))
+      ));
+
+      const chosen = chosenTeams.flatMap(team => team.fighters);
       history.push({ names: chosen.map(f => f.name) });
-
-      let done = false, championOwner = null;
-
-      if (wasOvertime){
-        // Sudden death: a shared top spot - a full draw or, in a three-seat
-        // round, two tied for best with a worse third - changes nothing
-        // but the drawn-out list above and keeps going, since the actual
-        // question sudden death exists to answer, who is better, still has
-        // no answer either way. A sole leader ends the match this instant,
-        // no matter what a third fighter's own tier happened to do - a
-        // symbolic point is banked purely so the final scoreboard's bars do
-        // not show two sides still level after one of them has actually
-        // won.
-        if (soleLeader){
-          done = true; championOwner = sides[roundWinnerSide].owner;
-          points[roundWinnerSide] += 1;
-        } else if (sides.every(x => x.fighters.every(f => x.drawnOut.has(f.name)))){
-          // Every card on every side has now been drawn out: sudden death
-          // has tried the whole roster and every pairing came back level,
-          // which is the state the match used to sit in forever, handing
-          // out the same pairing again each time eligible() ran out of
-          // un-drawn names. Settle it on raw capability instead, the same
-          // tier score the ledger shows but always computed as if the
-          // encounter were random, so a week of prep never decides it.
-          // Only a dead heat there falls to the seed, and that means two
-          // identically built teams.
-          done = true;
-          const best = Math.max(...points);
-          const live = sides.filter((x, i) => points[i] === best);
-          const top = Math.max(...live.map(x => x.rawScore));
-          const front = live.filter(x => x.rawScore === top);
-          const champ = front.length === 1 ? front[0] : pick(r, front);
-          championOwner = champ.owner;
-          points[champ.ix] += 1;
+      const done = history.length === 3;
+      let championOwner = null;
+      if (done){
+        const bestPoints = Math.max(...points);
+        let finalists = sides.filter((side, i) => points[i] === bestPoints);
+        if (finalists.length > 1){
+          const bestPower = Math.max(...finalists.map(side => side.rawScore));
+          finalists = finalists.filter(side => side.rawScore === bestPower);
         }
-      } else {
-        const regularOver = sides.every(s => s.fighters.every(f => f.used));
-        if (regularOver){
-          const best = Math.max(...points);
-          const tiedSides = sides.filter((s, i) => points[i] === best);
-          if (tiedSides.length === 1){ done = true; championOwner = tiedSides[0].owner; }
-          else overtime = true;   // every round from here on is sudden death
-        }
+        championOwner = finalists.length === 1 ? finalists[0].owner : pick(r, finalists).owner;
       }
-
-      // place mirrors which GROUP a fighter landed in, not raw array
-      // position: two fighters tied with each other always share one place
-      // number instead of one printing as "2nd" and the other "3rd" for a
-      // tie that was never actually broken between them.
-      const groupPlace = new Map();
-      groups.forEach((g, gi) => g.fighters.forEach(f => groupPlace.set(f, gi + 1)));
 
       return {
-        // clashText no longer receives an upset flag: there is no such
-        // thing as an upset once tier order is deterministic, so it always
-        // gets false and its one "nobody saw that coming" line simply
-        // never fires. The field survives only because nothing downstream
-        // currently reads it; nothing here depends on its content.
         text: clashText(r, d, chosen, ranked, rivalries, history.length, false, ground),
-        ranked: ranked.map(f => ({
-          owner: sides[f.side].owner, name: f.name, place: groupPlace.get(f),
-          eff: f.eff, draw: tied.has(f),
-          points: pointsMap ? (pointsMap.get(f) || 0) : 0
-        })),
-        isDraw: fullDraw,
-        roundWasOvertime: wasOvertime,
-        overtimeNow: overtime,
-        standings: sides.map((s, i) => ({ owner: s.owner, points: points[i] })),
+        ranked,
+        isDraw: !soleLeader,
+        roundWasOvertime: false,
+        overtimeNow: false,
+        standings: sides.map((side, i) => ({ owner: side.owner, points: points[i] })),
         done,
         champion: done ? championOwner : null
       };
     }
   };
 }
-
 /* Generic pools, used when a character has nothing of their own stored.
    Anything in the characters table under `lines` wins over these, so the
    writing improves as that table is filled in without touching this file.

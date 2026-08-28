@@ -74,16 +74,19 @@ Deno.serve(async (req) => {
     // in-memory shuffling; no writes happen until the RPC call below.
     const { data: rows, error: stockErr } = await sb
       .from("characters")
-      .select("name,universe,real_name,blurb,tier,prep_shift,fit_roles,bad_roles")
+      .select("*")
       .not("universe", "is", null);
     if (stockErr) return json({ error: stockErr.message }, 400);
     if (!rows?.length) return json({ error: "empty roster" }, 400);
+    if (rows.some((c: any) => !Number(c.Power_lvl ?? c.power_lvl)))
+      return json({ error: "characters.Power_lvl is required" }, 400);
 
     const deck = shuffle(
       rows
         .map((c, i) => ({
           name: c.name, pub: c.universe, alias: c.real_name, note: c.blurb || "",
           tier: c.tier, prep: c.prep_shift || 0, fit: c.fit_roles || "", bad: c.bad_roles || "",
+          power: Number(c.Power_lvl ?? c.power_lvl ?? 0),
           no: 1 + ((i * 37 + 11) % 480),
         }))
         .filter((c) => box.u.includes(c.pub))

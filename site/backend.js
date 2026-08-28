@@ -327,7 +327,7 @@ export class Backend {
   lockRoles(seat, roles){
     return this._act("lock-roles", { table_id: this.tableId, seat, cid: this.cid, roles });
   }
-  submitPick(seat, name, mode){
-    return this._act("submit-pick", { table_id: this.tableId, seat, cid: this.cid, name, mode });
+  submitPick(seat, names, mode){
+    return this._act("submit-pick", { table_id: this.tableId, seat, cid: this.cid, names, mode });
   }
 }

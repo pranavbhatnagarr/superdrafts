@@ -71,16 +71,19 @@ Deno.serve(async (req) => {
     // server-side.
     const { data: rows, error: stockErr } = await sb
       .from("characters")
-      .select("name,universe,real_name,blurb,tier,prep_shift,fit_roles,bad_roles")
+      .select("*")
       .not("universe", "is", null);
     if (stockErr) return new Response(JSON.stringify({ error: stockErr.message }), { status: 400, headers: CORS });
     if (!rows?.length) return new Response(JSON.stringify({ error: "empty roster" }), { status: 400, headers: CORS });
+    if (rows.some((c: any) => !Number(c.Power_lvl ?? c.power_lvl)))
+      return new Response(JSON.stringify({ error: "characters.Power_lvl is required" }), { status: 400, headers: CORS });
 
     const deck = shuffle(
       rows
         .map((c, i) => ({
           name: c.name, pub: c.universe, alias: c.real_name, note: c.blurb || "",
           tier: c.tier, prep: c.prep_shift || 0, fit: c.fit_roles || "", bad: c.bad_roles || "",
+          power: Number(c.Power_lvl ?? c.power_lvl ?? 0),
           no: 1 + ((i * 37 + 11) % 480),
         }))
         .filter((c) => box.u.includes(c.pub))
