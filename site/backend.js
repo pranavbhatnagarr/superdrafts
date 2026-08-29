@@ -154,7 +154,7 @@ export class Backend {
   // biddable card: the client's cached copy of the current lot had
   // fallen behind the server's real state and nothing ever forced it
   // back in sync.
-  async _resync(){
+  async _resync(force = false){
     const revisionAtStart = this._realtimeRevision;
     const [{ data: table }, { data: seats }, { data: lots }, { data: matches }] = await Promise.all([
       this.sb.from("tables").select("*").eq("id", this.tableId).single(),
@@ -165,7 +165,12 @@ export class Backend {
       // would throw the moment a second row actually exists.
       this.sb.from("matches").select("*").eq("table_id", this.tableId),
     ]);
-    if (this._realtimeRevision !== revisionAtStart) return;
+    // Routine polls avoid overwriting a newer Realtime event with an older
+    // in-flight read. An explicit refresh after lobby admission is different:
+    // its batch is the authoritative post-write state and must be accepted,
+    // otherwise a coincident Realtime event can leave the host permanently
+    // believing the newly-created seat is still empty.
+    if (!force && this._realtimeRevision !== revisionAtStart) return;
     this._table = table;
     this._seats = seats || [];
     this._lot = (lots && lots[0]) || null;
@@ -262,6 +267,15 @@ export class Backend {
     this._pollTimer = setInterval(() => this._resync(), 3000);
 
     this._emit();
+  }
+
+  // Lobby admission writes a seat through join-table, outside this Backend
+  // instance. Realtime normally delivers that INSERT, but admission is too
+  // important to depend on a best-effort websocket event (especially when the
+  // host tab was briefly backgrounded). Give game.js a supported way to pull
+  // the authoritative rows immediately after the Edge Function succeeds.
+  refresh(){
+    return this._resync(true);
   }
 
   disconnect(){

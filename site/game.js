@@ -959,8 +959,6 @@ function uniqueName(want, seat){
 // approval click instead of on every knock.
 async function admit(cid, name, userId){
   if (!HOST) return;
-  knocks.delete(cid);
-  paintPending();
   // uniqueName() existed correctly but was never actually wired into this
   // flow - admit() sent the raw, unmodified name straight to join-table,
   // and join-table itself has no uniqueness check either. Two players
@@ -991,15 +989,45 @@ async function admit(cid, name, userId){
     });
     const data = await res.json();
     if (!res.ok){
-      send({ t: data.full ? "full" : "refused", cid });
+      if (data.full) await send({ t: "full", cid });
+      $("lobbyMsg").textContent = data.error || "Could not give that player a chair. Try again.";
       return;
     }
+    knocks.delete(cid);
+    paintPending();
     // Tell the guest their real seat - they don't have their own `backend`
     // set up yet (they were only ever knocking, not seated), so this
     // broadcast is what lets askForChair() finally build one.
-    send({ t: "seat", cid, seat: data.seat, np: data.np, table_id: data.table_id });
-  } catch {
-    send({ t: "refused", cid });
+    // Await delivery: previously this was fire-and-forget, so the database
+    // could contain the new seat while the guest never received the handoff
+    // and remained forever on "Waiting for the host".
+    const handoff = send({ t: "seat", cid, seat: data.seat, np: data.np, table_id: data.table_id });
+
+    // The seat INSERT happens outside the host's Backend instance. Pull it
+    // immediately instead of waiting for Realtime/a background-tab timer;
+    // the existing snapshot callback will then see a full table and invoke
+    // start-table exactly as it does for an ordinary Realtime delivery. Do
+    // this concurrently with the broadcast acknowledgement: waiting for that
+    // acknowledgement first can stall in a backgrounded host tab even though
+    // the guest has already received the message.
+    if (backend){
+      // Starting the sale used to depend entirely on a later Realtime
+      // snapshot noticing this new seat. join-table always assigns the lowest
+      // free guest seat, so receiving np - 1 proves the final chair was just
+      // filled without another network read. Start before any optional refresh
+      // or broadcast acknowledgement can be throttled in a backgrounded tab.
+      if (data.seat === data.np - 1 && !started && !window.__startingTable){
+        window.__startingTable = true;
+        try { await backend.startTable(BOX, data.np); }
+        finally { window.__startingTable = false; }
+      }
+      // Reconcile the lobby display too, but never make successful admission
+      // wait on this safety pull.
+      backend.refresh().catch(() => {});
+    }
+    await handoff;
+  } catch (e) {
+    $("lobbyMsg").textContent = e?.message || "Could not give that player a chair. Try again.";
   }
 }
 
