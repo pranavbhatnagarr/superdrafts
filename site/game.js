@@ -3144,7 +3144,7 @@ function matchTallyText(standings){
 function powerScoreCaption(){
   if (!ST.v) return "";
   const parts = seats().map(p => `${escTxt(P[p].name)} ${Math.round(ST.v.scores[p])}`).join(", ");
-  return `Roster power: ${parts}. Combined deployed power decided each round.`;
+  return `Roster power: ${parts}. Perfect roles add 10 power, bad roles subtract 10, Prep adds 10 per prep level, family, teammates, and mentor pairs gain 5 each, while enemies lose 5 each, and the duo's adjusted total is divided by 1.58.`;
 }
 
 function stPaint(){
@@ -3346,7 +3346,7 @@ function stPaint(){
     ? "Something went wrong. You can run it again."
     : spent ? "Both encounters are done. Run it again for a fresh draft."
     : done ? "Run the other encounter to see how the same rosters would have done."
-           : "Three rounds. Send one or two unused characters each round; every drafted character must fight. Combined power wins the round.";
+           : "Three rounds. Send one or two unused characters each round; every drafted character must fight. Perfect roles add 10 power, bad roles subtract 10, Prep adds 10 per prep level, family, teammates, and mentor pairs gain 5 each, while enemies lose 5 each, and the duo's adjusted total is divided by 1.58.";
   // No clock between matches either.
 }
 

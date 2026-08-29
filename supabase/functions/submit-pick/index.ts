@@ -47,15 +47,18 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
 
-    const [{ data: table, error: tErr }, { data: seats, error: sErr }, { data: match, error: mErr }] =
+    const [{ data: table, error: tErr }, { data: seats, error: sErr }, { data: match, error: mErr },
+      { data: relationships, error: rErr }] =
       await Promise.all([
         sb.from("tables").select("np, finished").eq("id", table_id).single(),
         sb.from("seats").select("*").eq("table_id", table_id).order("seat"),
         sb.from("matches").select("*").eq("table_id", table_id).eq("mode", mode).single(),
+        sb.from("rivalries").select("a,b,kind"),
       ]);
     if (tErr) return json({ error: tErr.message }, 400);
     if (sErr) return json({ error: sErr.message }, 400);
     if (mErr) return json({ error: "match not started" }, 409);
+    if (rErr) return json({ error: rErr.message }, 400);
 
     const mySeat = seats.find((s: any) => s.seat === seat);
     if (!mySeat || mySeat.cid !== cid) return json({ error: "you may only act for your own seat" }, 403);
@@ -157,7 +160,7 @@ Deno.serve(async (req) => {
 
     const points = state.points.length ? state.points : sides.map(() => 0);
     const privateSeed = (Number(match.seed) ^ secretSeed(serviceKey)) >>> 0;
-    const result = resolveRound(sides, allPicks, points, state.overtime, privateSeed, contenders, Number(state.round || 1));
+    const result = resolveRound(sides, allPicks, points, state.overtime, privateSeed, contenders, Number(state.round || 1), relationships || []);
     if (!result) return json({ error: "round could not be resolved" }, 409);
 
     const newUsed: Record<string, string[]> = { ...state.used };

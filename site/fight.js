@@ -75,6 +75,25 @@ function effValue(ch, mode, role, roleShift){
 // gap is 1-5, the weaker fighter can only hold the stronger fighter to a
 // stalemate: 50%, 40%, 30%, 20%, then 10%. A gap above 5 is decisive.
 const powerLevel = f => Math.max(0, Number(f.power ?? f.Power_lvl ?? f.power_lvl ?? 0) || 0);
+const roleAdjustedPower = (f, mode, shift) =>
+  Math.max(0, powerLevel(f) + shift(f, f.role, mode) * 10
+    + (mode === "prep" ? (Number(f.prep) || 0) * 10 : 0));
+const relationshipBonus = (team, relationships) => {
+  if (team.length !== 2) return 0;
+  const [a, b] = team;
+  const relation = (relationships || []).find(link =>
+    (link.a === a.name && link.b === b.name) || (link.a === b.name && link.b === a.name));
+  const kind = String(relation?.kind || "").toLowerCase();
+  if (/(friend|ally|allies|partner|family|teammate|mentor)/.test(kind)) return 5;
+  if (/(rival|enemy|enemies|nemesis)/.test(kind)) return -5;
+  return 0;
+};
+const deployedFighterPower = (fighter, team, relationships) =>
+  Math.max(0, powerLevel(fighter) + relationshipBonus(team, relationships));
+const deployedTeamPower = (fighters, relationships) => {
+  const total = fighters.reduce((n, f) => n + deployedFighterPower(f, fighters, relationships), 0);
+  return fighters.length === 2 ? total / 1.58 : total;
+};
 const stalemateChance = gap => gap === 0 ? 1 : (gap >= 1 && gap <= 5 ? (6 - gap) / 10 : 0);
 
 function rankFighters(fighters, _strict, random){
@@ -150,10 +169,10 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
   const sides = teams.map((t, ix) => ({
     ix, owner: t.owner,
     fighters: t.fighters.map(f => ({
-      ...f, side: ix, power: powerLevel(f), eff: effTier(f, mode, f.role, roleShift),
+      ...f, side: ix, power: roleAdjustedPower(f, mode, roleShift), eff: effTier(f, mode, f.role, roleShift),
       val: effValue(f, mode, f.role, roleShift), baseIdx: LADDER.indexOf(f.tier), used: false
     })),
-    rawScore: t.fighters.reduce((n, f) => n + powerLevel(f), 0),
+    rawScore: t.fighters.reduce((n, f) => n + roleAdjustedPower(f, mode, roleShift), 0),
     purse: t.purse
   }));
   const points = sides.map(() => 0);
@@ -207,7 +226,7 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
         if (unique.length < min || unique.length > max) return null;
         const fighters = unique.map(name => legal.find(f => f.name === name)).filter(Boolean);
         if (fighters.length !== unique.length) return null;
-        chosenTeams.push({ side, fighters, power: fighters.reduce((n, f) => n + powerLevel(f), 0) });
+        chosenTeams.push({ side, fighters, power: deployedTeamPower(fighters, rivalries) });
       }
 
       chosenTeams.forEach(team => team.fighters.forEach(f => { f.used = true; }));
@@ -226,7 +245,7 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
       const ranked = powerGroups.flatMap(group => group.teams.flatMap(team =>
         team.fighters.map(f => ({
           owner: team.side.owner, name: f.name, place: teamPlace.get(team.side.ix),
-          eff: f.eff, power: f.power, teamPower: team.power,
+          eff: f.eff, power: deployedFighterPower(f, team.fighters, rivalries), teamPower: team.power,
           draw: group.teams.length > 1, points: soleLeader && team === powerGroups[0].teams[0] ? 1 : 0
         }))
       ));

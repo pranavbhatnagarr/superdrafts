@@ -1758,8 +1758,29 @@ svg.rs-icon{
   transition:transform .15s ease;
 }
 .sc-card:hover:not(:disabled) .sc-card-img{ transform:scale(1.04); }
-.sc-card.selected{ outline:4px solid var(--gold); outline-offset:-4px; box-shadow:0 0 0 2px var(--ink), 0 5px 14px rgba(0,0,0,.28); }
-.sc-card.selected::after{ content:'SELECTED'; position:absolute; top:7px; right:7px; z-index:4; padding:3px 5px; background:var(--gold); color:var(--ink); border:1px solid var(--ink); font:700 8px var(--data); letter-spacing:.08em; }
+.sc-card.selected{
+  outline:4px solid var(--gold); outline-offset:-4px;
+  background:linear-gradient(135deg, #5d4310, #f4d66d 45%, #8a6517);
+  box-shadow:0 0 0 2px var(--ink), 0 0 22px rgba(240,192,74,.72), 0 7px 18px rgba(0,0,0,.34);
+}
+.sc-card.selected .sc-card-img{
+  filter:saturate(1.18) contrast(1.06) brightness(1.08);
+}
+.sc-card.selected::before{
+  content:''; position:absolute; inset:-35%; z-index:2; pointer-events:none;
+  background:linear-gradient(112deg, transparent 31%, rgba(255,244,182,.18) 41%, rgba(255,255,255,.82) 49%, rgba(255,216,89,.28) 57%, transparent 68%);
+  transform:translateX(-58%); animation:selected-card-shine 1.8s ease-in-out infinite;
+  mix-blend-mode:screen;
+}
+.sc-card.selected::after{ content:'SELECTED'; position:absolute; top:7px; right:7px; z-index:4; padding:3px 5px; background:var(--gold); color:var(--ink); border:1px solid var(--ink); font:700 8px var(--data); letter-spacing:.08em; box-shadow:0 0 12px rgba(255,218,91,.8); }
+@keyframes selected-card-shine{
+  0%, 18%{ transform:translateX(-58%); opacity:.25; }
+  55%{ opacity:1; }
+  82%, 100%{ transform:translateX(58%); opacity:.35; }
+}
+@media (prefers-reduced-motion:reduce){
+  .sc-card.selected::before{ animation:none; transform:none; opacity:.38; }
+}
 .fight-pick-confirm{ grid-column:1/-1; justify-self:center; margin-top:8px; }
 .sc-card-blank{
   position:absolute; inset:0; display:grid; place-items:center;
@@ -1768,12 +1789,13 @@ svg.rs-icon{
 /* the scrim: a gradient rather than a flat panel, so it reads as a shadow
    cast by the caption instead of a sticker slapped over the art */
 .sc-card-scrim{
+  z-index:1;
   position:absolute; left:0; right:0; bottom:0; height:48%;
   background:linear-gradient(180deg, rgba(20,14,8,0) 0%, rgba(20,14,8,.55) 45%, rgba(20,14,8,.92) 100%);
   pointer-events:none;
 }
 .sc-card-info{
-  position:absolute; left:0; right:0; bottom:0; padding:7px 8px 8px;
+  position:absolute; z-index:3; left:0; right:0; bottom:0; padding:7px 8px 8px;
   display:flex; flex-direction:column; gap:0;
 }
 .sc-card-pub{
