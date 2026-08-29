@@ -327,6 +327,9 @@ export class Backend {
   pass(seat, lotNum){
     return this._act("place-bid", { table_id: this.tableId, seat, cid: this.cid, kind: "pass", lotNum });
   }
+  checkAuction(seat){
+    return this._act("place-bid", { table_id: this.tableId, seat, cid: this.cid, kind: "check" });
+  }
   startMatch(mode){
     return this._act("start-match", { table_id: this.tableId, host_cid: this.cid, mode });
   }

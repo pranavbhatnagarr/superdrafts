@@ -549,6 +549,22 @@ function applyState(s, local){
         const locked = (P[q] && P[q].locked) || false;
         return { ...incoming, roster, locked };
       });
+
+  // Recover tables produced by the older auction code. Roster space alone
+  // does not make somebody an active buyer: if every non-full seat has $0,
+  // nobody can meet the $1 opening bid and the auction must end. Ask the
+  // authoritative function once; its own ownership/state checks still decide.
+  const noAffordableBuyer = P.every(player =>
+    (player.roster || []).length >= SLOTS || Number(player.purse || 0) < 1
+  );
+  if (!s.over && !SOLO && backend && noAffordableBuyer && !window.__endingNoBuyers){
+    window.__endingNoBuyers = true;
+    backend.checkAuction(ME).catch(err => {
+      window.__endingNoBuyers = false;
+      gameNudge(err.message);
+    });
+  }
+  if (s.over) window.__endingNoBuyers = false;
   lot = resolveLotForDisplay(s.lot); lotNum = s.lotNum; over = s.over; deckLeft = s.deckLeft;
   if (s.box) BOX = s.box;
   if (s.np) NP = s.np;
@@ -1583,6 +1599,7 @@ function canPass(p){
 
 function nextLot(){
   if (bought() >= SLOTS * NP) return finish();
+  if (!seats().some(q => inPlay(q) && Number(P[q].purse || 0) >= 1)) return finish();
   if (lotNum >= perSale() || !deck.length) return finish();
   lotNum++;
   lot = { char: deck.shift(), price: 0, high: null, opener: (lotNum - 1) % NP,

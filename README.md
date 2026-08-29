@@ -98,6 +98,9 @@ the real backend state for the host or guest.
   gets bought by somebody.
 - You can never bid so deep you can't cover $1 for every character still
   needed to reach the minimum roster size of three.
+- The auction ends immediately when every roster is full or every player with
+  roster space has less than the $1 minimum bid. It never deals an impossible
+  lot with no eligible buyer.
 - **Once any player's roster is full, each pass by a player who can still buy
   costs that player $1**, provided it does not prevent them reaching three.
 - Sold/Passed feedback appears immediately and remains over the old card until

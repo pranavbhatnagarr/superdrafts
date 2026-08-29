@@ -59,6 +59,21 @@ Deno.serve(async (req) => {
       return json({ error: "you may only act for your own seat" }, 403);
     }
 
+    // A seat with roster space but less than the $1 opening bid is not a
+    // possible buyer. Previously inPlay() considered only roster length, so
+    // one full roster plus one $0 roster produced an impossible lot: Bid was
+    // unaffordable and compulsory-buy logic disabled Pass. End the auction as
+    // soon as nobody can legally buy another character. `check` lets a client
+    // recover a table that reached this state under the older code.
+    const hasAffordableBuyer = seats.some((s) =>
+      (s.roster?.length || 0) < SLOTS && Number(s.purse || 0) >= 1
+    );
+    if (!hasAffordableBuyer) {
+      await sb.from("tables").update({ finished: true }).eq("id", table_id);
+      return json({ ok: true, finished: true });
+    }
+    if (kind === "check") return json({ ok: true, finished: false });
+
     const { data: lot, error: lErr } = await sb
       .from("lots")
       .select("*")
@@ -190,6 +205,20 @@ Deno.serve(async (req) => {
     // ---- nextLot: deal the next card from the table's deck ----
     async function advanceLot() {
       const deck: unknown[] = table.deck || [];
+      // Re-read seats after the action that just settled this lot. award()
+      // may have spent a player's final dollar or filled their final slot,
+      // and pass() may also have charged $1. Do not deal another card if that
+      // leaves the table without anybody able to meet the $1 opening bid.
+      const { data: currentSeats, error: currentSeatsErr } = await sb
+        .from("seats").select("purse, roster").eq("table_id", table_id);
+      if (currentSeatsErr) throw currentSeatsErr;
+      const buyerRemains = (currentSeats || []).some((s: any) =>
+        (s.roster?.length || 0) < SLOTS && Number(s.purse || 0) >= 1
+      );
+      if (!buyerRemains) {
+        await sb.from("tables").update({ finished: true }).eq("id", table_id);
+        return;
+      }
       if (table.current_lot >= perSale() || !deck.length) {
         await sb.from("tables").update({ finished: true }).eq("id", table_id);
         return;
@@ -294,7 +323,7 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
-    return json({ error: "kind must be 'bid' or 'pass'" }, 400);
+    return json({ error: "kind must be 'bid', 'pass', or 'check'" }, 400);
   } catch (e) {
     return json({ error: String(e) }, 500);
   }
