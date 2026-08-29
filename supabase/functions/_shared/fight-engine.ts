@@ -156,8 +156,7 @@ export function buildSides(teams: any[], mode: string, priorState: any) {
 
 function eligible(side: any, isOT: boolean) {
   if (!isOT) return side.fighters.filter((f: any) => !f.used);
-  const elig = side.fighters.filter((f: any) => !side.drawnOut.has(f.name));
-  return elig.length ? elig : side.fighters;
+  return side.fighters.filter((f: any) => !side.drawnOut.has(f.name));
 }
 
 // The decision-only twin of createMatch().resolve() - same logic, minus
@@ -179,31 +178,34 @@ export function resolveRound(
   sides: any[],
   picks: { owner: string; names?: string[]; name?: string }[],
   points: number[],
-  _overtime: boolean,
+  overtime: boolean,
   seed: number,
-  _contenders: string[] | null = null,
+  contenders: string[] | null = null,
   roundNumber = 1,
   relationships: any[] = [],
 ) {
   const r = rng((seed ^ Math.imul(roundNumber, 0x9E3779B9)) >>> 0);
-  if (roundNumber < 1 || roundNumber > 3) return null;
+  if (roundNumber < 1 || (!overtime && roundNumber > 3)) return null;
   const roundsLeft = 4 - roundNumber;
   const chosenTeams: any[] = [];
 
-  for (const side of sides) {
+  const activeSides = contenders
+    ? sides.filter((side) => contenders.includes(side.owner))
+    : sides;
+  for (const side of activeSides) {
     const submitted = picks.find((p) => p.owner === side.owner);
     const names = submitted ? (submitted.names || (submitted.name ? [submitted.name] : [])) : [];
     const unique = [...new Set(names)];
-    const legal = side.fighters.filter((f: any) => !f.used);
-    const min = Math.max(1, legal.length - 2 * (roundsLeft - 1));
-    const max = Math.min(2, legal.length - (roundsLeft - 1));
+    const legal = eligible(side, overtime);
+    const min = overtime ? 1 : Math.max(1, legal.length - 2 * (roundsLeft - 1));
+    const max = overtime ? 1 : Math.min(2, legal.length - (roundsLeft - 1));
     if (unique.length < min || unique.length > max) return null;
     const fighters = unique.map((name) => legal.find((f: any) => f.name === name)).filter(Boolean);
     if (fighters.length !== unique.length) return null;
     chosenTeams.push({ side, fighters, power: deployedTeamPower(fighters, relationships) });
   }
 
-  chosenTeams.forEach((team) => team.fighters.forEach((f: any) => { f.used = true; }));
+  if (!overtime) chosenTeams.forEach((team) => team.fighters.forEach((f: any) => { f.used = true; }));
   const ordered = chosenTeams.slice().sort((a, b) => b.power - a.power);
   const groups: any[] = [];
   for (const team of ordered) {
@@ -212,7 +214,10 @@ export function resolveRound(
     else groups.push({ power: team.power, teams: [team] });
   }
   const soleLeader = groups[0].teams.length === 1;
-  if (soleLeader) points[groups[0].teams[0].side.ix] += 1;
+  if (!overtime && soleLeader) points[groups[0].teams[0].side.ix] += 1;
+  groups.filter((group) => group.teams.length > 1)
+    .forEach((group) => group.teams.forEach((team: any) =>
+      team.fighters.forEach((f: any) => team.side.drawnOut.add(f.name))));
 
   const place = new Map<number, number>();
   groups.forEach((group, index) => group.teams.forEach((team: any) => place.set(team.side.ix, index + 1)));
@@ -225,28 +230,38 @@ export function resolveRound(
     }))
   ));
 
-  const done = roundNumber === 3;
+  let done = false;
   let championOwner: string | null = null;
-  if (done) {
-    const bestPoints = Math.max(...points);
-    let finalists = sides.filter((_side, i) => points[i] === bestPoints);
-    if (finalists.length > 1) {
-      const bestPower = Math.max(...finalists.map((side) => side.rawScore));
-      finalists = finalists.filter((side) => side.rawScore === bestPower);
+  let nextContenders = contenders;
+  let nextOvertime = overtime;
+  if (overtime) {
+    if (soleLeader) {
+      championOwner = groups[0].teams[0].side.owner;
+      points[groups[0].teams[0].side.ix] += 1;
+      done = true;
     }
-    championOwner = finalists.length === 1 ? finalists[0].owner : pick(r, finalists).owner;
+  } else if (roundNumber === 3) {
+    const bestPoints = Math.max(...points);
+    const finalists = sides.filter((_side, i) => points[i] === bestPoints);
+    if (finalists.length === 1) {
+      championOwner = finalists[0].owner;
+      done = true;
+    } else {
+      nextOvertime = true;
+      nextContenders = finalists.map((side) => side.owner);
+    }
   }
 
   return {
     ranked,
     isDraw: !soleLeader,
-    roundWasOvertime: false,
-    overtimeNow: false,
+    roundWasOvertime: overtime,
+    overtimeNow: nextOvertime,
     standings: sides.map((side, i) => ({ owner: side.owner, points: points[i] })),
     done,
     champion: done ? championOwner : null,
     points,
-    overtime: false,
-    contenders: null,
+    overtime: nextOvertime,
+    contenders: nextContenders,
   };
 }

@@ -108,13 +108,15 @@ Deno.serve(async (req) => {
     const legalPool = legalNow;
     const uniqueNames = [...new Set(names.map((name: unknown) => String(name)))];
     const roundsLeft = 4 - Number(round);
-    const minPick = Math.max(1, legalPool.length - 2 * (roundsLeft - 1));
-    const maxPick = Math.min(2, legalPool.length - (roundsLeft - 1));
+    const minPick = state.overtime ? 1 : Math.max(1, legalPool.length - 2 * (roundsLeft - 1));
+    const maxPick = state.overtime ? 1 : Math.min(2, legalPool.length - (roundsLeft - 1));
     if (uniqueNames.length < minPick || uniqueNames.length > maxPick) {
       return json({ error: `send between ${minPick} and ${maxPick} characters this round` }, 400);
     }
     if (uniqueNames.some((name) => !legalPool.some((f: any) => f.name === name))) {
-      return json({ error: "every fighter must be yours, unused, and unique" }, 400);
+      return json({ error: state.overtime
+        ? "overtime fighters must be yours, unique, and must not have drawn earlier"
+        : "every fighter must be yours, unused, and unique" }, 400);
     }
 
     await sb.from("picks").insert({ table_id, mode, round_num: round, owner, name: JSON.stringify(uniqueNames) });

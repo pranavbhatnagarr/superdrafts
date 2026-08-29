@@ -172,11 +172,14 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
       ...f, side: ix, power: roleAdjustedPower(f, mode, roleShift), eff: effTier(f, mode, f.role, roleShift),
       val: effValue(f, mode, f.role, roleShift), baseIdx: LADDER.indexOf(f.tier), used: false
     })),
+    drawnOut: new Set(),
     rawScore: t.fighters.reduce((n, f) => n + roleAdjustedPower(f, mode, roleShift), 0),
     purse: t.purse
   }));
   const points = sides.map(() => 0);
   const history = [];
+  let overtime = false;
+  let contenders = null;
 
   const maxPurse = Math.max(...sides.map(s => s.purse || 0));
   const richestSides = sides.filter(s => (s.purse || 0) === maxPurse);
@@ -191,9 +194,15 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
   const ground = homeChar ? HOME[homeChar.name] : neutralPick.ground;
   const groundPlace = homeChar ? PLACE[homeChar.name] : neutralPick.place;
 
-  const availableFor = side => side.fighters.filter(f => !f.used);
+  const availableFor = side => {
+    if (contenders && !contenders.includes(side.owner)) return [];
+    return overtime
+      ? side.fighters.filter(f => !side.drawnOut.has(f.name))
+      : side.fighters.filter(f => !f.used);
+  };
   const boundsFor = side => {
     const remaining = availableFor(side).length;
+    if (overtime) return { min: 1, max: 1 };
     const roundsLeft = 3 - history.length;
     return {
       min: Math.max(1, remaining - 2 * (roundsLeft - 1)),
@@ -206,7 +215,7 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
     title: () => titleFor(mode, groundPlace),
     roundNo: () => history.length + 1,
     totalRounds: () => 3,
-    inOvertime: () => false,
+    inOvertime: () => overtime,
     available: () => sides.map(s => ({
       owner: s.owner,
       names: availableFor(s).map(f => f.name),
@@ -215,9 +224,12 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
     standings: () => sides.map((s, i) => ({ owner: s.owner, points: points[i] })),
 
     resolve(picks){
-      if (history.length >= 3) return null;
+      if (!overtime && history.length >= 3) return null;
       const chosenTeams = [];
-      for (const side of sides){
+      const activeSides = contenders
+        ? sides.filter(side => contenders.includes(side.owner))
+        : sides;
+      for (const side of activeSides){
         const submitted = picks.find(p => p.owner === side.owner);
         const names = submitted ? (submitted.names || (submitted.name ? [submitted.name] : [])) : [];
         const unique = [...new Set(names)];
@@ -229,7 +241,7 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
         chosenTeams.push({ side, fighters, power: deployedTeamPower(fighters, rivalries) });
       }
 
-      chosenTeams.forEach(team => team.fighters.forEach(f => { f.used = true; }));
+      if (!overtime) chosenTeams.forEach(team => team.fighters.forEach(f => { f.used = true; }));
       const orderedTeams = chosenTeams.slice().sort((a, b) => b.power - a.power);
       const powerGroups = [];
       for (const team of orderedTeams){
@@ -238,7 +250,10 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
         else powerGroups.push({ power: team.power, teams: [team] });
       }
       const soleLeader = powerGroups[0].teams.length === 1;
-      if (soleLeader) points[powerGroups[0].teams[0].side.ix] += 1;
+      if (!overtime && soleLeader) points[powerGroups[0].teams[0].side.ix] += 1;
+      powerGroups.filter(group => group.teams.length > 1)
+        .forEach(group => group.teams.forEach(team =>
+          team.fighters.forEach(f => team.side.drawnOut.add(f.name))));
 
       const teamPlace = new Map();
       powerGroups.forEach((group, index) => group.teams.forEach(team => teamPlace.set(team.side.ix, index + 1)));
@@ -252,27 +267,36 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
 
       const chosen = chosenTeams.flatMap(team => team.fighters);
       history.push({ names: chosen.map(f => f.name) });
-      const done = history.length === 3;
+      let done = false;
       let championOwner = null;
-      if (done){
-        const bestPoints = Math.max(...points);
-        let finalists = sides.filter((side, i) => points[i] === bestPoints);
-        if (finalists.length > 1){
-          const bestPower = Math.max(...finalists.map(side => side.rawScore));
-          finalists = finalists.filter(side => side.rawScore === bestPower);
+      if (overtime){
+        if (soleLeader){
+          championOwner = powerGroups[0].teams[0].side.owner;
+          points[powerGroups[0].teams[0].side.ix] += 1;
+          done = true;
         }
-        championOwner = finalists.length === 1 ? finalists[0].owner : pick(r, finalists).owner;
+      } else if (history.length === 3){
+        const bestPoints = Math.max(...points);
+        const finalists = sides.filter((side, i) => points[i] === bestPoints);
+        if (finalists.length === 1){
+          championOwner = finalists[0].owner;
+          done = true;
+        } else {
+          overtime = true;
+          contenders = finalists.map(side => side.owner);
+        }
       }
 
       return {
         text: clashText(r, d, chosen, ranked, rivalries, history.length, false, ground),
         ranked,
         isDraw: !soleLeader,
-        roundWasOvertime: false,
-        overtimeNow: false,
+        roundWasOvertime: history.length > 3,
+        overtimeNow: overtime,
         standings: sides.map((side, i) => ({ owner: side.owner, points: points[i] })),
         done,
-        champion: done ? championOwner : null
+        champion: done ? championOwner : null,
+        contenders
       };
     }
   };

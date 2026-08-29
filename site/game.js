@@ -1361,14 +1361,22 @@ function botTick(){
     }, 900);
   }
 
-  // 3. the encounter, when a bot kept the most money
-  if (!$("faceoff").hidden && allLocked() && !ST && BOTS[caller()]){
+  // 3. the encounter, when a bot kept the most money. A completed ST stays
+  // on screen to show its result, so the second encounter must accept that
+  // finished state too instead of waiting for ST to become null (it never
+  // does between the two modes).
+  if (!$("faceoff").hidden && allLocked() && (!ST || ST.end || ST.err) &&
+      runsDone().length < 2 && BOTS[caller()]){
     const seat = caller();
     return botThink(() => {
-      const mode = BOTS[seat].encounter(P[seat].roster);
+      const preferred = BOTS[seat].encounter(P[seat].roster);
+      // The bot may prefer the mode it already called first. When only one
+      // remains, always take that legal option so the draft continues.
+      const mode = modeLeft(preferred) ? preferred
+        : ["random", "prep"].find(modeLeft);
       const radio = document.querySelector(`input[name="encounter"][value="${mode}"]`);
       if (radio) radio.checked = true;
-      if (modeLeft(mode)) startStory(mode);
+      if (mode && modeLeft(mode)) startStory(mode);
       botTick();
     }, 1100);
   }
@@ -1376,7 +1384,9 @@ function botTick(){
   // 4. sending a fighter
   if (ST && !ST.end && MATCH){
     const avail = MATCH.available();
-    const seat = seats().find(q => q !== 0 && BOTS[q] && !ST.picks[P[q].name]);
+    const seat = seats().find(q => q !== 0 && BOTS[q] &&
+      (!ST.contenders || ST.contenders.includes(P[q].name)) &&
+      !ST.picks[P[q].name]);
     if (seat !== undefined){
       const mine = (avail.find(a => a.owner === P[seat].name) || { names: [] }).names;
       if (!mine.length) return;
@@ -2892,7 +2902,9 @@ const MODE_NAME = { random: "Random encounter", prep: "A week of prep" };
 // place that prints a round number goes through this so the label and the
 // actual picking rules (myRemaining(), MATCH's own eligible()) never say
 // two different things about which phase the match is in.
-const roundLabel = n => `Round ${Math.min(n, FIGHT_ROUNDS)} of ${FIGHT_ROUNDS}`;
+const roundLabel = n => n > FIGHT_ROUNDS
+  ? `Overtime ${n - FIGHT_ROUNDS}`
+  : `Round ${n} of ${FIGHT_ROUNDS}`;
 
 // Each draft is worth two issues, one of each encounter. Writing the same one
 // twice would cost tokens to tell the same story, so a used encounter closes.
@@ -3109,6 +3121,24 @@ function revealHtml(ranked, opts){
     + `${tierIconHtml(x.eff)}${powerBadgeHtml(x.power)}</span>`
     + `<span class="tier-chip-label">Tier ${escTxt(x.eff)}, power ${Number(x.power) || 0}</span></span>`).join("");
 
+  // A duo's real score belongs to the TEAM, not either individual card. Whole
+  // teams are kept adjacent above, leaving the even-numbered grid column
+  // between teammates empty (VS is deliberately only placed between opposing
+  // owners). Put the adjusted combined score there, centered between the two
+  // individual power badges. teamPower already includes role, Prep and
+  // relationship modifiers plus the 1.58 duo divisor from the backend result.
+  const combinedPowerBadges = [];
+  for (let i = 0; i < n - 1; i++){
+    if (shuffled[i].owner !== shuffled[i + 1].owner) continue;
+    const raw = Number(shuffled[i].teamPower) || 0;
+    const score = Number.isInteger(raw) ? String(raw) : raw.toFixed(1);
+    combinedPowerBadges.push(
+      `<span class="team-power-total" style="grid-column:${2 * i + 2};grid-row:3" role="img" aria-label="Combined team power ${score}">`
+      + `<span class="team-power-total-label">Combined</span>`
+      + `<span class="team-power-total-badge"><b>${score}</b><small>Team Power</small></span></span>`
+    );
+  }
+
   const winnerLine = roundWinner
     ? `Winner: <b>${escTxt(roundWinner)}</b>`
     : `Stalemate: <b>${escTxt(drawNames.join(" & "))}</b>`;
@@ -3119,6 +3149,7 @@ function revealHtml(ranked, opts){
     ${vsBadges.join("")}
     <p class="round-winner${shown ? " is-effects" : ""}" style="grid-column:1/-1;grid-row:2">${winnerLine}</p>
     ${tierChips}
+    ${combinedPowerBadges.join("")}
   </div>`;
 }
 
@@ -3391,7 +3422,7 @@ function stPaint(){
     ? "Something went wrong. You can run it again."
     : spent ? "Both encounters are done. Run it again for a fresh draft."
     : done ? "Run the other encounter to see how the same rosters would have done."
-           : "Three rounds. Send one or two unused characters each round; every drafted character must fight. Perfect roles add 10 power, bad roles subtract 10, Prep adds 10 per prep level, family, teammates, and mentor pairs gain 5 each, while enemies lose 5 each, and the duo's adjusted total is divided by 1.58.";
+           : "3 rounds. Send 1–2 characters each round; everyone must fight. Roles ±10, Prep +10/level, allies and mentors +5, enemies −5, duos ÷1.58.";
   // No clock between matches either.
 }
 
@@ -3642,6 +3673,7 @@ function buildMatch(){
 // un-drawn falls back to its full roster, same reasoning as fight.js's own
 // fallback, so the two never disagree about what is legal to offer.
 function fightPickBounds(remaining, round){
+  if (ST && ST.overtime) return { min: 1, max: 1 };
   const roundsLeft = 4 - round;
   return {
     min: Math.max(1, remaining - 2 * (roundsLeft - 1)),
@@ -3651,6 +3683,11 @@ function fightPickBounds(remaining, round){
 
 function myRemaining(){
   if (!ST || !P[ME]) return [];
+  if (ST.contenders && !ST.contenders.includes(P[ME].name)) return [];
+  if (ST.overtime){
+    const drawn = new Set(ST.drawnOut && ST.drawnOut[P[ME].name] || []);
+    return P[ME].roster.filter(r => !drawn.has(r.char.name)).map(r => r.char);
+  }
   const used = new Set(ST.used && ST.used[P[ME].name] || []);
   return P[ME].roster.filter(r => !used.has(r.char.name)).map(r => r.char);
 }
@@ -3685,10 +3722,11 @@ function takePick(owner, names){
   if (!side || chosen.length < side.min || chosen.length > side.max ||
       chosen.some(name => !side.names.includes(name))) return;
   ST.picks[owner] = chosen;
-  ST.locked = seats().map(q => P[q].name).filter(name => ST.picks[name]);
-  if (ST.locked.length < seats().length){ stPaint(); stSend(); return; }
+  const requiredOwners = ST.contenders || seats().map(q => P[q].name);
+  ST.locked = requiredOwners.filter(name => ST.picks[name]);
+  if (ST.locked.length < requiredOwners.length){ stPaint(); stSend(); return; }
 
-  const res = MATCH.resolve(seats().map(q => ({ owner: P[q].name, names: ST.picks[P[q].name] })));
+  const res = MATCH.resolve(requiredOwners.map(owner => ({ owner, names: ST.picks[owner] })));
   if (!res){ ST.picks = {}; ST.locked = []; stPaint(); stSend(); return; }
   for (const q of seats()){
     const ownerName = P[q].name;
@@ -3697,7 +3735,13 @@ function takePick(owner, names){
       if (!ST.used[ownerName].includes(sent)) ST.used[ownerName].push(sent);
     }
   }
-  ST.overtime = false;
+  for (const fighter of res.ranked.filter(f => f.draw)){
+    ST.drawnOut[fighter.owner] = ST.drawnOut[fighter.owner] || [];
+    if (!ST.drawnOut[fighter.owner].includes(fighter.name))
+      ST.drawnOut[fighter.owner].push(fighter.name);
+  }
+  ST.overtime = res.overtimeNow;
+  ST.contenders = res.contenders || null;
   ST.beats.push({ ranked: res.ranked });
   ST.standings = res.standings;
   ST.lastRound = res.ranked;
@@ -3858,67 +3902,89 @@ if (invited){
 let currentUser = null;   // { id, name } | null - null means "playing as a guest"
 let currentProfile = null; // full profiles row for currentUser, or null
 
-async function refreshAuthUI(){
+const authTimeout = (promise, ms, message) => Promise.race([
+  promise,
+  new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
+]);
+let authRefreshRevision = 0;
+
+async function refreshAuthUI(knownSession = undefined){
+  const refreshRevision = ++authRefreshRevision;
   sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
-  const { data: { session } } = await sb.auth.getSession();
   const linkRow = $("profileLinkRow"), nameEl = $("authSignedInName"), avatarEl = $("authAvatar");
   const guestRow = $("guestSignInRow");
   const wasSignedIn = !!currentUser;
+  let session = knownSession;
+  if (knownSession === undefined){
+    try {
+      const result = await authTimeout(sb.auth.getSession(), 6000, "Sign-in check timed out");
+      session = result?.data?.session || null;
+    } catch {
+      // Authentication is optional. A slow/unreachable auth check must never
+      // leave every screen hidden indefinitely; render the guest state now.
+      session = null;
+    }
+  }
+  // A newer auth event supplied fresher state while this request was waiting.
+  // Never let the older request finish later and overwrite that signed-in UI.
+  if (refreshRevision !== authRefreshRevision) return;
   if (session && session.user){
-    // profiles.display_name is the REAL name once it's been set - that's
-    // the "fixed name, set by you, that you can change" from the
-    // profile screen. The raw Google name is only ever a one-time
-    // fallback, used before the player has chosen anything of their
-    // own (see the profile screen's own name field/save handler).
-    const { data: profile } = await sb.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
-    currentProfile = profile || null;
+    // Once Supabase has materialized the session, the OAuth fragment has done
+    // its job. Remove the access token immediately rather than waiting for the
+    // optional profile query below, which may be slow or fail independently.
+    if (window.location.hash) {
+      try { history.replaceState(null, "", window.location.pathname + window.location.search); } catch {}
+    }
 
     const googleName = session.user.user_metadata?.full_name
       || session.user.user_metadata?.name
       || session.user.email
       || "your account";
-    const displayName = currentProfile?.display_name || googleName;
     const justSignedIn = !wasSignedIn;
-    currentUser = { id: session.user.id, name: displayName };
 
-    if (linkRow) linkRow.hidden = false;
-    if (guestRow) guestRow.hidden = true;
-    if (nameEl) nameEl.textContent = displayName;
+    // Render immediately from the OAuth session. The profile row only adds
+    // preferences and a custom name/avatar; it must never sit between a valid
+    // Google session and the user seeing that sign-in succeeded.
+    if (currentUser?.id !== session.user.id) currentProfile = null;
+    const renderSignedIn = (profile, navigate) => {
+      const displayName = profile?.display_name || googleName;
+      currentUser = { id: session.user.id, name: displayName };
+      currentProfile = profile || null;
+      if (linkRow) linkRow.hidden = false;
+      if (guestRow) guestRow.hidden = true;
+      if (nameEl) nameEl.textContent = displayName;
+      const avatarSrc = profile?.avatar_url || session.user.user_metadata?.avatar_url || null;
+      if (avatarEl){
+        if (avatarSrc){ avatarEl.src = avatarSrc; avatarEl.hidden = false; }
+        else avatarEl.hidden = true;
+      }
+      if ($("myName")){ $("myName").value = displayName.slice(0, 14); $("myName").readOnly = true; }
+      if ($("knockName")){ $("knockName").value = displayName.slice(0, 14); $("knockName").readOnly = true; }
+      if (!boxTouchedByUser && profile?.favorite_universes?.length && typeof refreshSetupBox === "function"){
+        BOX.u = profile.favorite_universes;
+        refreshSetupBox();
+      }
+      if (navigate && !invited && !hasResumable){
+        showScreen("profile");
+        paintProfileScreen();
+      } else if (!$("profile").hidden) {
+        paintProfileScreen();
+      }
+    };
 
-    // Google's own picture is always the fallback - a custom upload
-    // (avatar_url) only ever overrides it, never the other way around.
-    const avatarSrc = currentProfile?.avatar_url || session.user.user_metadata?.avatar_url || null;
-    if (avatarEl){
-      if (avatarSrc){ avatarEl.src = avatarSrc; avatarEl.hidden = false; }
-      else avatarEl.hidden = true;
-    }
+    renderSignedIn(currentProfile, justSignedIn);
 
-    // The FIXED name for a signed-in player - set on the profile screen,
-    // not editable on the setup screen itself. A guest's #myName stays
-    // fully free-typed, untouched by any of this.
-    if ($("myName")){ $("myName").value = displayName.slice(0, 14); $("myName").readOnly = true; }
-    if ($("knockName")){ $("knockName").value = displayName.slice(0, 14); $("knockName").readOnly = true; }
-
-    // A saved favorite-universes preference only ever pre-fills the box
-    // picker, and only if the player hasn't already touched it this
-    // session - see boxTouchedByUser's own comment.
-    if (!boxTouchedByUser && currentProfile?.favorite_universes?.length && typeof refreshSetupBox === "function"){
-      BOX.u = currentProfile.favorite_universes;
-      refreshSetupBox();
-    }
-
-    // Only navigate on the actual moment of signing in (including the
-    // OAuth redirect landing back here) - never on every subsequent
-    // refreshAuthUI() call, or a signed-in player would get yanked back
-    // to their profile screen every time this re-runs for an unrelated
-    // reason (onAuthStateChange firing, a routine re-check). invited and
-    // hasResumable both still take priority, same as they do for a fresh
-    // gate/profile decision - reconnecting to a specific table is a
-    // clearer intent than a generic "welcome back" landing.
-    if (justSignedIn && !invited && !hasResumable && $("gate").hidden === false){
-      showScreen("profile");
-      paintProfileScreen();
-    }
+    // Enrich the already-visible account in the background. A late response
+    // is ignored if another auth event (especially sign-out) has happened.
+    authTimeout(
+      sb.from("profiles").select("*").eq("id", session.user.id).maybeSingle(),
+      4000,
+      "Profile load timed out"
+    ).then(profileResult => {
+      if (refreshRevision !== authRefreshRevision || currentUser?.id !== session.user.id) return;
+      renderSignedIn(profileResult?.data || null, false);
+    }).catch(() => {});
+    return;
   } else {
     currentUser = null;
     currentProfile = null;
@@ -4262,9 +4328,18 @@ $("gateGuestBtn")?.addEventListener("click", () => { showScreen("setup"); });
 
 $("googleSignOutBtn")?.addEventListener("click", async () => {
   sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
-  await sb.auth.signOut();
+  // Signing out is a local UI/session action first. Do not leave the profile
+  // screen spinning while a network revocation request completes.
+  authRefreshRevision++;
+  currentUser = null;
+  currentProfile = null;
+  if ($("profileLinkRow")) $("profileLinkRow").hidden = true;
+  if ($("guestSignInRow")) $("guestSignInRow").hidden = false;
+  if ($("authAvatar")) $("authAvatar").hidden = true;
+  if ($("myName")) $("myName").readOnly = false;
+  if ($("knockName")) $("knockName").readOnly = false;
   showScreen("gate");
-  await refreshAuthUI();
+  sb.auth.signOut({ scope: "local" }).catch(() => {});
 });
 
 (async () => {
@@ -4281,7 +4356,14 @@ $("googleSignOutBtn")?.addEventListener("click", async () => {
   // was the actual reason a second sign-in click was needed: the second
   // click's own fresh redirect happened to let the timing line up by
   // coincidence, not because anything was actually fixed.
-  sb.auth.onAuthStateChange(() => { refreshAuthUI(); });
+  sb.auth.onAuthStateChange((_event, session) => {
+    // Supabase invokes this callback while its internal auth state is being
+    // finalized. Starting more auth/database work synchronously from inside
+    // that callback can contend with the same initialization and stall. Let
+    // the callback return first, then render from the session it already gave
+    // us (so there is no redundant getSession call at all).
+    setTimeout(() => { refreshAuthUI(session).catch(() => {}); }, 0);
+  });
   // The initial gate/setup decision for a fresh, non-invited,
   // non-resumable visit - invited and hasResumable were already handled
   // synchronously above (they don't need to wait on a session check at

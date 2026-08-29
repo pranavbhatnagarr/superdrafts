@@ -2101,6 +2101,29 @@ svg.rs-icon{
   opacity:0; transition:opacity .5s ease .5s;
 }
 .round-reveal.is-effects .tier-chip{ opacity:1; }
+.team-power-total{
+  display:flex; flex-direction:column; align-items:center; align-self:start;
+  justify-self:center; gap:2px; opacity:0; transition:opacity .5s ease .5s;
+  position:relative; z-index:2;
+}
+.round-reveal.is-effects .team-power-total{ opacity:1; }
+.team-power-total-label{
+  font:800 clamp(8px, 1.9vw, 10px)/1.2 var(--data); letter-spacing:.08em;
+  text-transform:uppercase; color:var(--kraft-dk); white-space:nowrap;
+}
+.team-power-total-badge{
+  width:clamp(48px, 13vw, 62px); height:clamp(48px, 13vw, 62px);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  color:#fff7d3; background:linear-gradient(145deg,#8f6818 0%,#d4a632 35%,#53360d 100%);
+  border:3px solid #f0cf69; box-shadow:inset 0 0 0 2px rgba(39,23,5,.48),0 3px 0 rgba(39,23,5,.62),0 0 12px rgba(212,166,50,.38);
+  clip-path:polygon(50% 0,92% 22%,92% 72%,50% 100%,8% 72%,8% 22%);
+  font-family:var(--data); line-height:.9;
+}
+.team-power-total-badge b{ font-size:clamp(17px, 4.6vw, 23px); }
+.team-power-total-badge small{
+  margin-top:4px; font-size:7px; font-weight:800; letter-spacing:.035em;
+  text-transform:uppercase; white-space:nowrap;
+}
 .tier-chip-name{
   font:700 clamp(9px, 2.2vw, 11px)/1.2 var(--data); letter-spacing:.07em;
   text-transform:uppercase; color:var(--red-dk); text-align:center;
@@ -2151,6 +2174,8 @@ svg.rs-icon{
 .power-band-plain{ border-color:#81786b; background:#bbb2a3; color:#3d3932; filter:none; }
 .round-reveal-historic .power-badge{ width:41.25px; height:41.25px; }
 .round-reveal-historic .power-badge-value{ font-size:18px; }
+.round-reveal-historic .team-power-total-badge{ width:45px; height:45px; }
+.round-reveal-historic .team-power-total-badge b{ font-size:17px; }
 /* the word under the medallion, same small red-caps treatment as the
    fighter's own name above it so "Tier" reads as part of the same label,
    not a separate caption. Stacked under the icon rather than beside it now
