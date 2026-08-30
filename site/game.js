@@ -1843,11 +1843,14 @@ function buildSeats(){
     a.id = "ledger" + p;
     a.classList.add("seat-" + p);
     a.innerHTML =
-      `<div class="ledger-tab auction-ledger-tab"><span class="lt-name" id="name${p}"></span>` +
+      `<div class="ledger-tab auction-ledger-tab"><span class="lt-name" id="name${p}"></span></div>` +
+      `<div class="ledger-purse-row">` +
+        `<div class="ledger-purse-copy">` +
+          `<p class="purse-line">Purse remaining</p>` +
+          `<p class="purse-figure" id="purse${p}">$${PURSE}</p>` +
+        `</div>` +
         `<img class="ledger-player-avatar" id="ledgerAvatar${p}" alt="" hidden>` +
       `</div>` +
-      `<p class="purse-line">Purse remaining</p>` +
-      `<p class="purse-figure" id="purse${p}">$${PURSE}</p>` +
       `<ol class="slots" id="slots${p}"></ol>` +
       `<p class="ledger-foot"><span id="spent${p}"></span> &middot; <span id="left${p}"></span></p>`;
     led.appendChild(a);

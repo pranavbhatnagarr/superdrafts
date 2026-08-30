@@ -805,13 +805,21 @@ body{
   align-items:center;
   gap:8px;
 }
+.ledger-purse-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:10px;
+}
+.ledger-purse-copy{ min-width:0; }
 .ledger-player-avatar{
-  position:absolute;
-  z-index:1;
-  top:38px;
-  right:22px;
-  width:88px;
-  height:88px;
+  width:clamp(54px,28%,112px);
+  height:auto;
+  aspect-ratio:1;
+  flex:0 1 auto;
+  margin-left:auto;
+  margin-right:-8px;
   border-radius:50%;
   object-fit:cover;
   border:2px solid rgba(62,43,24,.72);
@@ -828,7 +836,7 @@ body{
   letter-spacing:.17em; text-transform:uppercase; color:var(--ink-3);
 }
 .purse-figure{
-  margin:0 0 10px; font-family:var(--wax);
+  margin:0; font-family:var(--wax);
   font-size:clamp(34px,4.6vw,50px); line-height:1;
   transform:rotate(-1.6deg); transform-origin:left center;
 }
@@ -1674,7 +1682,8 @@ svg.rs-icon{
   .ledger.seat-0, .ledger.seat-1, .ledger.seat-2{ grid-area:auto; grid-column:auto; }
   .ledger{ padding:8px 9px 7px; }
   .ledger-tab{ margin:-8px -9px 7px; padding:5px 9px 4px; }
-  .ledger-player-avatar{ top:30px; right:10px; width:58px; height:58px; }
+  .ledger-purse-row{ gap:6px; margin-bottom:5px; }
+  .ledger-player-avatar{ width:clamp(42px,26%,68px); margin-right:-4px; }
   .lt-name{ font-size:12px; }
   .purse-line{ font-size:8.5px; letter-spacing:.1em; }
   .purse-figure{ font-size:clamp(20px,7vw,30px); margin-bottom:5px; }
