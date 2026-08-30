@@ -210,7 +210,13 @@ export function resolveRound(
   const groups: any[] = [];
   for (const team of ordered) {
     const last = groups[groups.length - 1];
-    if (last && last.power === team.power) last.teams.push(team);
+    if (!last) {
+      groups.push({ power: team.power, teams: [team] });
+      continue;
+    }
+    const gap = last.power - team.power;
+    const chance = stalemateChance(gap);
+    if (chance === 1 || (chance > 0 && r() < chance)) last.teams.push(team);
     else groups.push({ power: team.power, teams: [team] });
   }
   const soleLeader = groups[0].teams.length === 1;

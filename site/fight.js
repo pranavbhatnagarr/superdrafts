@@ -246,7 +246,13 @@ export function createMatch({ teams, mode, seed, roleShift, rivalries }){
       const powerGroups = [];
       for (const team of orderedTeams){
         const last = powerGroups[powerGroups.length - 1];
-        if (last && last.power === team.power) last.teams.push(team);
+        if (!last){
+          powerGroups.push({ power: team.power, teams: [team] });
+          continue;
+        }
+        const gap = last.power - team.power;
+        const chance = stalemateChance(gap);
+        if (chance === 1 || (chance > 0 && r() < chance)) last.teams.push(team);
         else powerGroups.push({ power: team.power, teams: [team] });
       }
       const soleLeader = powerGroups[0].teams.length === 1;
