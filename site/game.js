@@ -85,7 +85,8 @@ const UNIVERSES = {
   HP:  { name: "Harry Potter",   group: "Other"  },
   RE:  { name: "Resident Evil",  group: "Other"  },
   INF: { name: "Infamous",       group: "Other"  },
-  MK:  { name: "Mortal Kombat",  group: "Other"  }
+  MK:  { name: "Mortal Kombat",  group: "Other"  },
+  GOT: { name: "Game of Thrones",group: "Other"  }
 };
 
 // Tiers are scaled honestly across universes, never rebalanced. A weaker world
@@ -686,6 +687,16 @@ function applyState(s, local){
 // ever called from) becomes visible, in solo or multiplayer alike.
 function act(kind, amount){
   return kind === "bid" ? bid(ME, amount) : pass(ME);
+}
+
+async function recordSoloStat(payload){
+  try {
+    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
+    const { error } = await sb.functions.invoke("record-solo-stats", { body: payload });
+    if (error) throw error;
+  } catch (error) {
+    console.error("record-solo-stats failed:", error);
+  }
 }
 
 function showScreen(which){
@@ -1779,9 +1790,7 @@ function award(p, price){
   // nothing here ever recorded a sale price for the leaderboard,
   // regardless of how many solo games got played.
   if (SOLO){
-    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
-    sb.rpc("record_character_purchase", { p_name: lot.char.name, p_price: price })
-      .then(({ error }) => { if (error) console.error("record_character_purchase failed:", error); });
+    recordSoloStat({ type: "purchase", name: lot.char.name, price });
   }
   pushState({ id: ++fxSeq, word: "Sold",
     line: `${lot.char.name} to ${P[p].name} for ${money(price)}`,
@@ -1834,7 +1843,9 @@ function buildSeats(){
     a.id = "ledger" + p;
     a.classList.add("seat-" + p);
     a.innerHTML =
-      `<div class="ledger-tab"><span class="lt-name" id="name${p}"></span></div>` +
+      `<div class="ledger-tab auction-ledger-tab"><span class="lt-name" id="name${p}"></span>` +
+        `<img class="ledger-player-avatar" id="ledgerAvatar${p}" alt="" hidden>` +
+      `</div>` +
       `<p class="purse-line">Purse remaining</p>` +
       `<p class="purse-figure" id="purse${p}">$${PURSE}</p>` +
       `<ol class="slots" id="slots${p}"></ol>` +
@@ -1877,6 +1888,24 @@ function buildSeats(){
         if (v && p === ME) act("bid", v);
       }
     });
+  }
+}
+
+function paintLedgerAvatars(){
+  for (const p of seats()){
+    const avatar = $("ledgerAvatar" + p);
+    if (!avatar) continue;
+    const src = p === ME ? currentUser?.avatar : null;
+    $("ledger" + p)?.classList.toggle("has-player-avatar", !!src);
+    if (src){
+      avatar.src = src;
+      avatar.alt = P[p]?.name ? P[p].name + "'s profile picture" : "Profile picture";
+      avatar.hidden = false;
+    } else {
+      avatar.removeAttribute("src");
+      avatar.alt = "";
+      avatar.hidden = true;
+    }
   }
 }
 
@@ -2361,6 +2390,7 @@ function render(){
     $("name" + p).textContent = label;
     $("pn" + p).textContent = label;
   }
+  paintLedgerAvatars();
   for (const p of seats()){
     const me = P[p];
     $("purse" + p).textContent = money(me.purse);
@@ -3753,15 +3783,16 @@ function takePick(owner, names){
   if (res.done) ST.end = { winner: res.champion, standings: res.standings };
 
   if (SOLO){
-    sb = sb || window.supabase.createClient(ART_URL, ART_KEY);
-    Promise.all(
-      res.ranked.map(f =>
-        sb.rpc("record_character_round", { p_name: f.name, p_won: f.place === 1 && !f.draw, p_drew: f.draw })
-      )
-    ).catch(e => console.error("record_character_round failed:", e));
+    recordSoloStat({
+      type: "round",
+      fighters: res.ranked.map(f => ({
+        name: f.name,
+        won: f.place === 1 && !f.draw,
+        drew: !!f.draw,
+      })),
+    });
     if (res.done && res.champion && currentUser){
-      sb.rpc("record_bot_match_stats", { p_user_id: currentUser.id, p_won: res.champion === P[ME].name })
-        .then(({ error }) => { if (error) console.error("record_bot_match_stats failed:", error); });
+      recordSoloStat({ type: "match", won: res.champion === P[ME].name });
     }
   }
   res.isDraw ? SFX.pass() : SFX.sold();
@@ -3948,18 +3979,19 @@ async function refreshAuthUI(knownSession = undefined){
     if (currentUser?.id !== session.user.id) currentProfile = null;
     const renderSignedIn = (profile, navigate) => {
       const displayName = profile?.display_name || googleName;
-      currentUser = { id: session.user.id, name: displayName };
+      const avatarSrc = profile?.avatar_url || session.user.user_metadata?.avatar_url || null;
+      currentUser = { id: session.user.id, name: displayName, avatar: avatarSrc };
       currentProfile = profile || null;
       if (linkRow) linkRow.hidden = false;
       if (guestRow) guestRow.hidden = true;
       if (nameEl) nameEl.textContent = displayName;
-      const avatarSrc = profile?.avatar_url || session.user.user_metadata?.avatar_url || null;
       if (avatarEl){
         if (avatarSrc){ avatarEl.src = avatarSrc; avatarEl.hidden = false; }
         else avatarEl.hidden = true;
       }
       if ($("myName")){ $("myName").value = displayName.slice(0, 14); $("myName").readOnly = true; }
       if ($("knockName")){ $("knockName").value = displayName.slice(0, 14); $("knockName").readOnly = true; }
+      paintLedgerAvatars();
       if (!boxTouchedByUser && profile?.favorite_universes?.length && typeof refreshSetupBox === "function"){
         BOX.u = profile.favorite_universes;
         refreshSetupBox();
@@ -4271,7 +4303,9 @@ async function uploadAvatarBlob(blob, ext){
     const { error: dbErr } = await sb.from("profiles").update({ avatar_url }).eq("id", currentUser.id);
     if (dbErr) throw dbErr;
     currentProfile = { ...(currentProfile || {}), avatar_url };
+    currentUser = { ...currentUser, avatar: avatar_url };
     paintProfileScreen();
+    paintLedgerAvatars();
     if ($("authAvatar")){ $("authAvatar").src = avatar_url; $("authAvatar").hidden = false; }
     $("avatarMsg").textContent = "Updated.";
   } catch (err) {

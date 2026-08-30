@@ -92,7 +92,8 @@ export const UNIVERSES = {
   HP:  { name: "Harry Potter",   group: "Other"  },
   RE:  { name: "Resident Evil",  group: "Other"  },
   INF: { name: "Infamous",       group: "Other"  },
-  MK:  { name: "Mortal Kombat",  group: "Other"  }
+  MK:  { name: "Mortal Kombat",  group: "Other"  },
+  GOT: { name: "Game of Thrones",group: "Other"  }
 };
 
 /* Where the roster lives. The key is the publishable one and is meant to
