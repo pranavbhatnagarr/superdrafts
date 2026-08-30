@@ -245,11 +245,14 @@ readable without a broad `SELECT` policy that would let clients enumerate every
 object in a public bucket. See `site/privacy.html` for the user-facing account
 and image-data explanation.
 
-The latest rule migrations are `0006_remove_auction_timer.sql`, which removes
+The latest rule migrations include `0006_remove_auction_timer.sql`, which removes
 the obsolete close-lot schedule/function, and
 `0007_complete_character_relationships.sql`, which inserts curated missing
 relationships with valid `lines` values, skips existing `(a, b)` keys, and
 removes reverse-order duplicates while preserving older authored rows.
+`0010_fix_avatar_storage_policies.sql` gives every authenticated player
+owner-only access to create or replace the avatar inside their own user-ID
+folder, without restoring a bucket-wide object-listing policy.
 
 ### Deploying backend changes
 
