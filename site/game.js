@@ -3489,12 +3489,16 @@ let MATCH = null;
 let lastPickOptionsKey = null;
 let selectedFightPicks = new Set();
 
-function resetMatchState(){
-  ST = null; MATCH = null; matchRuns = []; lastSeenSeed = null;
+function resetMatchPresentation(){
   pendingEffects = null; shownSig = ""; shownStandings = null; shownWinner = null;
   shownRoundWinners = []; revealedRound = ""; flipInFlight = false;
   lastPickOptionsKey = null; selectedFightPicks.clear();
   clearTimeout(window.__effectDelayTimer);
+}
+
+function resetMatchState(){
+  ST = null; MATCH = null; matchRuns = []; lastSeenSeed = null;
+  resetMatchPresentation();
 }
 
 // runs isn't part of the backend's matches.state at all - it's a
@@ -3550,7 +3554,17 @@ function applyMatchSnapshot(matches){
   if (SOLO || !backend) return;   // SOLO never reads from the matches table at all
   if (Date.now() < suppressMatchSnapshotUntil) return;
   const modes = Object.keys(matches || {});
-  const activeMode = modes.find(m => matches[m] && !matches[m].state.done) || modes[modes.length - 1] || null;
+  const unfinishedMode = modes.find(m => matches[m] && matches[m].state && !matches[m].state.done);
+  // When the second encounter's final result arrives, both rows are now
+  // finished. Keep displaying the match that was already on screen instead
+  // of falling back to database/object insertion order (which can point at
+  // the first encounter). On a reload, where there is no current ST, choose
+  // the row most recently updated by the server.
+  const displayedMode = ST && matches[ST.mode] ? ST.mode : null;
+  const newestMode = modes.slice().sort((a, b) =>
+    Date.parse(matches[b].updated_at || 0) - Date.parse(matches[a].updated_at || 0)
+  )[0] || null;
+  const activeMode = unfinishedMode || displayedMode || newestMode;
   const match = activeMode ? matches[activeMode] : null;
   if (!match){
     // resetMatchState() only ever clears the underlying JS variables -
@@ -3577,9 +3591,14 @@ function applyMatchSnapshot(matches){
   // A genuinely new match (different seed than the last one we built ST
   // from) means this encounter mode just got fought - record it once,
   // not on every repeated snapshot for the SAME still-running match.
-  if (match.seed !== lastSeenSeed){
+  if (String(match.seed) !== String(lastSeenSeed)){
+    // Result-animation state is deliberately outside ST. It must be cleared
+    // between the two encounter modes without clearing matchRuns, otherwise
+    // repeated names/signatures from encounter one can suppress or leak into
+    // encounter two's final reveal.
+    resetMatchPresentation();
     lastSeenSeed = match.seed;
-    matchRuns = matchRuns.concat(state.mode);
+    if (!matchRuns.includes(state.mode)) matchRuns = matchRuns.concat(state.mode);
   }
 
   const standings = seats().map((q, i) => ({ owner: P[q].name, points: (state.points || [])[i] || 0 }));
@@ -3595,9 +3614,10 @@ function applyMatchSnapshot(matches){
   // forward across repeated snapshots (a re-render, the 3-second poll)
   // as long as the round hasn't actually moved on; a genuinely new round
   // clears it, same as the server's own ST.picks reset used to.
-  const samRound = ST && ST.round === state.round;
-  if (!samRound) selectedFightPicks.clear();
-  const picks = samRound ? ST.picks : {};
+  const sameRound = ST && String(ST.seed) === String(match.seed) &&
+    ST.mode === state.mode && ST.round === state.round;
+  if (!sameRound) selectedFightPicks.clear();
+  const picks = sameRound ? ST.picks : {};
 
   ST = {
     mode: state.mode, v: verdict(state.mode), seed: Number(match.seed),
